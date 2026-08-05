@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AZCK Command — the business</title>
+<link rel="icon" href="az-sigil.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── AZCK COMMAND — the business face. Phase 2 shell (plan d0e8cab3, Three homes). ──
+   Skeleton per Alessio 2026-08-05: his header bones, full-width use, dark + light,
+   AZCK signature red #990000. Truth lives in Supabase; this page is a window.       */
+:root{
+  --red:#990000; --red-hot:#c40e0e;
+  --bg:#0e0f11; --panel:#17181b; --panel-2:#1e2024; --line:#2a2d33;
+  --ink:#e8e6e1; --ink-dim:#9a978f; --ink-faint:#5c5a54;
+  --ok:#3d7a4a; --warn:#b58900;
+}
+html[data-theme="light"]{
+  --bg:#f4f2ee; --panel:#ffffff; --panel-2:#eceae5; --line:#d8d5cf;
+  --ink:#1c1b19; --ink-dim:#5f5d57; --ink-faint:#a09d96;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.5 Lexend,sans-serif;
+     display:flex;flex-direction:column;min-height:100vh}
+/* ── header — the standard chrome ── */
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;
+       background:var(--panel);border-bottom:2px solid var(--red)}
+header img{width:34px;height:34px}
+header h1{font:600 19px/1 Oswald,sans-serif;letter-spacing:2.5px;text-transform:uppercase}
+header h1 span{color:var(--red-hot)}
+.spacer{flex:1}
+.pill{font:500 12px/1 Lexend;color:var(--ink-dim);border:1px solid var(--line);
+      border-radius:999px;padding:7px 13px;background:var(--panel-2);cursor:pointer}
+.pill:hover{color:var(--ink)}
+/* ── nav — his cc-nav pattern ── */
+nav{display:flex;flex-wrap:wrap;gap:2px;padding:6px 12px;background:var(--panel);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+nav button{font:500 12.5px/1 Oswald,sans-serif;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--ink-dim);background:none;border:none;border-bottom:2px solid transparent;
+    padding:9px 13px;cursor:pointer}
+nav button:hover{color:var(--ink)}
+nav button.active{color:var(--ink);border-bottom-color:var(--red-hot)}
+/* ── lanes — full width, no wasted gutters ── */
+main{flex:1;width:100%;padding:22px 18px}
+.lane{display:none;max-width:none}
+.lane.active{display:block}
+.lane h2{font:600 15px/1 Oswald,sans-serif;letter-spacing:2px;text-transform:uppercase;
+         color:var(--red-hot);margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+      padding:22px;max-width:720px}
+.card b{font-weight:600}
+.card .dim{color:var(--ink-dim);font-size:13.5px;margin-top:8px}
+.stamp{margin-top:14px;font-size:12px;color:var(--ink-faint)}
+/* ── login gate ── */
+#gate{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+#gate form{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--red);
+      border-radius:12px;padding:34px 30px;width:100%;max-width:380px}
+#gate h2{font:600 17px/1 Oswald,sans-serif;letter-spacing:2.5px;margin-bottom:6px}
+#gate p{color:var(--ink-dim);font-size:13px;margin-bottom:20px}
+#gate input{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+      color:var(--ink);font:400 15px Lexend;padding:12px 14px;margin-bottom:12px}
+#gate input:focus{outline:none;border-color:var(--red-hot)}
+#gate button{width:100%;background:var(--red);border:none;border-radius:8px;color:#fff;
+      font:600 14px/1 Oswald,sans-serif;letter-spacing:2px;text-transform:uppercase;
+      padding:13px;cursor:pointer}
+#gate button:hover{background:var(--red-hot)}
+#gate .err{color:var(--red-hot);font-size:13px;min-height:18px;margin-top:10px}
+footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px solid var(--line)}
+#app{display:none;flex-direction:column;flex:1}
+@media (max-width:640px){ header h1{font-size:16px;letter-spacing:1.8px} main{padding:16px 12px} }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <form id="loginForm">
+    <h2>AZCK <span style="color:var(--red-hot)">COMMAND</span></h2>
+    <p>The business face. Your own login — sessions are never handed over.</p>
+    <input id="email" type="email" placeholder="email" autocomplete="username" required>
+    <input id="pass" type="password" placeholder="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <div class="err" id="err"></div>
+  </form>
+</div>
+
+<div id="app">
+  <header>
+    <img src="az-sigil.svg" alt="">
+    <h1>AZCK <span>COMMAND</span></h1>
+    <div class="spacer"></div>
+    <button class="pill" id="themeBtn" type="button">theme</button>
+    <button class="pill" id="userPill" type="button">…</button>
+  </header>
+  <nav id="nav"></nav>
+  <main id="lanes"></main>
+  <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+'use strict';
+/* One Supabase client per tab (fleet law). Same house project as every face. */
+const supa = window.supabase.createClient(
+  'https://twrlvnfszohyrmivdhre.supabase.co',
+  'sb_publishable_xnDjiN2NRly0mU4aRMpLjA_HVqqcjxI',
+  { auth: { storageKey: 'azck_command_auth' } }   // own session bucket — no token handoff, ever
+);
+const ALLOWED = ['alessio.zilli@azcustomknives.com','admin@azcustomknives.com'];
+
+/* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
+   nothing pretends to be live until phase 3 moves the real tab in. */
+const LANES = [
+  ['dashboard','DASHBOARD','The business at a glance.','Phase 3 builds this last, from real lanes.'],
+  ['services','SERVICES','Queue, bookings, calendar, schedule.','Moves here from the builder face in phase 3 — first in line.'],
+  ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
+  ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
+  ['corporate','CORPORATE','Corporate pipeline and team building.','Moves in phase 3.'],
+  ['keypartners','KEY PARTNERS','The people the business runs with.','Moves in phase 3.'],
+  ['comms','COMMS','Business communications.','Moves in phase 3.'],
+  ['forgeatlas','FORGE ATLAS','The Forge Atlas venue.','Moves in phase 3.'],
+  ['swiss','SWISS DELICIOUS','Swiss Delicious.','Moves in phase 3.'],
+];
+
+const $ = s => document.querySelector(s);
+
+function buildShell(){
+  const nav = $('#nav'), main = $('#lanes');
+  LANES.forEach(([id,label,what,when],i)=>{
+    const b=document.createElement('button');
+    b.textContent=label; b.dataset.lane=id;
+    if(i===0) b.classList.add('active');
+    b.onclick=()=>switchLane(id);
+    nav.appendChild(b);
+    const s=document.createElement('section');
+    s.className='lane'+(i===0?' active':''); s.id='lane-'+id;
+    s.innerHTML=`<h2>${label}</h2><div class="card"><b>${what}</b>
+      <div class="dim">${when}</div>
+      <div class="stamp">Empty on purpose — no fake sync buttons. Plan: Three homes, phase 3.</div></div>`;
+    main.appendChild(s);
+  });
+}
+function switchLane(id){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.lane===id));
+  document.querySelectorAll('.lane').forEach(l=>l.classList.toggle('active',l.id==='lane-'+id));
+}
+
+/* theme — dark default, toggle persisted */
+const THEME_KEY='azck_command_theme';
+function applyTheme(t){ document.documentElement.dataset.theme=t; localStorage.setItem(THEME_KEY,t); }
+$('#themeBtn').onclick=()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+applyTheme(localStorage.getItem(THEME_KEY)||'dark');
+
+/* gate */
+async function boot(){
+  const {data:{session}} = await supa.auth.getSession();
+  if(session && ALLOWED.includes((session.user.email||'').toLowerCase())){
+    $('#gate').style.display='none'; $('#app').style.display='flex';
+    $('#userPill').textContent=session.user.email.split('@')[0];
+    $('#userPill').onclick=async()=>{ await supa.auth.signOut(); location.reload(); };
+    if(!$('#nav').children.length) buildShell();
+  } else if(session){
+    await supa.auth.signOut();
+    $('#err').textContent='That login has no seat here.';
+  }
+}
+$('#loginForm').onsubmit=async e=>{
+  e.preventDefault(); $('#err').textContent='';
+  const {error}=await supa.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#pass').value});
+  if(error){ $('#err').textContent=error.message; return; }
+  boot();
+};
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AZ Custom Knives — Dynamic Sigil
+  Canonical version. Do not edit inline in individual pages — always reference THIS file.
+  Standalone: this SVG contains its own CSS animations (inside <style>) so it renders identically when referenced via <img src>, <object>, fetched inline, or pasted into any HTML page.
+  Author: Built collaboratively by Alessio + Forge, April 2026.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="160" height="160" style="display:block;filter:drop-shadow(0 0 24px rgba(153,0,0,0.35));">
+  <defs>
+    <style><![CDATA[
+      .sigil-core { animation: sigilBreathe 6s ease-in-out infinite; transform-origin: 50px 50px; }
+      @keyframes sigilBreathe { 0%,100%{ opacity:0.85; } 50%{ opacity:1; } }
+      .path-a { animation: pathDrift 28s linear infinite; transform-origin: 50px 50px; }
+      .path-b { animation: pathDrift 28s linear infinite reverse; transform-origin: 50px 50px; }
+      .path-c { animation: pathDriftC 36s linear infinite; transform-origin: 50px 50px; }
+      @keyframes pathDrift { to { transform: rotate(360deg); } }
+      @keyframes pathDriftC { to { transform: rotate(360deg); } }
+      .counter-ring { animation: counterSpin 35s linear infinite; transform-origin: 50px 50px; }
+      @keyframes counterSpin { to { transform: rotate(-360deg); } }
+      .counter-ring-2 { animation: counterSpin2 22s linear infinite; transform-origin: 50px 50px; }
+      @keyframes counterSpin2 { to { transform: rotate(-360deg); } }
+      .orb-a { animation: orbPulse 4s ease-in-out infinite; }
+      .orb-b { animation: orbPulse 4s ease-in-out infinite 0.6s; }
+      .orb-c { animation: orbPulse 4s ease-in-out infinite 1.2s; }
+      .orb-d { animation: orbPulse 4s ease-in-out infinite 1.8s; }
+      .orb-e { animation: orbPulse 4s ease-in-out infinite 2.4s; }
+      .orb-f { animation: orbPulse 4s ease-in-out infinite 3.0s; }
+      .orb-g { animation: orbPulse 4s ease-in-out infinite 3.6s; }
+      @keyframes orbPulse { 0%,100%{ opacity:0.4; } 50%{ opacity:0.85; } }
+      .particle-1 { animation: pSpin1 9s linear infinite; transform-origin: 50px 50px; }
+      .particle-2 { animation: pSpin2 14s linear infinite; transform-origin: 50px 50px; }
+      .particle-3 { animation: pSpin3 7s linear infinite; transform-origin: 50px 50px; }
+      .particle-4 { animation: pSpin4 11s linear infinite; transform-origin: 50px 50px; }
+      .particle-5 { animation: pSpin5 18s linear infinite; transform-origin: 50px 50px; }
+      @keyframes pSpin1 { to { transform: rotate(360deg); } }
+      @keyframes pSpin2 { to { transform: rotate(-360deg); } }
+      @keyframes pSpin3 { to { transform: rotate(360deg); } }
+      @keyframes pSpin4 { to { transform: rotate(-360deg); } }
+      @keyframes pSpin5 { to { transform: rotate(360deg); } }
+      .energy-core { animation: corePulse 4s ease-in-out infinite; }
+      @keyframes corePulse { 0%,100%{ r:2.5; opacity:0.6; } 50%{ r:4; opacity:1; } }
+      .arc-a { animation: arcGlow 8s ease-in-out infinite; }
+      .arc-b { animation: arcGlow 8s ease-in-out infinite 2.7s; }
+      .arc-c { animation: arcGlow 8s ease-in-out infinite 5.3s; }
+      @keyframes arcGlow { 0%,100%{ stroke-opacity:0.75; } 50%{ stroke-opacity:0.95; } }
+      .inner-pulse { animation: innerGlow 6s ease-in-out infinite; }
+      @keyframes innerGlow { 0%,100%{ opacity:0.2; } 50%{ opacity:0.5; } }
+    ]]></style>
+    <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff4422" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#990000" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#990000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auraGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#990000" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#990000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g class="sigil-core">
+    <circle cx="50" cy="50" r="49" fill="url(#auraGrad)"/>
+    <ellipse class="orb-a" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#58a6ff" stroke-width="0.35" transform="rotate(0 50 50)"/>
+    <ellipse class="orb-b" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#bc8cff" stroke-width="0.35" transform="rotate(25.7 50 50)"/>
+    <ellipse class="orb-c" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#58a6ff" stroke-width="0.35" transform="rotate(51.4 50 50)"/>
+    <ellipse class="orb-d" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#d4a84b" stroke-width="0.35" transform="rotate(77.1 50 50)"/>
+    <ellipse class="orb-e" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#58a6ff" stroke-width="0.35" transform="rotate(102.8 50 50)"/>
+    <ellipse class="orb-f" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#d4a84b" stroke-width="0.35" transform="rotate(128.5 50 50)"/>
+    <ellipse class="orb-g" cx="50" cy="50" rx="47" ry="12" fill="none" stroke="#58a6ff" stroke-width="0.35" transform="rotate(154.2 50 50)"/>
+    <g class="particle-1"><circle cx="50" cy="3" r="1.1" fill="#58a6ff" opacity="0.7"/></g>
+    <g class="particle-2"><circle cx="97" cy="50" r="0.9" fill="#bc8cff" opacity="0.6"/></g>
+    <g class="particle-3"><circle cx="50" cy="6" r="0.8" fill="#d4a84b" opacity="0.6"/></g>
+    <g class="particle-4"><circle cx="3" cy="50" r="1.0" fill="#58a6ff" opacity="0.5"/></g>
+    <g class="particle-5"><circle cx="50" cy="97" r="0.7" fill="#bc8cff" opacity="0.4"/></g>
+    <path class="arc-a" d="M 16.3 21.7 A 44 44 0 0 1 83.7 21.7" fill="none" stroke="#990000" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <path class="arc-b" d="M 91.4 35 A 44 44 0 0 1 57.6 93.3" fill="none" stroke="#cc3300" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <path class="arc-c" d="M 42.4 93.3 A 44 44 0 0 1 8.7 35" fill="none" stroke="#990000" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#990000" stroke-width="0.5" opacity="0.3"/>
+    <g class="counter-ring">
+      <circle cx="50" cy="50" r="34" fill="none" stroke="#bc8cff" stroke-width="0.3" stroke-dasharray="2 6" opacity="0.3"/>
+    </g>
+    <g class="counter-ring-2">
+      <circle cx="50" cy="50" r="30" fill="none" stroke="#58a6ff" stroke-width="0.25" stroke-dasharray="4 10" opacity="0.2"/>
+    </g>
+    <g class="path-a">
+      <ellipse cx="50" cy="50" rx="26" ry="8" fill="none" stroke="#bc8cff" stroke-width="0.6" opacity="0.45"/>
+      <circle cx="76" cy="50" r="1.5" fill="#bc8cff" opacity="0.8"/>
+    </g>
+    <g class="path-b">
+      <ellipse cx="50" cy="50" rx="26" ry="8" fill="none" stroke="#58a6ff" stroke-width="0.6" opacity="0.45" transform="rotate(90 50 50)"/>
+      <circle cx="50" cy="24" r="1.5" fill="#58a6ff" opacity="0.8"/>
+    </g>
+    <g class="path-c">
+      <ellipse cx="50" cy="50" rx="26" ry="8" fill="none" stroke="#d4a84b" stroke-width="0.6" opacity="0.4" transform="rotate(45 50 50)"/>
+      <circle cx="68" cy="32" r="1.5" fill="#d4a84b" opacity="0.75"/>
+    </g>
+    <circle cx="50" cy="50" r="22" fill="none" stroke="#e6edf3" stroke-width="0.3" opacity="0.12"/>
+    <path class="arc-a" d="M50 22 L78 50 L50 78 L22 50 Z" fill="none" stroke="#990000" stroke-width="1.35" opacity="0.65"/>
+    <line x1="3" y1="50" x2="35" y2="50" stroke="#e6edf3" stroke-width="0.35" opacity="0.1"/>
+    <line x1="65" y1="50" x2="97" y2="50" stroke="#e6edf3" stroke-width="0.35" opacity="0.1"/>
+    <line x1="50" y1="3" x2="50" y2="35" stroke="#e6edf3" stroke-width="0.35" opacity="0.1"/>
+    <line x1="50" y1="65" x2="50" y2="97" stroke="#e6edf3" stroke-width="0.35" opacity="0.1"/>
+    <circle class="inner-pulse" cx="50" cy="50" r="15" fill="none" stroke="#990000" stroke-width="0.6" opacity="0.35"/>
+    <circle cx="50" cy="50" r="10" fill="none" stroke="#d4a84b" stroke-width="0.3" stroke-dasharray="1.5 5" opacity="0.3"/>
+    <circle cx="50" cy="50" r="7" fill="url(#coreGrad)"/>
+    <circle class="energy-core" cx="50" cy="50" r="2.5" fill="#ff4422" opacity="0.6"/>
+    <circle cx="48.5" cy="48" r="0.8" fill="rgba(212,168,75,0.2)"/>
+  </g>
+</svg>
