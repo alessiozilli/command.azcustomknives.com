@@ -1725,6 +1725,143 @@ document.addEventListener('DOMContentLoaded', () => {
 });
     </script>
   </section>
+  <!-- ════════ CORPORATE lane — ported from azck-faces 2026-08-05 (phase 3, port 4/6).
+       corporate_pipeline + corporate_meta (RLS is_knifemaker — both humans edit the SAME rows).
+       Self-contained IIFE: click-to-edit cells, 60s poll that pauses while a cell is edited. ════════ -->
+  <section class="lane faces-tokens" id="lane-corporate" data-lane="corporate">
+    <div style="padding:var(--sp-16) var(--sp-20);height:100%;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:0 0 auto;">
+        <span style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-xs,#7a7a7a);">Gifting line</span>
+        <span id="corp-gift-status" data-no-mic title="Click to edit — saves for both of you" style="font-size:12.5px;color:var(--text,#fff);background:var(--raised,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:4px 10px;cursor:text;min-width:120px;">…</span>
+        <button type="button" id="corp-add" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">+ Add org</button>
+        <span id="corp-msg" style="margin-left:auto;font-size:11px;color:var(--text-xs,#7a7a7a);"></span>
+      </div>
+      <div style="flex:1 1 auto;min-height:0;overflow:auto;border:1px solid var(--border,#2a2a2a);border-radius:6px;">
+        <!-- data-no-mic: cc-mic.js wraps editable fields in a 100%-width block
+             (.cc-mic-wrap global lock) which shreds table-cell layout — opt the
+             whole table out; the ancestor rule covers every cell and input. -->
+        <table id="corp-table" data-no-mic style="border-collapse:collapse;width:100%;font-size:12.5px;min-width:980px;">
+          <thead></thead><tbody><tr><td style="padding:18px;color:var(--text-dim,#b8b8b8);">Loading pipeline…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  <script>
+  (function(){
+    'use strict';
+    var STAGES = ['target','contacted','replied','quoted','booked','dormant'];
+    var STAGE_COLOR = { target:'#7a7a7a', contacted:'#4c8fd6', replied:'#d29922', quoted:'#e8630a', booked:'#3fb950', dormant:'#4a5058' };
+    var COLS = [
+      { k:'org',              t:'Org',         w:'160px' },
+      { k:'sector',           t:'Sector',      w:'110px' },
+      { k:'contact_name',     t:'Contact',     w:'130px' },
+      { k:'contact_channel',  t:'Channel',     w:'110px' },
+      { k:'stage',            t:'Stage',       w:'110px', type:'stage' },
+      { k:'last_touch',       t:'Last touch',  w:'112px', type:'date' },
+      { k:'next_action',      t:'Next action', w:'170px' },
+      { k:'next_action_date', t:'Due',         w:'112px', type:'date' },
+      { k:'source',           t:'Source',      w:'110px' },
+      { k:'notes',            t:'Notes',       w:'200px' }
+    ];
+    function el(id){ return document.getElementById(id); }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+    function msg(t, bad){ var m = el('corp-msg'); if(!m) return; m.textContent = t||''; m.style.color = bad ? 'var(--azck-red-hi,#cc1f1f)' : 'var(--text-xs,#7a7a7a)'; if(t) setTimeout(function(){ if(m.textContent===t) m.textContent=''; }, 4000); }
+    function editingNow(){ var a = document.activeElement; return !!(a && a.closest && (a.closest('#corp-table') || a.id === 'corp-gift-status')); }
+    // GPPA countdown chip removed 2026-07-03 per Alessio: no chips/boxes above
+    // lane content — the table is the content. Do not re-add.
+    function saveCell(id, key, value){
+      var patch = {}; patch[key] = (value === '' ? null : value); patch.updated_at = new Date().toISOString();
+      return window.supa.from('corporate_pipeline').update(patch).eq('id', id)
+        .then(function(r){ if (r.error) { msg('Save failed: ' + r.error.message, true); } else { msg('Saved'); } });
+    }
+    function render(rows){
+      var thead = el('corp-table').querySelector('thead');
+      var tbody = el('corp-table').querySelector('tbody');
+      var h = '<tr>';
+      COLS.forEach(function(c){ h += '<th style="position:sticky;top:0;background:var(--raised,#1a1a1a);color:var(--text,#fff);text-align:left;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--border,#2a2a2a);min-width:'+c.w+';">'+c.t+'</th>'; });
+      h += '<th style="position:sticky;top:0;background:var(--raised,#1a1a1a);border-bottom:1px solid var(--border,#2a2a2a);width:34px;"></th></tr>';
+      thead.innerHTML = h;
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="' + (COLS.length+1) + '" style="padding:22px;color:var(--text-dim,#b8b8b8);">No organizations yet. Rows land here once the corporate pack review is approved (bus #2669) — or hit <b>+ Add org</b>.</td></tr>';
+        return;
+      }
+      var b = '';
+      rows.forEach(function(r){
+        // Tier A rows render hot (bus #2764) — tier prefix lives in notes: "Tier A · …"
+        var hot = /^\s*tier\s*a\b/i.test(r.notes || '');
+        b += '<tr data-id="'+r.id+'"'+(hot ? ' style="background:rgba(153,0,0,0.10);"' : '')+'>';
+        COLS.forEach(function(c){
+          var v = r[c.k];
+          if (c.type === 'stage') {
+            var sel = '<select data-k="stage" style="background:var(--bg,#111);color:#fff;border:1px solid '+(STAGE_COLOR[v]||'#2a2a2a')+';border-left:4px solid '+(STAGE_COLOR[v]||'#2a2a2a')+';border-radius:4px;padding:4px 6px;font-size:12px;width:100%;">';
+            STAGES.forEach(function(s){ sel += '<option value="'+s+'"'+(s===v?' selected':'')+'>'+s+'</option>'; });
+            sel += '</select>';
+            b += '<td style="padding:5px 8px;border-bottom:1px solid var(--border,#2a2a2a);">'+sel+'</td>';
+          } else if (c.type === 'date') {
+            b += '<td style="padding:5px 8px;border-bottom:1px solid var(--border,#2a2a2a);"><input type="date" data-k="'+c.k+'" value="'+esc(v||'')+'" style="background:var(--bg,#111);color:#fff;border:1px solid var(--border,#2a2a2a);border-radius:4px;padding:4px 6px;font-size:12px;width:100%;"></td>';
+          } else {
+            b += '<td contenteditable="true" data-k="'+c.k+'" style="padding:8px 10px;border-bottom:1px solid var(--border,#2a2a2a);'+(c.k==='org'&&hot?'border-left:3px solid var(--azck-red,#990000);':'')+'color:'+(c.k==='org'?'var(--text,#fff);font-weight:600':'var(--text-dim,#b8b8b8)')+';outline:none;">'+esc(v)+'</td>';
+          }
+        });
+        b += '<td style="padding:5px 6px;border-bottom:1px solid var(--border,#2a2a2a);text-align:center;"><button type="button" data-del="'+r.id+'" title="Move to dormant (never deletes)" style="background:none;border:0;color:var(--text-xs,#7a7a7a);cursor:pointer;font-size:14px;">💤</button></td>';
+        b += '</tr>';
+      });
+      tbody.innerHTML = b;
+      tbody.querySelectorAll('[contenteditable][data-k]').forEach(function(td){
+        td.addEventListener('blur', function(){ var tr = td.closest('tr'); saveCell(tr.getAttribute('data-id'), td.getAttribute('data-k'), td.textContent.trim()); });
+        td.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); td.blur(); } });
+      });
+      tbody.querySelectorAll('select[data-k], input[data-k]').forEach(function(inp){
+        inp.addEventListener('change', function(){ var tr = inp.closest('tr'); saveCell(tr.getAttribute('data-id'), inp.getAttribute('data-k'), inp.value).then(load); });
+      });
+      tbody.querySelectorAll('[data-del]').forEach(function(btn){
+        btn.addEventListener('click', function(){ saveCell(btn.getAttribute('data-del'), 'stage', 'dormant').then(load); });
+      });
+    }
+    function load(){
+      if (!window.supa) return;
+      return window.supa.from('corporate_pipeline').select('*')
+        .order('next_action_date', { ascending: true, nullsFirst: false })
+        .order('org', { ascending: true })
+        .then(function(r){
+          if (r.error) { msg('Load failed: ' + r.error.message, true); return; }
+          render(r.data || []);
+        });
+    }
+    function loadGift(){
+      if (!window.supa) return;
+      window.supa.from('corporate_meta').select('value').eq('key','gifting_line_status').maybeSingle()
+        .then(function(r){ var g = el('corp-gift-status'); if (g && r.data) g.textContent = r.data.value || '—'; });
+    }
+    function wireGift(){
+      var g = el('corp-gift-status'); if (!g) return;
+      g.addEventListener('click', function(){ g.setAttribute('contenteditable','true'); g.focus(); });
+      g.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); g.blur(); } });
+      g.addEventListener('blur', function(){
+        g.removeAttribute('contenteditable');
+        window.supa.from('corporate_meta').update({ value: g.textContent.trim(), updated_at: new Date().toISOString() }).eq('key','gifting_line_status')
+          .then(function(r){ msg(r.error ? 'Save failed: ' + r.error.message : 'Saved', !!r.error); });
+      });
+    }
+    function wireAdd(){
+      var btn = el('corp-add'); if (!btn) return;
+      btn.addEventListener('click', function(){
+        window.supa.from('corporate_pipeline').insert({ org: 'New org — click to edit', stage: 'target' })
+          .then(function(r){ if (r.error) { msg('Add failed: ' + r.error.message, true); } else { load(); } });
+      });
+    }
+    function boot(n){
+      if (!window.supa) { if ((n||0) < 60) setTimeout(function(){ boot((n||0)+1); }, 250); return; }
+      wireGift(); wireAdd(); load(); loadGift();
+      setInterval(function(){
+        var lane = document.querySelector('[data-lane="corporate"].cc-lane');
+        if (!lane || lane.style.display === 'none' || editingNow()) return;   // busy/hidden → skip tick
+        load(); loadGift();
+      }, 60000);
+    }
+    boot(0);
+  })();
+  </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
@@ -1752,7 +1889,7 @@ const LANES = [
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
   ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
-  ['corporate','CORPORATE','Corporate pipeline and team building.','Moves in phase 3.'],
+  ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
 ];
