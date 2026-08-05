@@ -1579,6 +1579,152 @@ window.renderKeyPartners = function() {
 };
     </script>
   </section>
+  <!-- ════════ COMMS lane — ported from azck-faces 2026-08-05 (phase 3, port 3/6).
+       BUS = the live dispatcher (fire a bus to any instance, prefix routes, recent traffic).
+       CHAT = parked on purpose: the faces original is nav-hidden (builder experiment);
+       porting a parked surface as live would be a fake. Sender rides the session hook. ════════ -->
+  <section class="lane faces-tokens" id="lane-comms" data-lane="comms">
+    <style>
+      [data-lane="comms"] .cc-divider { display:flex; align-items:center; gap:var(--sp-8); font-family:var(--mono); font-size:9px; color:var(--text-xs); letter-spacing:0.1em; margin:12px 0 8px; }
+      [data-lane="comms"] .cc-divider::before, [data-lane="comms"] .cc-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+      [data-lane="comms"] .cc-card__btn { font-family:var(--display); font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:5px 10px; border-radius:3px; border:1px solid var(--border); background:var(--raised); color:var(--text-dim); cursor:pointer; transition:all 0.12s; }
+      [data-lane="comms"] .cc-card__btn:hover { color:var(--amber); border-color:var(--amber); }
+      [data-lane="comms"] .cc-card__btn:disabled { opacity:0.5; pointer-events:none; }
+      [data-lane="comms"] .cc-card__btn.primary { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-lane="comms"] .cc-card__btn.primary:hover { background:var(--amber-dim); border-color:var(--amber-dim); }
+      [data-lane="comms"] .cc-card { max-width:760px; }
+      [data-lane="comms"] code { font-family:var(--mono); font-size:11px; background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:1px 5px; }
+    </style>
+    <div class="cc-subpane active" data-subtab="bus">
+      <div>
+      <div class="cc-card">
+        <div class="cc-card__label">Bus dispatcher</div>
+        <div class="cc-card__title">Fire a bus to an instance</div>
+        <div class="cc-card__sub" style="margin-bottom:10px;">Prefix routes: <code>@code</code> · <code>@cowork</code> · <code>@design</code> · <code>@reanna</code> · <code>@team</code> — append <code>!urgent</code> for urgent priority. No prefix → forge-cowork.</div>
+        <textarea id="co-bus-input" rows="4" style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:10px;font-family:var(--mono);font-size:12px;resize:vertical;min-height:80px;" placeholder="@code build the next slice · ⌘/Ctrl+Enter sends"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;">
+          <button type="button" id="co-bus-mic" class="cc-card__btn" title="Voice" onclick="toggleBusDispatchMic()">🎤</button>
+          <button type="button" id="co-bus-send" class="cc-card__btn primary" onclick="sendBusDispatch()">Fire →</button>
+        </div>
+        <div id="co-bus-transcript" style="margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--text-xs);min-height:18px;"></div>
+      </div>
+      <div class="cc-divider">recent bus traffic</div>
+      <div id="co-bus-recent" style="max-width:760px;">
+        <div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs);">Loading…</div></div>
+      </div>
+      </div>
+    </div>
+    <div class="cc-subpane" data-subtab="chat">
+      <div>
+      <div class="cc-card">
+        <div class="cc-card__label">Chat</div>
+        <div class="cc-card__title">Parked, on purpose</div>
+        <div class="cc-card__sub">The direct-chat surface (Sentinel, forge-code, Telegram peers) sits nav-hidden on the builder face — a parked experiment, and porting a parked thing as live would be a fake surface. Business comms ride the bus dispatcher. Say the word and the chat moves in properly.</div>
+      </div>
+      </div>
+    </div>
+    <script>
+window.sendBusDispatch = async function() {
+  const ta = document.getElementById('co-bus-input');
+  const btn = document.getElementById('co-bus-send');
+  const out = document.getElementById('co-bus-transcript');
+  if (!ta || !window.supa) return;
+  const raw = (ta.value || '').trim();
+  if (!raw) { if (out) out.textContent = '(empty)'; return; }
+  let toUser = 'forge-cowork';
+  let intended = 'forge-cowork-sonnet';
+  let body = raw;
+  let priority = 'normal';
+  if (/^@code\s/i.test(raw))   { toUser='forge-code';   intended='forge-code-opus-beast'; body=raw.replace(/^@code\s+/i,''); }
+  else if (/^@cowork\s/i.test(raw)) { toUser='forge-cowork'; intended='forge-cowork-sonnet'; body=raw.replace(/^@cowork\s+/i,''); }
+  else if (/^@design\s/i.test(raw)) { toUser='forge-design'; intended=null; body=raw.replace(/^@design\s+/i,''); }
+  else if (/^@reanna\s/i.test(raw)) { toUser='reanna';       intended=null; body=raw.replace(/^@reanna\s+/i,''); }
+  else if (/^@team\s/i.test(raw))   { toUser='forge-team';   intended=null; body=raw.replace(/^@team\s+/i,''); }
+  if (/!urgent/i.test(body)) { priority='urgent'; body=body.replace(/!urgent/i,'').trim(); }
+  const me = (typeof window.CC_BUS_IDENTITY==='function') ? window.CC_BUS_IDENTITY() : 'alessio';
+  if (btn) { btn.disabled = true; btn.textContent = 'Firing…'; }
+  if (out) out.textContent = 'Dispatching to ' + toUser + '…';
+  try {
+    const ins = await window.supa.from('agent_messages').insert({
+      from_user: me,
+      from_instance_id: 'cc-comms-bus@' + location.hostname,
+      to_user: toUser, intended_for: intended,
+      channel: 'general', body, priority,
+      status: 'sent', awaiting_reply_from: toUser, thread_id: 'cc-comms-bus'
+    }).select('id').single();
+    if (ins.error) throw ins.error;
+    ta.value = '';
+    if (out) out.textContent = '✓ Bus #' + ins.data.id + ' → ' + toUser;
+    if (typeof renderBusRecent === 'function') renderBusRecent();
+  } catch (err) {
+    if (out) out.textContent = '✗ Failed: ' + ((err.message || '') + '').slice(0, 120);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Fire →'; }
+  }
+};
+
+let _busMicRec = null;
+let _busMicOn = false;
+window.toggleBusDispatchMic = function() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ta = document.getElementById('co-bus-input');
+  const btn = document.getElementById('co-bus-mic');
+  if (!SR || !ta) return;
+  if (_busMicOn) { try { _busMicRec.stop(); } catch(e){} return; }
+  _busMicRec = new SR();
+  _busMicRec.continuous = false;
+  _busMicRec.interimResults = true;
+  _busMicRec.lang = 'en-US';
+  _busMicRec.onstart = () => { _busMicOn = true; if(btn){btn.textContent='⏺';btn.style.color='#f85149';} };
+  _busMicRec.onresult = ev => { ta.value = Array.from(ev.results).map(r=>r[0].transcript).join(''); };
+  _busMicRec.onerror = () => { _busMicOn = false; if(btn){btn.textContent='🎤';btn.style.color='';} };
+  _busMicRec.onend = () => { _busMicOn = false; if(btn){btn.textContent='🎤';btn.style.color='';} };
+  try { _busMicRec.start(); } catch(e) { _busMicOn=false; }
+};
+
+window.renderBusRecent = async function() {
+  const wrap = document.getElementById('co-bus-recent');
+  if (!wrap || !window.supa) return;
+  const me = (typeof window.CC_BUS_IDENTITY==='function') ? window.CC_BUS_IDENTITY() : 'alessio';
+  const { data, error } = await window.supa
+    .from('agent_messages')
+    .select('id, from_user, to_user, body, status, sent_at, priority')
+    .or(`to_user.eq.${me},from_user.eq.${me}`)
+    .order('sent_at', { ascending: false })
+    .limit(15);
+  if (error || !data || !data.length) {
+    wrap.innerHTML = '<div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs);">No bus traffic yet.</div></div>';
+    return;
+  }
+  function fmt(ts){ if(!ts) return '—'; const d=new Date(ts); const m=Math.floor((Date.now()-d.getTime())/60000); if(m<1) return 'now'; if(m<60) return m+'m'; const h=Math.floor(m/60); if(h<24) return h+'h'; return d.toLocaleDateString('en-CA',{month:'short',day:'numeric'}); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  wrap.innerHTML = data.map(m => {
+    const tag = m.status === 'sent' ? 'amber' : (m.status === 'done' ? 'green' : 'muted');
+    return '<div class="cc-card" style="display:block;margin-bottom:6px;">' +   // Operator lives on the builder face — plain card here
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+        '<div style="font-family:var(--mono);font-size:10px;font-weight:700;color:var(--amber);">#' + m.id + ' · ' + esc(m.from_user||'?') + ' → ' + esc(m.to_user||'?') + (m.priority==='urgent'?' · ⚡':'') + '</div>' +
+        '<div style="font-family:var(--mono);font-size:9px;color:var(--text-xs);">' + fmt(m.sent_at) + '</div>' +
+      '</div>' +
+      '<div style="font-size:11px;line-height:1.4;color:var(--text-dim);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + esc(String(m.body||'').slice(0,200)) + '</div>' +
+    '</div>';
+  }).join('');
+};
+
+// Wire bus textarea Cmd/Ctrl+Enter + auto-render on subtab activate
+document.addEventListener('DOMContentLoaded', () => {
+  const ta = document.getElementById('co-bus-input');
+  if (ta && !ta.dataset._wired) {
+    ta.dataset._wired = '1';
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        window.sendBusDispatch();
+      }
+    });
+  }
+});
+    </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
@@ -1608,7 +1754,7 @@ const LANES = [
   ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','Moves in phase 3.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
-  ['comms','COMMS','Business communications.','Moves in phase 3.'],
+  ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
 
@@ -1646,11 +1792,18 @@ function switchLane(id){
   if(id==='keypartners'){
     (function retry(n){ if(window.supa && window.CCMasterDetail){ try{ window.renderKeyPartners(); }catch(e){ console.warn('[keypartners] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   }
+  if(id==='comms'){
+    (function retry(n){ if(window.supa && window.renderBusRecent){ try{ window.renderBusRecent(); }catch(e){ console.warn('[comms] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
+  }
 }
 
 /* ── subnav: per-lane subtabs. Services first; later phase-3 lanes add rows here.
    Order inside a row is his — new subtabs go LAST (the faces reshuffle lesson). ── */
 const SUBNAV = {
+  comms: [
+    { id:'bus',  label:'Bus'  },
+    { id:'chat', label:'Chat' },
+  ],
   services: [
     { id:'calendar', label:'Calendar' },
     { id:'bookings', label:'Bookings' },
@@ -1680,6 +1833,7 @@ function switchSubtab(lane,target){
   try{ localStorage.setItem('azck_command_subtab_'+lane,target); }catch(e){}
   try{ const want='#'+lane+'/'+target; if(location.hash!==want) history.replaceState(null,'',want); }catch(e){}
   if(lane==='services') svcRender(target);
+  if(lane==='comms' && target==='bus' && window.renderBusRecent) window.renderBusRecent();
 }
 /* Lazy renderers, faces retry pattern — deferred assets may land after the tap. */
 function svcRender(target){
