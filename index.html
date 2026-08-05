@@ -135,6 +135,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
         --amber-soft:rgba(160,108,16,0.06); --amber-glow:rgba(160,108,16,0.12);
       }
       /* faces globals the chunk leans on, scoped to the lane */
+      .faces-tokens .cc-lane__head { display:none; } /* faces policy: lane titles are redundant with the nav */
       .faces-tokens .cc-subpane { display:none; }
       .faces-tokens .cc-subpane.active { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
       .faces-tokens .cc-subpane.active > * { flex:1; min-height:0; }
@@ -2248,6 +2249,2899 @@ window.renderQfTracker = function(attempt){
 };
     </script>
   </section>
+  <!-- ════════ SHOP lane — ported from azck-faces 2026-08-05 (phase 3, port 6/6, the monster).
+       Heat Treat (.ht4, CCMasterDetail) · Interns (.in-3col, live intern tables + portal bus)
+       · After-Hours (.ah4, programs.json + mirrored program pages). Senders ride the session
+       hook — never presigned. Resize surfaces already registered in mirrored cc-col-resize. ════════ -->
+  <section class="lane faces-tokens cc-lane" id="lane-shop" data-lane="shop">
+    <div class="cc-lane__head">
+      <span class="cc-lane__bracket">[</span>
+      <span class="cc-lane__title">Shop</span>
+      <span class="cc-lane__bracket">]</span>
+      <span class="cc-lane__count" id="sp-count">…</span>
+    </div>
+
+    <div class="cc-subpane active" data-subtab="procedures">
+      <style>
+        /* ════════════════════════════════════════════════════════════════
+           SHOP v2 — operator-mode modal · runs · versioning
+           Strict AZCK palette · Lexend type · ALL CAPS labels · no green/blue
+           Scoped to [data-lane="shop"] so it can't bleed into other lanes.
+           ═══════════════════════════════════════════════════════════════ */
+        [data-lane="shop"] {
+          --sp-orange:   #FC4C02;
+          --sp-amber:    #EF9F27;
+          --sp-amber-lt: #FAC775;
+          --sp-white:    #FFFFFF;
+          --sp-muted-lt: #CCCCCC;
+          --sp-muted:    #6B6B6B;
+          --sp-divider:  #444444;
+          --sp-panel:    #1A1A1A;
+          --sp-deep:     #0D0D0D;
+          --sp-scrim:    rgba(0,0,0,0.85);
+          --sp-warn:     #990000;
+          font-family: 'Lexend', sans-serif;
+        }
+
+        /* ── Active-run rail (SHOP-level, above toolbar) ─────────────── */
+        .sp-runrail { display:none; background:var(--sp-orange); color:#000; padding:8px 18px; font-family:'Lexend',sans-serif; font-size:12px; font-weight:500; letter-spacing:0.5px; text-transform:uppercase; align-items:center; gap:10px; margin-bottom:12px; cursor:pointer; }
+        .sp-runrail.open { display:flex; }
+        .sp-runrail i { font-size:16px; }
+        .sp-runrail__title { font-weight:500; }
+        .sp-runrail__timer { font-family:'Lexend',sans-serif; font-variant-numeric:tabular-nums; }
+        .sp-runrail__cta { margin-left:auto; padding:2px 10px; border:1px solid #000; background:transparent; color:#000; font-family:inherit; font-size:11px; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; }
+
+        /* ── Toolbar ─────────────────────────────────────────────────── */
+        .sp-toolbar { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+        .sp-toolbar input, .sp-toolbar select { background:var(--sp-panel); color:var(--sp-white); border:1px solid var(--sp-divider); padding:8px 12px; font-family:'Lexend',sans-serif; font-size:12px; font-weight:400; }
+        .sp-toolbar input { flex:1 1 240px; min-width:180px; }
+        .sp-toolbar input:focus, .sp-toolbar select:focus { outline:none; border-color:var(--sp-orange); }
+        .sp-toolbar input::placeholder { color:var(--sp-muted); }
+
+        /* ── Category grid + cards ───────────────────────────────────── */
+        .sp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:8px; margin:6px 0 10px; }
+        .sp-card { cursor:pointer; }
+        .sp-card:hover { border-color:var(--sp-orange); }
+
+        /* ── MODAL v2 ─────────────────────────────────────────────────── */
+        .sp-modal { display:none; position:fixed; inset:0; z-index:9999; background:var(--sp-scrim); }
+        .sp-modal.open { display:flex; align-items:center; justify-content:center; padding:24px; font-family:'Lexend',sans-serif; }
+        .sp-modal__shell { background:var(--sp-deep); border:1px solid var(--sp-divider); width:100%; max-width:960px; max-height:92vh; display:flex; flex-direction:column; color:var(--sp-white); }
+
+        /* Header strip */
+        .sp-modal__header { padding:18px 24px; border-bottom:1px solid #1f1f1f; display:flex; gap:14px; align-items:center; flex-shrink:0; }
+        .sp-chip { font-size:11px; padding:3px 10px; border:1px solid var(--sp-orange); color:var(--sp-orange); text-transform:uppercase; letter-spacing:1.2px; font-weight:500; white-space:nowrap; }
+        .sp-modal__title { font-size:15px; font-weight:500; color:var(--sp-white); text-transform:uppercase; letter-spacing:0.5px; flex:1; line-height:1.3; }
+        .sp-btn-print { font-size:11px; padding:6px 14px; border:1px solid var(--sp-divider); color:var(--sp-white); text-decoration:none; text-transform:uppercase; letter-spacing:0.5px; font-family:inherit; font-weight:400; }
+        .sp-btn-print:hover { border-color:var(--sp-orange); color:var(--sp-orange); }
+        .sp-btn-close { background:none; border:0; color:var(--sp-muted); cursor:pointer; font-family:inherit; padding:4px 6px; line-height:1; }
+        .sp-btn-close i { font-size:22px; }
+        .sp-btn-close:hover { color:var(--sp-white); }
+
+        /* Metadata strip */
+        .sp-modal__metadata { padding:12px 24px; border-bottom:1px solid #1f1f1f; display:flex; gap:24px; flex-wrap:wrap; flex-shrink:0; }
+        .sp-meta-field { display:flex; flex-direction:column; gap:2px; min-width:0; }
+        .sp-meta-lbl { font-size:10px; color:var(--sp-muted); text-transform:uppercase; letter-spacing:0.08em; }
+        .sp-meta-val { font-size:13px; color:var(--sp-white); font-weight:400; }
+        .sp-meta-val.amber { color:var(--sp-amber); }
+        .sp-meta-status { display:inline-flex; align-items:center; gap:6px; }
+        .sp-meta-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .sp-meta-dot.active   { background:var(--sp-orange); }
+        .sp-meta-dot.draft    { background:var(--sp-muted); }
+        .sp-meta-dot.archived { background:var(--sp-warn); }
+
+        /* Anchored nav (5 pills) */
+        .sp-modal__nav { display:flex; border-bottom:1px solid #1f1f1f; flex-shrink:0; overflow-x:auto; scrollbar-width:none; }
+        .sp-modal__nav::-webkit-scrollbar { display:none; }
+        .sp-pill { padding:14px 18px; background:none; border:0; color:var(--sp-muted); font-family:inherit; font-size:12px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; text-transform:none; letter-spacing:0.2px; }
+        .sp-pill i { font-size:16px; vertical-align:-2px; }
+        .sp-pill:hover:not(.active) { color:var(--sp-amber-lt); }
+        .sp-pill.active { color:var(--sp-white); border-bottom-color:var(--sp-orange); }
+
+        /* Section content */
+        .sp-modal__content { flex:1; overflow-y:auto; padding:18px 24px; font-size:13px; color:var(--sp-white); line-height:1.55; }
+        .sp-section { display:none; }
+        .sp-section.active { display:block; }
+        .sp-section h2, .sp-section h3 { font-family:'Lexend',sans-serif; font-weight:500; color:var(--sp-white); text-transform:uppercase; letter-spacing:0.5px; margin:14px 0 8px; }
+        .sp-section h2 { font-size:13px; color:var(--sp-amber); }
+        .sp-section h3 { font-size:12px; color:var(--sp-muted-lt); }
+        .sp-section p { margin:6px 0; color:var(--sp-muted-lt); }
+        .sp-section strong { color:var(--sp-white); font-weight:500; }
+        .sp-section code { background:var(--sp-panel); padding:1px 6px; color:var(--sp-amber); font-family:'Lexend',monospace; font-size:12px; }
+
+        /* Sub-blocks within sections */
+        .sp-block { background:var(--sp-panel); padding:14px 16px; margin:10px 0; border-left:2px solid transparent; }
+        .sp-block__label { font-size:10px; color:var(--sp-muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px; font-weight:500; }
+        .sp-block.warn { border-left-color:var(--sp-warn); }
+        .sp-block.amber { border-left-color:var(--sp-amber); }
+
+        /* Checkbox rows (parsed from markdown checkboxes) */
+        .sp-check { display:flex; align-items:flex-start; gap:10px; margin:4px 0; padding:4px 0; }
+        .sp-check input[type=checkbox] { margin-top:3px; accent-color:var(--sp-orange); width:14px; height:14px; flex-shrink:0; }
+        .sp-check label { color:var(--sp-muted-lt); cursor:pointer; flex:1; }
+        .sp-check input:checked + label { color:var(--sp-muted); text-decoration:line-through; }
+
+        /* AT-THE-KILN · spec tiles row */
+        .sp-spec-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:8px 0 18px; }
+        .sp-spec-tile { background:var(--sp-panel); padding:16px; }
+        .sp-spec-tile .val { font-size:36px; font-weight:500; color:var(--sp-amber); line-height:1.05; font-variant-numeric:tabular-nums; }
+        .sp-spec-tile .val.white { color:var(--sp-white); font-size:24px; }
+        .sp-spec-tile .lbl { font-size:10px; color:var(--sp-muted); text-transform:uppercase; letter-spacing:0.1em; margin-top:8px; font-weight:500; }
+
+        /* Collapsible step cards */
+        .sp-step { background:var(--sp-panel); margin:6px 0; }
+        .sp-step summary { padding:11px 14px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--sp-white); font-weight:500; }
+        .sp-step summary::-webkit-details-marker { display:none; }
+        .sp-step[open] summary { border-bottom:1px solid #1f1f1f; }
+        .sp-step__num { font-size:10px; color:var(--sp-amber); background:#0d0d0d; padding:3px 7px; font-weight:500; letter-spacing:0.5px; min-width:38px; text-align:center; }
+        .sp-step__title { flex:1; }
+        .sp-step__check { margin-left:auto; }
+        .sp-step__check input[type=checkbox] { accent-color:var(--sp-orange); width:14px; height:14px; }
+        .sp-step__body { padding:12px 14px; font-size:12px; color:var(--sp-muted-lt); }
+        .sp-step__body p { color:var(--sp-muted-lt); }
+        .sp-step__body .label { color:var(--sp-amber); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; font-weight:500; display:block; margin:8px 0 2px; }
+
+        /* IF-WRONG · structured tables */
+        .sp-table { width:100%; border-collapse:collapse; margin:8px 0 14px; }
+        .sp-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--sp-muted); padding:8px 12px; border-bottom:1px solid var(--sp-divider); font-weight:500; }
+        .sp-table td { padding:10px 12px; font-size:12px; color:var(--sp-white); border-bottom:1px solid #1f1f1f; vertical-align:top; line-height:1.45; }
+        .sp-table tr:hover { background:var(--sp-panel); }
+
+        /* POST-JOB · log-a-batch form */
+        .sp-form { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:8px; }
+        .sp-form-field { display:flex; flex-direction:column; gap:4px; }
+        .sp-form-field.full { grid-column:1/-1; }
+        .sp-form-field .lbl { font-size:10px; color:var(--sp-muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:500; }
+        .sp-form input, .sp-form textarea, .sp-form select { background:var(--sp-panel); border:1px solid var(--sp-divider); color:var(--sp-white); padding:8px 10px; font-size:13px; font-family:'Lexend',sans-serif; font-weight:400; }
+        .sp-form input:focus, .sp-form textarea:focus, .sp-form select:focus { outline:none; border-color:var(--sp-orange); }
+        .sp-form textarea { min-height:60px; resize:vertical; }
+        .sp-toggle { display:flex; gap:6px; }
+        .sp-toggle button { padding:7px 14px; background:var(--sp-panel); border:1px solid var(--sp-divider); color:var(--sp-muted-lt); cursor:pointer; font-family:inherit; font-size:12px; font-weight:400; text-transform:uppercase; letter-spacing:0.5px; }
+        .sp-toggle button.on { background:var(--sp-orange); color:#000; border-color:var(--sp-orange); }
+        .sp-photo-drop { border:1px dashed var(--sp-divider); padding:20px; text-align:center; cursor:pointer; color:var(--sp-muted); font-size:12px; }
+        .sp-photo-drop:hover, .sp-photo-drop.dragover { border-color:var(--sp-orange); color:var(--sp-orange); }
+        .sp-photo-drop input { display:none; }
+        .sp-photo-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+        .sp-photo-thumb { width:72px; height:72px; object-fit:cover; border:1px solid var(--sp-divider); }
+
+        /* Modal footer */
+        .sp-modal__footer { padding:14px 24px; border-top:1px solid #1f1f1f; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-shrink:0; }
+        .sp-footer-status { color:var(--sp-muted); font-size:12px; font-family:'Lexend',sans-serif; }
+        .sp-footer-status .num { color:var(--sp-white); }
+        .sp-cta { background:var(--sp-orange); color:#000; padding:10px 24px; border:0; font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; font-family:'Lexend',sans-serif; }
+        .sp-cta:hover { background:var(--sp-amber); }
+        .sp-cta.secondary { background:transparent; color:var(--sp-muted-lt); border:1px solid var(--sp-divider); padding:9px 20px; }
+        .sp-cta.secondary:hover { color:var(--sp-white); border-color:var(--sp-white); }
+        .sp-footer-link { color:var(--sp-muted); font-size:11px; text-decoration:none; padding:6px 10px; cursor:pointer; font-family:inherit; background:transparent; border:0; }
+        .sp-footer-link:hover { color:var(--sp-amber); }
+
+        /* Mobile */
+        @media (max-width:520px) {
+          .sp-grid { grid-template-columns:1fr; }
+          .sp-modal.open { padding:0; align-items:stretch; }
+          .sp-modal__shell { max-width:100%; max-height:100vh; }
+          .sp-modal__header { padding:14px 16px; }
+          .sp-modal__metadata { padding:10px 16px; gap:14px; }
+          .sp-modal__nav { padding:0 4px; }
+          .sp-pill { padding:12px 12px; font-size:11px; }
+          .sp-modal__content { padding:14px 16px; }
+          .sp-modal__footer { padding:12px 16px; }
+          .sp-spec-row { grid-template-columns:1fr 1fr; gap:8px; }
+          .sp-spec-tile { padding:12px; }
+          .sp-spec-tile .val { font-size:26px; }
+          .sp-form { grid-template-columns:1fr; }
+        }
+      </style>
+
+      <!-- Active-run rail — pinned above toolbar when any run is in progress -->
+      <div id="sp-runrail" class="sp-runrail" onclick="openActiveRun()">
+        <i class="ti ti-flame"></i>
+        <span class="sp-runrail__title" id="sp-runrail-title">—</span>
+        <span class="sp-runrail__timer" id="sp-runrail-timer"></span>
+        <button type="button" class="sp-runrail__cta" onclick="event.stopPropagation();openActiveRun()">→ Open</button>
+      </div>
+
+      <!-- Heat Treat 3-col view (Alessio direct, 2026-05-31): mirrors the OPERATOR
+           list/master/detail pattern using shared CCMasterDetail. Left = steels
+           (distinct material), middle = procedures for that steel, right =
+           detail + bus thread. The legacy .sp-toolbar + #sp-list grid + the
+           .sp-modal popup are kept loaded in case the old flow is still wired
+           elsewhere — search/category are hidden via display:none; the
+           operator-run modal is still reachable via the right-pane CTA. -->
+      <div id="sp-md3-mount" data-md-host="1" style="height:calc(100vh - 220px); min-height:480px;">
+        <div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs);padding:20px;">Loading heat treat…</div></div>
+      </div>
+
+      <div class="sp-toolbar" style="display:none;">
+        <input type="text" id="sp-search" placeholder="Search title, material, tags…" oninput="renderShopProcedures()" data-no-mic>
+        <select id="sp-category" onchange="renderShopProcedures()">
+          <option value="">All categories</option>
+          <option value="heat-treat">Heat Treat</option>
+          <option value="sharpening">Sharpening</option>
+          <option value="forging">Forging</option>
+          <option value="grinding">Grinding</option>
+          <option value="finishing">Finishing</option>
+          <option value="tooling">Tooling</option>
+        </select>
+      </div>
+
+      <div id="sp-list" style="display:none;">
+        <div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs);">Loading procedures…</div></div>
+      </div>
+
+      <!-- v2 modal — header / metadata / 5-pill nav / section content / footer -->
+      <div id="sp-modal" class="sp-modal" role="dialog" aria-modal="true" onclick="if(event.target===this)closeProcedureDetail()">
+        <div class="sp-modal__shell">
+          <div class="sp-modal__header">
+            <span class="sp-chip" id="sp-mod-chip">—</span>
+            <div class="sp-modal__title" id="sp-mod-title">—</div>
+            <a class="sp-btn-print" id="sp-mod-print" href="#" target="_blank" rel="noopener">Print</a>
+            <button type="button" class="sp-btn-close" onclick="closeProcedureDetail()" aria-label="Close"><i class="ti ti-x"></i></button>
+          </div>
+
+          <div class="sp-modal__metadata" id="sp-mod-meta"></div>
+
+          <div class="sp-modal__nav" id="sp-mod-nav">
+            <button type="button" class="sp-pill active" data-sec="pre-job"     onclick="switchProcedureSection(this,'pre-job')"><i class="ti ti-clipboard-list"></i>Pre-job</button>
+            <button type="button" class="sp-pill"        data-sec="at-the-kiln" onclick="switchProcedureSection(this,'at-the-kiln')"><i class="ti ti-flame"></i>At the kiln</button>
+            <button type="button" class="sp-pill"        data-sec="post-job"    onclick="switchProcedureSection(this,'post-job')"><i class="ti ti-check"></i>Post-job</button>
+            <button type="button" class="sp-pill"        data-sec="if-wrong"    onclick="switchProcedureSection(this,'if-wrong')"><i class="ti ti-alert-triangle"></i>If wrong</button>
+            <button type="button" class="sp-pill"        data-sec="reference"   onclick="switchProcedureSection(this,'reference')"><i class="ti ti-book-2"></i>Reference</button>
+          </div>
+
+          <div class="sp-modal__content">
+            <div class="sp-section active" data-sec="pre-job"     id="sp-sec-pre-job"></div>
+            <div class="sp-section"        data-sec="at-the-kiln" id="sp-sec-at-the-kiln"></div>
+            <div class="sp-section"        data-sec="post-job"    id="sp-sec-post-job"></div>
+            <div class="sp-section"        data-sec="if-wrong"    id="sp-sec-if-wrong"></div>
+            <div class="sp-section"        data-sec="reference"   id="sp-sec-reference"></div>
+          </div>
+
+          <div class="sp-modal__footer">
+            <div class="sp-footer-status" id="sp-mod-status">—</div>
+            <div id="sp-mod-actions"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ INTERNS SUBPANE — split view (v2, 2026-05-20).
+         Built on the Sessions split-view template (cc-ses-* classes reused).
+         LEFT  : Active / Pre-arrival sections · clickable intern rows.
+         RIGHT : dense per-intern detail · Identity · Meta · Schedule · Phase · Forms · Log.
+         Click an intern on the left → detail switches on the right.
+         Schema target: shop_interns + companion tables (TBD — Phase 2). ═══ -->
+    <div class="cc-subpane" data-subtab="interns">
+      <span style="display:none" id="in-count">2</span>
+
+      <style>
+        /* 3-column subpane layout (2026-05-31 Alessio direct):
+              intern list  |  journey / calendar  |  Project Bus (staff-only)
+           Replaces the previous .cc-ses-split (2-col) + .in-mvp-header strip
+           + .in-mvp-bus tail. Interns NEVER see this surface — agent_messages
+           lives behind staff-RLS and the portal at intern.html doesn't touch it. */
+        [data-subtab="interns"] .in-3col { display:grid; grid-template-columns:1.5fr 2.5fr 2.5fr; gap:var(--sp-10); align-items:stretch; }
+        /* Curriculum card fills the leftover vertical space in the LEFT column
+           so the bottom of col-1 lines up with the bottom of col-2 + col-3
+           (Alessio direct ask, 2026-06-01). */
+        [data-subtab="interns"] #in-curriculum-card { flex:1 1 auto; min-height:0; }
+        @media (max-width:700px) { [data-subtab="interns"] .in-3col { grid-template-columns:180px 1fr; }
+                                     [data-subtab="interns"] .in-3col__bus { grid-column:1 / -1; } } /* 700 (was 1100) — iPads keep columns + resize, 2026-06-09 */
+        /* Gray-box card look on all three columns (Alessio direct, 2026-05-31) —
+           matches the OPERATOR > TASKS / PLANS / PROJECTS .ts3-col / .pj-card
+           visual: background var(--surface), 1px border, 6px radius, 10px pad. */
+        [data-subtab="interns"] .in-3col__list { display:flex; flex-direction:column; gap:var(--sp-6); background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); min-height:0; max-height:100%; overflow-y:auto; }
+        [data-subtab="interns"] .in-3col__detail { min-height:0; max-height:100%; overflow-y:auto; min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); }
+        /* Bus column — list scrolls, head + composer stay at top. Now wrapped in the
+           same gray-box card as cols 1 + 2 for visual consistency (Alessio direct,
+           2026-05-31). Dropped the bare border-left + padding-left in favour of a
+           full bordered card. */
+        [data-subtab="interns"] .in-3col__bus { min-height:0; max-height:100%; overflow:hidden; min-width:0; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); }
+        /* tighter calendar rows + week spacing */
+        [data-subtab="interns"] .wk { margin:8px 0 4px; }
+        [data-subtab="interns"] .day { padding:5px 8px !important; }
+        [data-subtab="interns"] .day__activity { margin-bottom:3px; }
+
+        /* Project Bus column (staff-only · agent_messages) */
+        [data-subtab="interns"] .in-mvp-bus__head { font-family:var(--display); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); margin-bottom:var(--sp-8); display:flex; align-items:baseline; gap:var(--sp-8); flex-shrink:0; }
+        [data-subtab="interns"] .in-mvp-bus__count { font-family:var(--mono); font-size:10px; color:var(--text-xs); letter-spacing:0.04em; text-transform:none; }
+        /* The bus LIST is the scroll container — head + composer stay at top, list scrolls under them with NO seam-bleed. */
+        [data-subtab="interns"] .in-mvp-bus__list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:var(--sp-6); margin-bottom:0; }
+        [data-subtab="interns"] .in-mvp-bus__msg { padding:var(--sp-6) var(--sp-10); border:1px solid var(--border); border-radius:3px; background:var(--raised); }
+        [data-subtab="interns"] .in-mvp-bus__msg.urgent { border-left:3px solid #f85149; }
+        [data-subtab="interns"] .in-mvp-bus__msg-head { display:flex; align-items:baseline; gap:var(--sp-6); font-family:var(--mono); font-size:10px; letter-spacing:0.04em; color:var(--text-dim); margin-bottom:var(--sp-4); flex-wrap:wrap; }
+        [data-subtab="interns"] .in-mvp-bus__msg-from { color:var(--amber); font-weight:600; }
+        [data-subtab="interns"] .in-mvp-bus__msg-arrow { color:var(--text-xs); }
+        [data-subtab="interns"] .in-mvp-bus__msg-to { color:var(--text); }
+        [data-subtab="interns"] .in-mvp-bus__msg-when { margin-left:auto; color:var(--text-xs); font-size:9px; }
+        [data-subtab="interns"] .in-mvp-bus__msg-body { font-size:11.5px; color:var(--text); line-height:1.42; white-space:pre-wrap; word-wrap:break-word; }
+        [data-subtab="interns"] .in-mvp-bus__empty { font-family:var(--mono); font-size:10px; color:var(--text-xs); padding:var(--sp-10); text-align:center; border:1px dashed var(--border); border-radius:3px; }
+        /* Composer (staff-only — interns never reach this) */
+        /* Composer ON TOP of col3 (bus #1788). Static layout — the LIST below is
+           the scroll container (see .in-mvp-bus__list overflow-y:auto), so the
+           composer + head stay fixed at the top of the column naturally without
+           position:sticky (sticky was leaking the scrolling thread through the
+           seam around the composer). */
+        [data-subtab="interns"] .in-mvp-bus__compose { flex-shrink:0; background:var(--bg); padding:var(--sp-10); border:1px solid var(--border); border-radius:4px; margin-bottom:var(--sp-10); display:flex; flex-direction:column; gap:var(--sp-6); }
+        [data-subtab="interns"] .in-mvp-bus__compose label { font-family:var(--mono); font-size:9px; color:var(--text-xs); letter-spacing:0.06em; text-transform:uppercase; }
+        [data-subtab="interns"] .in-mvp-bus__compose-row { display:flex; gap:var(--sp-6); align-items:center; flex-wrap:wrap; }
+        /* Channel-type chip row (bus #1788) — same enum as agent_messages.channel CHECK constraint. */
+        [data-subtab="interns"] .in-mvp-bus__chan-row { display:flex; gap:4px; flex-wrap:wrap; }
+        [data-subtab="interns"] .in-mvp-bus__chan { font-family:var(--mono); font-size:9px; padding:3px 8px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; user-select:none; }
+        [data-subtab="interns"] .in-mvp-bus__chan:hover { color:var(--amber); border-color:var(--amber); }
+        [data-subtab="interns"] .in-mvp-bus__chan.active { background:var(--amber); color:#000; border-color:var(--amber); }
+        [data-subtab="interns"] .in-mvp-bus__compose-to { background:var(--bg); color:var(--text); border:1px solid var(--border); height:28px; font-size:11px; padding:0 6px; }
+        [data-subtab="interns"] .in-mvp-bus__compose-text { width:100%; box-sizing:border-box; background:var(--bg); color:var(--text); border:1px solid var(--border); padding:6px 8px; font-family:var(--sans); font-size:12px; line-height:1.4; min-height:60px; max-height:400px; resize:vertical; }
+        [data-subtab="interns"] .in-mvp-bus__compose-text:focus { outline:none; border-color:var(--amber); }
+        [data-subtab="interns"] .in-mvp-bus__compose-send { align-self:flex-start; background:var(--amber); color:#000; border:0; padding:6px 14px; font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; height:28px; }
+        [data-subtab="interns"] .in-mvp-bus__compose-send:hover { background:var(--amber-hi, #ffb000); }
+        [data-subtab="interns"] .in-mvp-bus__compose-send:disabled { background:var(--muted); cursor:wait; }
+
+        /* Tight list rows for the Interns left rail — no stretched cc-cards */
+        [data-subtab="interns"] .in-row { display:flex; align-items:center; gap:var(--sp-8); padding:var(--sp-8) var(--sp-10); cursor:pointer; border-left:2px solid transparent; transition:background var(--tr-fast), border-color var(--tr-fast); }
+        [data-subtab="interns"] .in-row:hover { background:var(--raised); border-left-color:var(--amber-dim); }
+        [data-subtab="interns"] .in-row.selected { background:var(--amber-soft); border-left-color:var(--amber); }
+        [data-subtab="interns"] .in-row__main { flex:1; min-width:0; }
+        [data-subtab="interns"] .in-row__name { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--text); line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        [data-subtab="interns"] .in-row__sub { font-size:10px; color:var(--text-dim); margin-top:2px; font-family:var(--mono); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        [data-subtab="interns"] .in-row__chev { color:var(--text-xs); font-size:14px; flex-shrink:0; }
+        [data-subtab="interns"] .in-row.selected .in-row__chev { color:var(--amber); }
+        [data-subtab="interns"] .in-row__badge { font-family:var(--mono); font-size:9px; padding:2px 6px; border-radius:3px; background:var(--amber-soft); color:var(--amber); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; flex-shrink:0; }
+        [data-subtab="interns"] .in-row__badge.muted { background:var(--raised); color:var(--text-xs); border:1px solid var(--border); }
+      </style>
+
+      <div class="in-3col">
+
+        <!-- COL 1 — intern list (Hannes / Corentin) -->
+        <div class="in-3col__list">
+          <div id="in-active-section">
+            <div class="cc-ses-section-head" onclick="window.toggleInSection('active')"><span class="arrow"></span><span>Active</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-xs)">2</span></div>
+            <div class="cc-ses-section-body" id="in-active-body">
+              <div class="in-row" data-intern="hannes" onclick="window.selectIntern(this,'hannes')">
+                <div class="in-row__main">
+                  <div class="in-row__name">🇩🇪 Hannes Nagel</div>
+                  <div class="in-row__sub">Day 2 · Phase A · 9w</div>
+                </div>
+                <div class="in-row__badge">2 to sign</div>
+                <div class="in-row__chev">›</div>
+              </div>
+              <div class="in-row" data-intern="corentin" onclick="window.selectIntern(this,'corentin')">
+                <div class="in-row__main">
+                  <div class="in-row__name">🇫🇷 Corentin</div>
+                  <div class="in-row__sub">Phase A · 17w</div>
+                </div>
+                <div class="in-row__badge">3 to sign</div>
+                <div class="in-row__chev">›</div>
+              </div>
+            </div>
+          </div>
+          <div id="in-pre-section" style="display:none">
+            <!-- Pre-arrival section emptied 2026-06-01 — both interns now active per DB (status=active). -->
+          </div>
+
+          <!-- ═══ WHAT WE'RE TEACHING — curriculum card (bus #1867, 2026-06-01) ═══
+               Reads from assets/data/intern-curriculum.json so Alessio/cowork can
+               edit without touching JS. Inline fallback content lives below in
+               case the JSON fetch fails. -->
+          <div id="in-curriculum-card" class="cc-intern-curriculum-host" data-cur-version="1" style="margin-top:var(--sp-10); padding-top:var(--sp-10); border-top:1px solid var(--border); display:flex; flex-direction:column; gap:var(--sp-8);">
+            <style>
+              .cc-intern-curriculum-host .cur-head { display:flex; align-items:baseline; gap:var(--sp-6); font-family:var(--display); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); }
+              .cc-intern-curriculum-host .cur-head__sub { margin-left:auto; font-family:var(--mono); font-size:9px; color:var(--text-xs); letter-spacing:0.04em; text-transform:none; }
+              .cc-intern-curriculum-host .cur-section { padding-top:var(--sp-6); }
+              .cc-intern-curriculum-host .cur-section + .cur-section { border-top:1px dashed var(--border); margin-top:var(--sp-4); }
+              .cc-intern-curriculum-host .cur-section__head { display:flex; align-items:baseline; gap:6px; font-family:var(--display); font-size:11px; font-weight:600; color:var(--text); }
+              .cc-intern-curriculum-host .cur-section__icon { font-size:13px; }
+              .cc-intern-curriculum-host .cur-group { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px 6px; align-items:baseline; }
+              .cc-intern-curriculum-host .cur-group__label { font-family:var(--mono); font-size:9px; color:var(--text-xs); letter-spacing:0.06em; text-transform:uppercase; margin-right:2px; }
+              .cc-intern-curriculum-host .cur-chip { font-family:var(--sans); font-size:10.5px; padding:2px 7px; background:var(--raised); color:var(--text); border:1px solid var(--border); border-radius:3px; }
+              .cc-intern-curriculum-host .cur-note { font-family:var(--sans); font-size:11px; color:var(--text-dim); font-style:italic; line-height:1.4; margin-top:4px; }
+            </style>
+            <div class="cur-head"><span>📚</span><span>What we're teaching</span><span class="cur-head__sub">AZCK intern curriculum</span></div>
+            <div id="in-curriculum-body">
+              <div class="cur-section">
+                <div class="cur-section__head"><span class="cur-section__icon">⏳</span><span>Loading…</span></div>
+              </div>
+            </div>
+            <script>
+            (function(){
+              const host = document.getElementById('in-curriculum-card');
+              if (!host) return;
+              const body = host.querySelector('#in-curriculum-body');
+              function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+              function renderGroup(g){
+                const chips = (g.chips||[]).map(c => '<span class="cur-chip">'+esc(c)+'</span>').join('');
+                return '<div class="cur-group"><span class="cur-group__label">'+esc(g.label||'')+'</span>'+chips+'</div>';
+              }
+              function renderSection(sec){
+                const groups = (sec.groups||[]).map(renderGroup).join('');
+                const note = sec.note ? '<div class="cur-note">'+esc(sec.note)+'</div>' : '';
+                return '<div class="cur-section">'+
+                       '<div class="cur-section__head"><span class="cur-section__icon">'+esc(sec.icon||'')+'</span><span>'+esc(sec.heading||'')+'</span></div>'+
+                       groups + note +
+                       '</div>';
+              }
+              fetch('assets/data/intern-curriculum.json', { cache:'no-cache' })
+                .then(r => r.ok ? r.json() : Promise.reject(new Error('http '+r.status)))
+                .then(cur => {
+                  body.innerHTML = (cur.sections||[]).map(renderSection).join('');
+                  const head = host.querySelector('.cur-head');
+                  if (head && cur.title) head.querySelector('span:nth-child(2)').textContent = cur.title;
+                  if (head && cur.subtitle) head.querySelector('.cur-head__sub').textContent = cur.subtitle;
+                })
+                .catch(err => {
+                  body.innerHTML = '<div class="cur-section"><div class="cur-section__head"><span class="cur-section__icon">⚠️</span><span>Curriculum load failed</span></div><div class="cur-note">Edit assets/data/intern-curriculum.json. Error: '+esc(err.message||err)+'</div></div>';
+                });
+            })();
+            </script>
+          </div>
+        </div>
+
+        <!-- COL 2 — journey / calendar for the selected intern -->
+        <div class="in-3col__detail" id="in-detail-pane">
+
+          <div id="in-detail-empty" class="cc-ses-detail-empty" style="display:none">Click an intern on the left to open their card.</div>
+
+          <!-- Per-intern detail = identity strip + multi-week journey of days with notes per day -->
+          <style>
+            /* Journey list — one row per day, grouped by week */
+            [data-subtab="interns"] .wk { margin:14px 0 6px; }
+            [data-subtab="interns"] .wk__head { display:flex; align-items:baseline; gap:10px; padding:7px 10px; background:var(--raised); border-left:2px solid var(--amber-glow); }
+            [data-subtab="interns"] .wk__num { font-family:var(--display); font-size:11px; font-weight:700; color:var(--amber); letter-spacing:0.14em; text-transform:uppercase; }
+            [data-subtab="interns"] .wk__range { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+            [data-subtab="interns"] .wk__phase { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--text-xs); letter-spacing:0.1em; text-transform:uppercase; }
+
+            [data-subtab="interns"] .day { display:grid; grid-template-columns:54px 90px 1fr; gap:12px; padding:8px 10px; border-bottom:1px solid var(--border); align-items:start; }
+            [data-subtab="interns"] .day.closed { opacity:0.35; }
+            [data-subtab="interns"] .day.today { background:var(--amber-soft); border-left:2px solid var(--amber); padding-left:8px; }
+            [data-subtab="interns"] .day.past { opacity:0.75; }
+
+            [data-subtab="interns"] .day__date { font-family:var(--mono); line-height:1; }
+            [data-subtab="interns"] .day__num { font-size:20px; font-weight:700; color:var(--text); }
+            [data-subtab="interns"] .day__wd { font-size:10px; color:var(--text-xs); text-transform:uppercase; letter-spacing:0.1em; margin-top:3px; }
+            [data-subtab="interns"] .day.today .day__num { color:var(--amber); }
+
+            [data-subtab="interns"] .day__meta { display:flex; flex-direction:column; gap:4px; }
+            [data-subtab="interns"] .day__tag { font-family:var(--mono); font-size:9px; padding:2px 6px; background:var(--amber-soft); color:var(--amber); text-transform:uppercase; letter-spacing:0.08em; font-weight:700; display:inline-block; width:fit-content; border-radius:2px; }
+            [data-subtab="interns"] .day__tag.b { background:rgba(106,176,89,0.12); color:#6ab059; }
+            [data-subtab="interns"] .day__tag.c { background:rgba(115,150,210,0.12); color:#7396d2; }
+            [data-subtab="interns"] .day__tag.muted { background:var(--raised); color:var(--text-xs); border:1px solid var(--border); }
+            [data-subtab="interns"] .day__status { font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+            [data-subtab="interns"] .day.today .day__status { color:var(--amber); font-weight:700; }
+
+            [data-subtab="interns"] .day__activity { font-size:12px; color:var(--text); margin-bottom:5px; line-height:1.4; }
+            [data-subtab="interns"] .day__activity.placeholder { color:var(--text-xs); font-style:italic; }
+            /* Per-day conversation thread */
+            [data-subtab="interns"] .day__thread { display:flex; flex-direction:column; gap:4px; margin:4px 0 6px; }
+            [data-subtab="interns"] .msg { padding:5px 9px; border-left:2px solid var(--border); background:rgba(255,255,255,0.02); max-width:94%; }
+            [data-subtab="interns"] .msg__head { display:flex; gap:8px; align-items:baseline; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:2px; }
+            [data-subtab="interns"] .msg__who { font-weight:700; }
+            [data-subtab="interns"] .msg__time { color:var(--text-xs); }
+            [data-subtab="interns"] .msg__text { font-size:12px; color:var(--text); line-height:1.4; white-space:pre-wrap; word-wrap:break-word; }
+            [data-subtab="interns"] .msg--intern  { border-left-color:var(--amber); background:var(--amber-soft); }
+            [data-subtab="interns"] .msg--intern  .msg__who { color:var(--amber); }
+            [data-subtab="interns"] .msg--alessio { border-left-color:#5da0ff; background:rgba(93,160,255,0.08); align-self:flex-end; }
+            [data-subtab="interns"] .msg--alessio .msg__who { color:#7ab3ff; }
+            [data-subtab="interns"] .msg--reanna  { border-left-color:#7bcfa6; background:rgba(123,207,166,0.08); align-self:flex-end; }
+            [data-subtab="interns"] .msg--reanna  .msg__who { color:#9be0bd; }
+
+            [data-subtab="interns"] .day__reply { display:flex; gap:6px; margin-top:4px; align-items:flex-end; width:100%; }
+            [data-subtab="interns"] .day__reply-input { flex:1 1 0%; width:100%; min-width:0; min-height:30px; max-height:300px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 8px; font-family:var(--sans); font-size:11px; line-height:1.4; resize:vertical; box-sizing:border-box; }
+            [data-subtab="interns"] .day__reply-input:focus { outline:none; border-color:var(--amber); }
+            [data-subtab="interns"] .day__reply-send { background:var(--amber); color:#000; border:0; padding:7px 12px; font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; height:30px; }
+            [data-subtab="interns"] .day__reply-send:hover { background:var(--text); }
+            [data-subtab="interns"] .day__reply-send:disabled { background:var(--muted); cursor:wait; }
+
+            [data-subtab="interns"] .id-strip { padding-bottom:var(--sp-12); border-bottom:1px solid var(--border); margin-bottom:var(--sp-8); }
+            [data-subtab="interns"] .id-strip__top { display:flex; align-items:baseline; gap:10px; }
+            [data-subtab="interns"] .id-strip__name { font-family:var(--display); font-size:18px; font-weight:700; letter-spacing:0.02em; color:var(--text); }
+            [data-subtab="interns"] .id-strip__flag { font-size:16px; }
+            [data-subtab="interns"] .id-strip__status { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--amber); text-transform:uppercase; letter-spacing:0.12em; }
+            [data-subtab="interns"] .id-strip__sub { font-size:11px; color:var(--text-dim); margin-top:4px; letter-spacing:0.04em; }
+            [data-subtab="interns"] .id-strip__link { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:6px 12px; background:var(--amber-soft); color:var(--amber); border:1px solid var(--amber-glow); text-decoration:none; font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; }
+            [data-subtab="interns"] .id-strip__link:hover { background:var(--amber); color:#000; }
+          </style>
+
+          <!-- ── HANNES DETAIL ── -->
+          <div id="in-detail-hannes" data-intern-detail="hannes">
+            <div class="id-strip">
+              <div class="id-strip__top">
+                <div class="id-strip__name">Hannes Nagel</div>
+                <div class="id-strip__flag">🇩🇪</div>
+                <div class="id-strip__status" id="in-hannes-progress">Day 2 of 45 · Phase A</div>
+              </div>
+              <div class="id-strip__sub">May 19 → Jul 18 · 9-week stay · capstone TBD · transport: our vehicle 8:45</div>
+              <a class="id-strip__link" href="/intern.html?as=hannes" target="_blank" rel="noopener" title="Same-origin so the CC staff session adopts automatically — no magic-link needed">↗ Open Hannes's intern page</a>
+            </div>
+            <div id="in-journey-hannes"></div>
+          </div>
+
+          <!-- ── CORENTIN DETAIL ── -->
+          <div id="in-detail-corentin" data-intern-detail="corentin" style="display:none">
+            <div class="id-strip">
+              <div class="id-strip__top">
+                <div class="id-strip__name">Corentin</div>
+                <div class="id-strip__flag">🇫🇷</div>
+                <div class="id-strip__status" id="in-corentin-progress" style="color:var(--text-dim);">Arrives in 3 days · Sat May 23</div>
+              </div>
+              <div class="id-strip__sub">May 23 → Sep 19 · 17-week stay · capstone QuadFang broadhead</div>
+              <a class="id-strip__link" href="/intern.html?as=corentin" target="_blank" rel="noopener" title="Same-origin so the CC staff session adopts automatically — no magic-link needed">↗ Open Corentin's intern page</a>
+            </div>
+            <div id="in-journey-corentin"></div>
+          </div>
+
+        </div>
+
+        <!-- COL 3 — Project Bus (staff-only · agent_messages WHERE project_slug=interns-hr-cowork)
+             Interns NEVER see this surface. Their portal at intern.html writes to
+             intern_messages only. This column is forge-code↔Alessio↔Reanna territory. -->
+        <div class="in-3col__bus">
+          <div class="in-mvp-bus__head">▾ Project Bus <span class="in-mvp-bus__count" id="in-mvp-bus-count">loading…</span></div>
+          <!-- COMPOSER ON TOP (bus #1788) — sticky, full-width, matches BUSES v2 sticky-composer pattern.
+               Universal mic via assets/cc-mic.js auto-attaches to the textarea per CC_DESIGN_SYSTEM.md 2.1. -->
+          <div class="in-mvp-bus__compose">
+            <label for="in-mvp-bus-compose">New bus message (staff-only · interns won't see this)</label>
+            <div class="in-mvp-bus__compose-row">
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text-xs);">to:</span>
+              <select class="in-mvp-bus__compose-to" id="in-mvp-bus-to">
+                <option value="forge-cowork">forge-cowork</option>
+                <option value="forge-code">forge-code</option>
+                <option value="forge-design">forge-design</option>
+                <option value="reanna">reanna</option>
+                <option value="alessio">alessio (note to self)</option>
+              </select>
+            </div>
+            <div class="in-mvp-bus__chan-row" role="radiogroup" aria-label="Channel type">
+              <button type="button" class="in-mvp-bus__chan active" data-chan="general" onclick="window.selectInternsBusChan(this)" role="radio" aria-checked="true">general</button>
+              <button type="button" class="in-mvp-bus__chan" data-chan="task"         onclick="window.selectInternsBusChan(this)" role="radio" aria-checked="false">task</button>
+              <button type="button" class="in-mvp-bus__chan" data-chan="question"     onclick="window.selectInternsBusChan(this)" role="radio" aria-checked="false">question</button>
+              <button type="button" class="in-mvp-bus__chan" data-chan="fyi"          onclick="window.selectInternsBusChan(this)" role="radio" aria-checked="false">fyi</button>
+              <button type="button" class="in-mvp-bus__chan" data-chan="escalation"   onclick="window.selectInternsBusChan(this)" role="radio" aria-checked="false">escalation</button>
+            </div>
+            <textarea class="in-mvp-bus__compose-text" id="in-mvp-bus-compose" placeholder="Type a message to log on the Interns project bus…"></textarea>
+            <button class="in-mvp-bus__compose-send" id="in-mvp-bus-send" type="button" onclick="window.postInternsBus()">Send to bus</button>
+          </div>
+          <!-- Bus thread BELOW composer (scrolls within col3 vertically). -->
+          <div class="in-mvp-bus__list" id="in-mvp-bus-list">
+            <div class="in-mvp-bus__empty">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        // ── Journey renderer: per-intern day-by-day list with notes per day ──
+        (function(){
+          const TODAY = (function(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })(); // LOCAL date so the highlight tracks Alessio's wall clock, not UTC
+          const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+          function iso(d){ return d.toISOString().slice(0,10); }
+          function parseISO(s){ return new Date(s + 'T00:00:00'); }
+          function shortDate(s){ const d = parseISO(s); return MONTHS[d.getMonth()] + ' ' + d.getDate(); }
+
+          // ── Supabase data layer — load interns + schedule + messages, post staff messages ─────
+          const INTERN_ID_BY_SLUG = {};
+          const INTERN_SLUG_BY_ID = {};  // intern_id → slug (for realtime callback)
+          const MESSAGES_BY_SLUG = {};   // slug → { 'YYYY-MM-DD': [msg, msg, …] }
+          const SCHEDULE_BY_SLUG = {};   // slug → { 'YYYY-MM-DD': 'activity text' }
+          async function loadInternData(){
+            if (!window.supa) return;
+            try {
+              const { data: ins, error: e1 } = await window.supa.from('interns').select('id, slug');
+              if (e1) { console.warn('[interns] interns load failed', e1.message); return; }
+              (ins||[]).forEach(i => { INTERN_ID_BY_SLUG[i.slug] = i.id; });
+              const idToSlug = Object.fromEntries(Object.entries(INTERN_ID_BY_SLUG).map(([s,id]) => [id, s]));
+              Object.assign(INTERN_SLUG_BY_ID, idToSlug); // keep reverse-map in sync for realtime
+              const [msgsRes, schedRes] = await Promise.all([
+                window.supa.from('intern_messages').select('id, intern_id, day_date, author, text, created_at').order('created_at', { ascending:true }),
+                window.supa.from('intern_schedule').select('intern_id, day_date, activity'),
+              ]);
+              // Reset before populating in case of re-fetch
+              for (const k in MESSAGES_BY_SLUG) delete MESSAGES_BY_SLUG[k];
+              if (msgsRes.error) console.warn('[interns] messages load failed', msgsRes.error.message);
+              (msgsRes.data||[]).forEach(m => {
+                const slug = idToSlug[m.intern_id]; if (!slug) return;
+                MESSAGES_BY_SLUG[slug] = MESSAGES_BY_SLUG[slug] || {};
+                (MESSAGES_BY_SLUG[slug][m.day_date] = MESSAGES_BY_SLUG[slug][m.day_date] || []).push(m);
+              });
+              if (schedRes.error) console.warn('[interns] schedule load failed', schedRes.error.message);
+              (schedRes.data||[]).forEach(s => {
+                const slug = idToSlug[s.intern_id]; if (!slug) return;
+                SCHEDULE_BY_SLUG[slug] = SCHEDULE_BY_SLUG[slug] || {};
+                SCHEDULE_BY_SLUG[slug][s.day_date] = s.activity || '';
+              });
+            } catch(e){ console.warn('[interns] data load threw', e); }
+          }
+
+          // Post a message into a day's thread (CC = always staff, author = 'alessio')
+          window.postCCMessage = async function(slug, date, btn){
+            // Find the textarea by class within the reply row — NOT previousElementSibling.
+            // cc-mic.js wraps the textarea in a <span class="cc-mic-wrap">, so the send
+            // button's previous sibling is that wrapper span, not the textarea. Using
+            // closest()+querySelector is robust whether or not the mic wrapper is present.
+            const row = btn.closest('.day__reply');
+            const ta = (row && row.querySelector('.day__reply-input')) || btn.previousElementSibling;
+            if (!ta) { console.warn('[interns] postCCMessage: textarea not found'); return; }
+            const text = (ta.value || '').trim();
+            if (!text) return;
+            const internId = INTERN_ID_BY_SLUG[slug];
+            if (!internId || !window.supa) {
+              console.warn('[interns] postCCMessage: missing intern id or supa', { slug, hasId: !!internId, hasSupa: !!window.supa });
+              btn.style.background = 'var(--red)';
+              return;
+            }
+            btn.disabled = true; const oldLabel = btn.textContent; btn.textContent = '…';
+            try {
+              const { data: inserted, error } = await window.supa.from('intern_messages').insert({
+                intern_id: internId,
+                day_date: date,
+                author: 'alessio',
+                text
+              }).select('id, day_date, author, text, created_at').single();
+              if (error) throw error;
+              // Append to local cache
+              MESSAGES_BY_SLUG[slug] = MESSAGES_BY_SLUG[slug] || {};
+              (MESSAGES_BY_SLUG[slug][date] = MESSAGES_BY_SLUG[slug][date] || []).push(inserted);
+              appendCCMessageToDay(slug, date, inserted);
+              ta.value = '';
+              if (window._internDraftClear) window._internDraftClear(slug, date);
+              btn.style.background = '';  // clear any prior error state
+            } catch(e){
+              console.warn('[interns] post failed', e);
+              btn.style.background = 'var(--red)';
+            } finally {
+              btn.disabled = false; btn.textContent = oldLabel;
+            }
+          };
+
+          function appendCCMessageToDay(slug, date, msg){
+            const container = document.getElementById('in-journey-' + slug);
+            if (!container) return;
+            const dayEl = container.querySelector('.day[data-day="' + date + '"]');
+            if (!dayEl) return;
+            let thread = dayEl.querySelector('.day__thread');
+            if (!thread){
+              thread = document.createElement('div');
+              thread.className = 'day__thread';
+              const replyEl = dayEl.querySelector('.day__reply');
+              if (replyEl) replyEl.parentNode.insertBefore(thread, replyEl);
+            }
+            // Dedup — don't add the same message twice (Realtime + 60s refresh can both fire)
+            if (msg.id && thread.querySelector('[data-msg-id="' + msg.id + '"]')) return;
+            const div = document.createElement('div');
+            if (msg.id) div.setAttribute('data-msg-id', msg.id);
+            div.className = 'msg msg--' + msg.author;
+            div.innerHTML =
+              '<div class="msg__head"><span class="msg__who">' + escapeHtml(msg.author) + '</span><span class="msg__time">' + escapeHtml(formatMsgTimeCC(msg.created_at)) + '</span></div>' +
+              '<div class="msg__text">' + escapeHtml(msg.text) + '</div>';
+            thread.appendChild(div);
+          }
+
+          function formatMsgTimeCC(iso){
+            const d = new Date(iso);
+            const today = new Date(); today.setHours(0,0,0,0);
+            const isToday = (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate());
+            const hh = String(d.getHours()).padStart(2,'0');
+            const mm = String(d.getMinutes()).padStart(2,'0');
+            if (isToday) return hh + ':' + mm;
+            return MONTHS[d.getMonth()] + ' ' + d.getDate() + ' · ' + hh + ':' + mm;
+          }
+
+          // Intern configurations
+          const INTERNS = {
+            hannes: {
+              start: '2026-05-19',          // Tue
+              end:   '2026-07-18',           // Sat
+              rangeStart: '2026-05-18',      // back to Monday for week 1 framing
+              phases: [
+                { tag:'A', label:'A · Intro',    start:'2026-05-18', end:'2026-05-31' },
+                { tag:'B', label:'B · Build',    start:'2026-06-01', end:'2026-06-28' },
+                { tag:'C', label:'C · Personal', start:'2026-06-29', end:'2026-07-18' },
+              ],
+              holidays: {
+                '2026-05-18': 'Victoria Day · stat',
+                '2026-07-01': 'Canada Day · stat',
+              },
+              prefilled: {
+                '2026-05-19': { activity:'Day 1 · Welcome + Safety + Shop tour', notes:'🌟 Hannes wrote his 3 answers — transcribed to Hannes_Running_Log.md' },
+                '2026-05-20': { activity:'Bench block — Alessio\'s call · direction set in the moment', notes:'' },
+              },
+            },
+            corentin: {
+              start: '2026-05-23',           // Sat — arrival
+              end:   '2026-09-19',           // Sat
+              rangeStart: '2026-05-18',      // align week 1 with Hannes
+              phases: [
+                { tag:'A', label:'A · Intro',    start:'2026-05-23', end:'2026-06-14' },
+                { tag:'B', label:'B · Build',    start:'2026-06-15', end:'2026-08-30' },
+                { tag:'C', label:'C · Capstone', start:'2026-08-31', end:'2026-09-19' },
+              ],
+              holidays: {
+                '2026-07-01': 'Canada Day · stat',
+                '2026-08-03': 'Heritage Day · stat',
+                '2026-09-07': 'Labour Day · stat',
+              },
+              prefilled: {
+                '2026-05-23': { activity:'Arrival day — pickup + housing settle', notes:'' },
+                '2026-05-25': { activity:'Day 1 · Welcome + Safety + Shop tour', notes:'' },
+              },
+            },
+          };
+
+          function phaseFor(cfg, isoDate){
+            for (const p of cfg.phases){ if (isoDate >= p.start && isoDate <= p.end) return p; }
+            return null;
+          }
+
+          function buildDays(cfg){
+            const days = [];
+            const start = parseISO(cfg.rangeStart);
+            const end = parseISO(cfg.end);
+            let dayCounter = 0;
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+              const isoDate = iso(d);
+              const dow = d.getDay(); // 0=Sun 6=Sat
+              const isHoliday = !!cfg.holidays[isoDate];
+              const isWeekend = (dow === 0 || dow === 6);
+              const isBeforeStart = isoDate < cfg.start;
+              const isClosed = isWeekend || isHoliday || isBeforeStart;
+              const phase = phaseFor(cfg, isoDate);
+              const pre = cfg.prefilled[isoDate] || {};
+              let status;
+              if (isClosed) status = 'closed';
+              else if (isoDate < TODAY) status = 'past';
+              else if (isoDate === TODAY) status = 'today';
+              else status = 'future';
+              if (status !== 'closed') dayCounter++;
+              days.push({
+                iso: isoDate,
+                dow: dow,
+                date: d.getDate(),
+                monthAbbr: MONTHS[d.getMonth()],
+                status,
+                phase,
+                dayNum: status === 'closed' ? null : dayCounter,
+                holidayLabel: cfg.holidays[isoDate] || (isWeekend ? (dow === 0 ? 'Sunday' : 'Saturday · closed unless course') : null),
+                activity: pre.activity || '',
+                messages: [],
+              });
+            }
+            return { days, totalWorkDays: dayCounter };
+          }
+
+          function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+          function renderJourney(containerId, cfg){
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const slug = containerId.replace('in-journey-','');
+            const liveMsgs = MESSAGES_BY_SLUG[slug] || {};
+            const liveSchedule = SCHEDULE_BY_SLUG[slug] || {};
+            const { days, totalWorkDays } = buildDays(cfg);
+            // Supabase is source of truth — attach loaded thread + override activity
+            days.forEach(day => {
+              if (liveMsgs[day.iso]) day.messages = liveMsgs[day.iso];
+              if (liveSchedule[day.iso]) day.activity = liveSchedule[day.iso];
+            });
+
+            // Group by Monday-start week
+            const weeks = [];
+            let curr = null;
+            days.forEach((day, i) => {
+              if (i === 0 || day.dow === 1){ curr = { days:[] }; weeks.push(curr); }
+              curr.days.push(day);
+            });
+
+            // Which week is "current"? Match TODAY against each week's date range
+            // (ISO YYYY-MM-DD compares lexicographically). Works on weekends/holidays
+            // too. Before the stay → first week; after the stay → last week.
+            let currentWeekIndex = -1;
+            for (let i = 0; i < weeks.length; i++){
+              const wd = weeks[i].days;
+              if (!wd.length) continue;
+              if (TODAY >= wd[0].iso && TODAY <= wd[wd.length-1].iso){ currentWeekIndex = i; break; }
+            }
+            if (currentWeekIndex === -1){
+              currentWeekIndex = (weeks.length && TODAY < weeks[0].days[0].iso) ? 0 : (weeks.length - 1);
+            }
+
+            let html = '';
+            weeks.forEach((wk, wi) => {
+              if (!wk.days.length) return;
+              const first = wk.days[0], last = wk.days[wk.days.length-1];
+              const phase = wk.days.map(d => d.phase).find(Boolean);
+              const isCurrent = (wi === currentWeekIndex);
+              html += '<div class="wk' + (isCurrent ? ' wk--current' : '') + '"' + (isCurrent ? ' data-current-week="1"' : '') + '>';
+              html += '<div class="wk__head">';
+              html += '<div class="wk__num">Week ' + (wi+1) + '</div>';
+              html += '<div class="wk__range">' + shortDate(first.iso) + ' → ' + shortDate(last.iso) + '</div>';
+              if (phase) html += '<div class="wk__phase">Phase ' + escapeHtml(phase.label) + '</div>';
+              html += '</div>';
+
+              wk.days.forEach(day => {
+                const cls = 'day ' + day.status;
+                html += '<div class="' + cls + '" data-day="' + day.iso + '">';
+                html += '<div class="day__date"><div class="day__num">' + day.date + '</div><div class="day__wd">' + WD[day.dow] + '</div></div>';
+                html += '<div class="day__meta">';
+                if (day.status === 'closed'){
+                  html += '<div class="day__tag muted">—</div>';
+                } else if (day.phase){
+                  html += '<div class="day__tag ' + day.phase.tag.toLowerCase() + '">' + day.phase.tag + '</div>';
+                }
+                if (day.status === 'closed'){
+                  html += '<div class="day__status">closed</div>';
+                } else {
+                  html += '<div class="day__status">Day ' + day.dayNum + (day.status === 'today' ? ' · TODAY' : '') + '</div>';
+                }
+                html += '</div>';
+                html += '<div class="day__body">';
+                if (day.status === 'closed'){
+                  html += '<div class="day__activity placeholder">' + escapeHtml(day.holidayLabel || 'Closed') + '</div>';
+                } else {
+                  if (day.activity){
+                    html += '<div class="day__activity">' + escapeHtml(day.activity) + '</div>';
+                  } else if (day.status === 'future') {
+                    html += '<div class="day__activity placeholder">No plan set yet · Alessio fills in the moment</div>';
+                  } else if (day.status === 'today') {
+                    html += '<div class="day__activity placeholder">Today\'s plan set by Alessio at start of day</div>';
+                  }
+                  // Conversation thread (loaded messages)
+                  if (day.messages && day.messages.length){
+                    html += '<div class="day__thread">';
+                    for (const m of day.messages){
+                      html += '<div class="msg msg--' + escapeHtml(m.author) + '"' + (m.id ? ' data-msg-id="' + escapeHtml(m.id) + '"' : '') + '>';
+                      html += '<div class="msg__head"><span class="msg__who">' + escapeHtml(m.author) + '</span><span class="msg__time">' + escapeHtml(formatMsgTimeCC(m.created_at)) + '</span></div>';
+                      html += '<div class="msg__text">' + escapeHtml(m.text) + '</div>';
+                      html += '</div>';
+                    }
+                    html += '</div>';
+                  }
+                  // Reply box — Alessio writes back as 'alessio'
+                  const replyPlaceholder = day.status === 'today' ? 'Reply to ' + slug + ' for today…' : (day.status === 'past' ? 'Reply on a past day…' : 'Message to ' + slug + '…');
+                  html += '<div class="day__reply">';
+                  html += '<textarea class="day__reply-input" data-intern="' + slug + '" data-day="' + day.iso + '" placeholder="' + escapeHtml(replyPlaceholder) + '" onkeydown="if(event.key===\'Enter\' && (event.metaKey||event.ctrlKey)){ event.preventDefault(); var b=this.closest(\'.day__reply\').querySelector(\'.day__reply-send\'); if(b) b.click(); }"></textarea>';
+                  html += '<button class="day__reply-send" onclick="window.postCCMessage(\'' + slug + '\', \'' + day.iso + '\', this)">Send</button>';
+                  html += '</div>';
+                }
+                html += '</div></div>';
+              });
+              html += '</div>';
+            });
+
+            container.innerHTML = html;
+
+            // Update the progress label in the identity strip
+            const todayEntry = days.find(d => d.status === 'today');
+            const upcomingEntry = todayEntry || days.find(d => d.status === 'future');
+            const progressEl = document.getElementById('in-' + containerId.replace('in-journey-','') + '-progress');
+            if (progressEl){
+              if (todayEntry){
+                progressEl.textContent = 'Day ' + todayEntry.dayNum + ' of ' + totalWorkDays + ' · Phase ' + (todayEntry.phase ? todayEntry.phase.tag : '—');
+              } else if (cfg.start > TODAY){
+                const arrival = parseISO(cfg.start);
+                const todayD = parseISO(TODAY);
+                const daysUntil = Math.round((arrival - todayD)/86400000);
+                progressEl.textContent = 'Arrives in ' + daysUntil + ' day' + (daysUntil === 1 ? '' : 's') + ' · ' + WD[arrival.getDay()] + ' ' + MONTHS[arrival.getMonth()] + ' ' + arrival.getDate();
+              }
+            }
+
+            // Auto-scroll so the CURRENT week sits at the top of the detail column
+            // (only for the intern that's actually visible — both journeys share
+            // the same scroll container, so scrolling a hidden one would misfire).
+            setTimeout(() => { window.scrollInternWeekToTop && window.scrollInternWeekToTop(slug); }, 60);
+          }
+
+          // Scroll the detail column so the current week's header aligns to its top.
+          // Global (window) because selectIntern lives in a separate closure.
+          window.scrollInternWeekToTop = function(slug, attempt){
+            attempt = attempt || 0;
+            const container = document.getElementById('in-journey-' + slug);
+            if (!container) return;
+            const detail = container.closest('[data-intern-detail]');
+            if (!detail || detail.style.display === 'none') return;  // visible intern only
+            const scroller = container.closest('.in-3col__detail');
+            const wk = container.querySelector('.wk[data-current-week="1"]');
+            // First paint / tab-switch can fire this before the detail column has real
+            // height (or before the journey HTML exists), so the scroll computes nothing
+            // and Alessio is stranded at week 1. Retry ~4s until the column is laid out.
+            if (!scroller || !wk || scroller.clientHeight === 0){
+              if (attempt < 40) setTimeout(function(){ window.scrollInternWeekToTop(slug, attempt + 1); }, 100);
+              return;
+            }
+            const sRect = scroller.getBoundingClientRect();
+            const wRect = wk.getBoundingClientRect();
+            scroller.scrollTop += (wRect.top - sRect.top);
+          };
+
+          // ── Reply-draft protection (Alessio direct, 2026-06-09) ───────────
+          // The 60s refresh + realtime refresh rebuilt both journeys mid-typing,
+          // killing voice-dictated replies. Two layers:
+          //   1. skip the rebuild while any reply box is focused or holds text
+          //   2. persist drafts to localStorage on input; restore after every
+          //      rebuild and after a full page reload; clear only on send.
+          function internDraftKey(slug, day){ return 'cc-intern-draft:' + slug + ':' + day; }
+          function internComposing(){
+            try {
+              var act = document.activeElement;
+              if (act && act.classList && act.classList.contains('day__reply-input')) return true;
+              var tas = document.querySelectorAll('[data-subtab="interns"] .day__reply-input');
+              for (var i = 0; i < tas.length; i++) { if (tas[i].value && tas[i].value.trim()) return true; }
+            } catch(e) {}
+            return false;
+          }
+          function restoreInternDrafts(){
+            try {
+              document.querySelectorAll('[data-subtab="interns"] .day__reply-input').forEach(function(t){
+                if (t.value) return; // never clobber live text
+                var d = localStorage.getItem(internDraftKey(t.dataset.intern, t.dataset.day));
+                if (d) t.value = d;
+              });
+            } catch(e) {}
+          }
+          window._internDraftClear = function(slug, day){
+            try { localStorage.removeItem(internDraftKey(slug, day)); } catch(e) {}
+          };
+          document.addEventListener('input', function(e){
+            var t = e.target;
+            if (!t || !t.classList || !t.classList.contains('day__reply-input')) return;
+            try {
+              var k = internDraftKey(t.dataset.intern, t.dataset.day);
+              if (t.value && t.value.trim()) localStorage.setItem(k, t.value);
+              else localStorage.removeItem(k);
+            } catch(e2) {}
+          });
+
+          window.renderInternJourneys = async function(){
+            // Realtime first — it must exist even when a rebuild is skipped.
+            // Guard prevents duplicate subscriptions on periodic re-render.
+            if (!window._ccInternMsgRealtime && window.supa) {
+              window._ccInternMsgRealtime = window.supa
+                .channel('cc-intern-messages-live')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'intern_messages' }, function(payload){
+                  const msg = payload.new;
+                  if (!msg || !msg.day_date || !msg.intern_id) return;
+                  const slug = INTERN_SLUG_BY_ID[msg.intern_id];
+                  if (!slug) return;
+                  // Update cache so next renderJourney includes this message
+                  MESSAGES_BY_SLUG[slug] = MESSAGES_BY_SLUG[slug] || {};
+                  const dayMsgs = MESSAGES_BY_SLUG[slug][msg.day_date] = MESSAGES_BY_SLUG[slug][msg.day_date] || [];
+                  if (!dayMsgs.some(function(m){ return m.id === msg.id; })) dayMsgs.push(msg);
+                  // Append to visible DOM immediately
+                  appendCCMessageToDay(slug, msg.day_date, msg);
+                })
+                .subscribe();
+            }
+            // A reply is being written — leave the DOM alone. New messages
+            // still arrive live via the realtime append above.
+            if (internComposing()) return;
+            await loadInternData();
+            renderJourney('in-journey-hannes',   INTERNS.hannes);
+            renderJourney('in-journey-corentin', INTERNS.corentin);
+            restoreInternDrafts();
+          };
+
+          // Render once Supabase client is ready. window.supa is created after auth
+          // initializes, so we poll briefly then either render or render-empty as fallback.
+          (function waitForSupa(tries){
+            if (window.supa || tries <= 0){
+              window.renderInternJourneys();
+            } else {
+              setTimeout(() => waitForSupa(tries - 1), 200);
+            }
+          })(25); // ~5s budget then render with empty data
+        })();
+
+        // (removed: legacy save-state CSS for the deprecated day__notes textarea —
+        // replaced by the intern_messages thread + reply box this commit.)
+
+        // Section toggle on the LEFT list (Active / Pre-arrival)
+        window.toggleInSection = function(key){
+          var sec = document.getElementById('in-' + key + '-section');
+          if (!sec) return;
+          var head = sec.querySelector('.cc-ses-section-head');
+          var body = sec.querySelector('.cc-ses-section-body');
+          if (head) head.classList.toggle('collapsed');
+          if (body) body.classList.toggle('collapsed');
+        };
+        // Select intern row → swap detail pane
+        window.selectIntern = function(row, who){
+          document.querySelectorAll('#in-split .in-row').forEach(function(r){ r.classList.remove('selected'); });
+          row.classList.add('selected');
+          document.querySelectorAll('#in-detail-pane > [data-intern-detail]').forEach(function(d){ d.style.display='none'; });
+          var t = document.getElementById('in-detail-' + who);
+          if (t) t.style.display = 'block';
+          var emp = document.getElementById('in-detail-empty');
+          if (emp) emp.style.display = 'none';
+          // Bring the current week to the top of the detail column for this intern.
+          setTimeout(function(){ window.scrollInternWeekToTop && window.scrollInternWeekToTop(who); }, 60);
+        };
+        // Default-select Hannes (top of Active list) on first activation
+        (function(){
+          var sub = document.querySelector('.cc-subpane[data-subtab="interns"]');
+          if (!sub) return;
+          var armed = false;
+          function pick(){
+            if (armed) return;
+            var f = document.querySelector('#in-active-body .in-row');
+            if (f){ armed = true; f.click(); }
+          }
+          // Re-scroll the current week to top whenever the subtab is (re)opened —
+          // the first render may have run while the column had zero height.
+          function rescroll(){
+            var sel = document.querySelector('#in-split .in-row.selected');
+            var who = sel && sel.getAttribute('data-intern');
+            if (who && window.scrollInternWeekToTop) window.scrollInternWeekToTop(who);
+          }
+          setTimeout(pick, 50);
+          var obs = new MutationObserver(function(){
+            if (sub.classList.contains('active')){ pick(); setTimeout(rescroll, 80); }
+          });
+          obs.observe(sub, { attributes:true, attributeFilter:['class'] });
+        })();
+
+        // SHOP > INTERNS Project Bus column — staff-only.
+        // Loads agent_messages WHERE project_slug='interns-hr-cowork' (read);
+        // postInternsBus writes a new row, then reloads the list. Interns
+        // never see this surface — their portal at /intern.html talks to
+        // intern_messages only.
+        (function(){
+          var sub = document.querySelector('.cc-subpane[data-subtab="interns"]');
+          if (!sub) return;
+          function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+          window.loadInternsBus = async function(){
+            // wait up to 5s for window.supa (cold-start safe)
+            if (!window.supa) {
+              for (var i = 0; i < 50; i++) { await new Promise(function(r){ setTimeout(r, 100); }); if (window.supa) break; }
+              if (!window.supa) return;
+            }
+            var list = document.getElementById('in-mvp-bus-list');
+            var countEl = document.getElementById('in-mvp-bus-count');
+            if (!list) return;
+            try {
+              // Interns comms debug (Alessio, 2026-06-09): intern messages mirror
+              // onto the bus as from_user='system' + from_instance_id='intern-<slug>'
+              // but carry no project_slug — the old project-only filter never showed
+              // them. Pull both: project-tagged traffic AND the intern mirrors.
+              var res = await window.supa.from('agent_messages')
+                .select('id,from_user,to_user,priority,body,created_at,from_instance_id')
+                .or('project_slug.eq.interns-hr-cowork,from_instance_id.like.intern-*')
+                .order('created_at', { ascending: false })
+                .limit(30);
+              if (res.error) throw res.error;
+              var rows = res.data || [];
+              if (countEl) countEl.textContent = rows.length === 0 ? '(none yet)' : rows.length + ' message' + (rows.length === 1 ? '' : 's');
+              if (!rows.length) {
+                list.innerHTML = '<div class="in-mvp-bus__empty">No bus messages tagged interns-hr-cowork yet. New project bus traffic shows up here.</div>';
+                return;
+              }
+              list.innerHTML = rows.map(function(m){
+                var when = '';
+                try { when = new Date(m.created_at).toLocaleString(); } catch(e){ when = String(m.created_at); }
+                var body = esc(m.body || '');
+                if (body.length > 400) body = body.slice(0, 400) + '…';
+                // Mirrors arrive as from_user='system' — show the intern's name instead.
+                var fromLabel = m.from_user;
+                if (m.from_instance_id && m.from_instance_id.indexOf('intern-') === 0) {
+                  fromLabel = m.from_instance_id.slice(7) + ' (intern)';
+                }
+                return '<div class="in-mvp-bus__msg' + (m.priority === 'urgent' ? ' urgent' : '') + '">'
+                  + '<div class="in-mvp-bus__msg-head">'
+                    + '<span class="in-mvp-bus__msg-from">' + esc(fromLabel) + '</span>'
+                    + '<span class="in-mvp-bus__msg-arrow">→</span>'
+                    + '<span class="in-mvp-bus__msg-to">' + esc(m.to_user) + '</span>'
+                    + '<span class="in-mvp-bus__msg-when">' + esc(when) + '</span>'
+                  + '</div>'
+                  + '<div class="in-mvp-bus__msg-body">' + body + '</div>'
+                + '</div>';
+              }).join('');
+            } catch(e) {
+              list.innerHTML = '<div class="in-mvp-bus__empty" style="color:#f85149;border-color:rgba(248,81,73,0.4);">Bus load failed: ' + esc((e && e.message) || String(e)) + '</div>';
+            }
+          };
+
+          // Channel-chip selector (bus #1788) — radio behaviour, single active. Default 'general'.
+          window.selectInternsBusChan = function(btnEl){
+            var row = btnEl && btnEl.parentNode; if (!row) return;
+            row.querySelectorAll('.in-mvp-bus__chan').forEach(function(b){
+              var on = (b === btnEl);
+              b.classList.toggle('active', on);
+              b.setAttribute('aria-checked', on ? 'true' : 'false');
+            });
+          };
+          function _internsBusActiveChan(){
+            var row = document.querySelector('[data-subtab="interns"] .in-mvp-bus__chan-row');
+            var active = row && row.querySelector('.in-mvp-bus__chan.active');
+            return (active && active.dataset.chan) || 'general';
+          }
+
+          window.postInternsBus = async function(){
+            var ta = document.getElementById('in-mvp-bus-compose');
+            var toSel = document.getElementById('in-mvp-bus-to');
+            var btn = document.getElementById('in-mvp-bus-send');
+            if (!ta || !toSel || !btn) return;
+            var body = (ta.value || '').trim();
+            if (!body) return;
+            if (!window.supa) { alert('Database not ready yet — try again in a sec.'); return; }
+            btn.disabled = true; var oldLabel = btn.textContent; btn.textContent = 'Sending…';
+            try {
+              var res = await window.supa.from('agent_messages').insert({
+                from_user: (typeof window.CC_BUS_IDENTITY==='function' ? window.CC_BUS_IDENTITY() : 'alessio'),
+                to_user: toSel.value || 'forge-cowork',
+                channel: _internsBusActiveChan(),
+                priority: 'normal',
+                body: body,
+                status: 'sent',
+                awaiting_reply_from: toSel.value || 'forge-cowork',
+                project_slug: 'interns-hr-cowork'
+              }).select('id').single();
+              if (res.error) throw res.error;
+              ta.value = '';
+              await window.loadInternsBus();
+            } catch(e) {
+              console.warn('[interns-bus] post failed', e);
+              btn.style.background = '#f85149';
+              btn.textContent = '(failed)';
+              setTimeout(function(){ btn.style.background=''; btn.textContent = oldLabel; }, 1800);
+              return;
+            } finally {
+              btn.disabled = false;
+              if (btn.textContent === 'Sending…') btn.textContent = oldLabel;
+            }
+          };
+
+          // Fire on first paint if already active
+          if (sub.classList.contains('active')) setTimeout(window.loadInternsBus, 200);
+          // Fire when the subpane becomes active later
+          var obs = new MutationObserver(function(){ if (sub.classList.contains('active')) window.loadInternsBus(); });
+          obs.observe(sub, { attributes:true, attributeFilter:['class'] });
+        })();
+        // Resize drag — mirror of Sessions
+        (function(){
+          var split = document.getElementById('in-split');
+          var handle = document.getElementById('in-resize');
+          if (!split || !handle) return;
+          try { var saved = localStorage.getItem('cc.interns.listWidthPct'); if (saved) split.style.setProperty('--ses-list-w', saved + '%'); } catch(e){}
+          var dragging = false;
+          handle.addEventListener('mousedown', function(ev){ dragging=true; handle.classList.add('dragging'); document.body.style.cursor='col-resize'; document.body.style.userSelect='none'; ev.preventDefault(); });
+          document.addEventListener('mousemove', function(ev){ if (!dragging) return; var rect = split.getBoundingClientRect(); var x = ev.clientX - rect.left; var pct = Math.max(20, Math.min(75, (x/rect.width)*100)); split.style.setProperty('--ses-list-w', pct + '%'); });
+          document.addEventListener('mouseup', function(){ if (!dragging) return; dragging=false; handle.classList.remove('dragging'); document.body.style.cursor=''; document.body.style.userSelect=''; var pct = (split.style.getPropertyValue('--ses-list-w')||'').replace('%',''); try { localStorage.setItem('cc.interns.listWidthPct', pct); } catch(e){} });
+        })();
+      </script>
+    </div>
+
+    <!-- LEGACY-PLACEHOLDER — old separate Interns content below; superseded by split view above ═══ -->
+    <div class="cc-subpane" data-subtab="interns-legacy" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:var(--sp-12);">
+
+        <!-- HANNES · active -->
+        <div class="cc-card amber">
+          <div class="cc-card__label">Active intern</div>
+          <div class="cc-card__title">Hannes Nagel · 🇩🇪</div>
+          <div class="cc-card__sub">May 19 → Jul 18 · 9 weeks · Phase A · Intro</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin:var(--sp-10) 0 0;padding-top:var(--sp-10);border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);">
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Today</div>Wed 9:00 → 18:00</div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Transport</div>Our vehicle · 8:45</div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Safety form</div><span style="color:var(--amber);">Signed May 19</span></div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Capstone</div>TBD · personal</div>
+          </div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag amber">Day 2 · at shop</span>
+            <span class="cc-card__tag muted">Phase A</span>
+          </div>
+        </div>
+
+        <!-- CORENTIN · pre-arrival -->
+        <div class="cc-card">
+          <div class="cc-card__label">Pre-arrival</div>
+          <div class="cc-card__title">Corentin · 🇫🇷</div>
+          <div class="cc-card__sub">May 23 → Sep 19 · 17 weeks · capstone QuadFang broadhead</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin:var(--sp-10) 0 0;padding-top:var(--sp-10);border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);">
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Pre-arrival pack</div>Pending — clone Hannes</div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">School waiver</div>Reanna · admin@</div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Safety form</div>Not yet</div>
+            <div><div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-xs);">Duration</div>17 weeks</div>
+          </div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Arrives in 3 days</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ SCHEDULE SUBPANE — today's tactical sheet (v1 first slice, 2026-05-20).
+         CC-native: each row is a cc-card. Done = dimmed, now = .amber, future = plain.
+         Hard-coded Day 2 shape from Hannes_Day1_Schedule pattern.
+         Schema target: shop_schedules table (TBD — Phase 2). ═══ -->
+    <div class="cc-subpane" data-subtab="schedule">
+      <div style="display:flex;align-items:baseline;gap:14px;padding-bottom:var(--sp-12);border-bottom:1px solid var(--border);margin-bottom:var(--sp-12);">
+        <div>
+          <div style="font-family:var(--display);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.14em;">Today · Day 2 · Hannes</div>
+          <div style="font-size:22px;color:var(--text);font-weight:500;margin-top:3px;">Wed · May 20</div>
+        </div>
+        <div style="margin-left:auto;font-size:11px;color:var(--text-xs);text-transform:uppercase;letter-spacing:0.08em;">Shop <span style="color:var(--text);">9:00 → 18:00</span> · Lead <span style="color:var(--text);">Alessio</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+
+        <div class="cc-card" style="opacity:0.45;">
+          <div class="cc-card__label">8:45</div>
+          <div class="cc-card__title" style="font-size:13px;">🚗 Pickup from rental (our vehicle)</div>
+          <div class="cc-card__meta"><span class="cc-card__tag muted">Done</span></div>
+        </div>
+
+        <div class="cc-card" style="opacity:0.45;">
+          <div class="cc-card__label">9:00</div>
+          <div class="cc-card__title" style="font-size:13px;">🏭 Shop open · Hannes in</div>
+          <div class="cc-card__meta"><span class="cc-card__tag muted">Done</span></div>
+        </div>
+
+        <div class="cc-card" style="opacity:0.45;">
+          <div class="cc-card__label">9:00–9:30</div>
+          <div class="cc-card__title" style="font-size:13px;">📋 Day-1 wrap review · 3-question recap</div>
+          <div class="cc-card__meta"><span class="cc-card__tag muted">Done</span></div>
+        </div>
+
+        <div class="cc-card amber">
+          <div class="cc-card__label">9:30 → 12:00 · NOW</div>
+          <div class="cc-card__title" style="font-size:13px;">🔥 Bench block 1 — Alessio's call</div>
+          <div class="cc-card__sub">direction set in the moment · steel + project</div>
+          <div class="cc-card__meta"><span class="cc-card__tag amber">In progress</span></div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">12:00 → 13:00</div>
+          <div class="cc-card__title" style="font-size:13px;">🍽️ Lunch (Hannes brings own)</div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">13:00 → 16:00</div>
+          <div class="cc-card__title" style="font-size:13px;">🔥 Bench block 2 — continue or pivot</div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">16:00 → 17:30</div>
+          <div class="cc-card__title" style="font-size:13px;">🛠️ Late block — Wed runs to 18:00</div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">17:30 → 18:00</div>
+          <div class="cc-card__title" style="font-size:13px;">📒 End-of-day wrap · 3 questions → running log</div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">18:00</div>
+          <div class="cc-card__title" style="font-size:13px;">🚗 Drop home — "see you tomorrow"</div>
+        </div>
+
+      </div>
+
+      <div class="cc-card" style="margin-top:var(--sp-16);">
+        <div class="cc-card__label">Tomorrow · Thu May 21</div>
+        <div class="cc-card__sub">Shop 9:00 → 16:00 · pickup 8:45 · early close — Thu is a 9–4 day</div>
+      </div>
+
+    </div>
+
+    <!-- ═══ FORMS SUBPANE — waivers, signatures, school paperwork (v1, 2026-05-20).
+         CC-native cc-card rows. Tag colors:
+           red    = awaiting signature (urgent)
+           amber  = signed, awaiting Reanna file
+           muted  = filed / not yet applicable
+         Schema target: shop_documents + shop_signatures (TBD — Phase 2). ═══ -->
+    <div class="cc-subpane" data-subtab="forms">
+      <div style="display:flex;align-items:baseline;gap:14px;padding-bottom:var(--sp-12);border-bottom:1px solid var(--border);margin-bottom:var(--sp-12);">
+        <div style="font-family:var(--display);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.14em;">Forms · waivers · paperwork</div>
+        <div style="margin-left:auto;font-size:11px;color:var(--text-xs);text-transform:uppercase;letter-spacing:0.08em;"><span style="color:var(--amber);">1 to file</span> · <span style="color:var(--red);">2 to sign</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+
+        <div class="cc-card amber">
+          <div class="cc-card__label">Hannes · Safety Acknowledgment</div>
+          <div class="cc-card__title" style="font-size:13px;">Hannes_Safety_Acknowledgment_2026-05-19.pdf</div>
+          <div class="cc-card__sub">Signed by Hannes + Alessio · May 19 · awaiting Reanna to file</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag amber">Signed — awaiting file</span>
+            <span class="cc-card__tag muted">May 19 10:47</span>
+          </div>
+        </div>
+
+        <div class="cc-card red">
+          <div class="cc-card__label">Hannes · Photo Permission</div>
+          <div class="cc-card__title" style="font-size:13px;">Photo Permission Release</div>
+          <div class="cc-card__sub">Print · sign · scan back — not yet on file</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag red">To sign</span>
+          </div>
+        </div>
+
+        <div class="cc-card red">
+          <div class="cc-card__label">Hannes · Tool / Equipment Waiver</div>
+          <div class="cc-card__title" style="font-size:13px;">Tool & Equipment Use Waiver</div>
+          <div class="cc-card__sub">Required before solo use of any powered station</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag red">To sign</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Corentin · Safety Acknowledgment</div>
+          <div class="cc-card__title" style="font-size:13px;">Safety Acknowledgment (FR version)</div>
+          <div class="cc-card__sub">To clone from Hannes pack · target signing date May 23 (arrival)</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Pre-arrival</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Corentin · Convention de Stage</div>
+          <div class="cc-card__title" style="font-size:13px;">School internship agreement</div>
+          <div class="cc-card__sub">Reanna pulling from admin@ inbox · French school side</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Reanna · pending</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cc-card" style="margin-top:var(--sp-16);background:var(--amber-soft);border-color:var(--amber-glow);">
+        <div class="cc-card__label">Where the signed copies live</div>
+        <div class="cc-card__sub">My Drive / AZCK Ltd / Opportunities / Intern-Program-2026-Hannes-Corentin /</div>
+      </div>
+    </div>
+
+    <!-- ═══ LOGS SUBPANE — daily running log per intern (v1, 2026-05-20).
+         Each card = one day · 3-question recap.
+         Schema target: shop_intern_logs (TBD — Phase 2). ═══ -->
+    <div class="cc-subpane" data-subtab="logs">
+      <div style="display:flex;align-items:baseline;gap:14px;padding-bottom:var(--sp-12);border-bottom:1px solid var(--border);margin-bottom:var(--sp-12);">
+        <div style="font-family:var(--display);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.14em;">Running logs · end-of-day recap</div>
+        <div style="margin-left:auto;font-size:11px;color:var(--text-xs);text-transform:uppercase;letter-spacing:0.08em;">Filled at <span style="color:var(--text);">17:30 → 18:00</span> daily</div>
+      </div>
+
+      <div style="font-family:var(--display);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-xs);margin-bottom:6px;">Hannes · 🇩🇪</div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-16);">
+
+        <div class="cc-card amber">
+          <div class="cc-card__label">Today · Wed May 20 · Day 2</div>
+          <div class="cc-card__title" style="font-size:13px;">Awaiting end-of-day wrap</div>
+          <div class="cc-card__sub">Alessio fills the 3 questions at 17:30 → log to Hannes_Running_Log.md</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag amber">Pending today</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Tue May 19 · Day 1</div>
+          <div class="cc-card__title" style="font-size:13px;">Welcome · safety · shop tour</div>
+          <div class="cc-card__sub">🌟 best — 😬 hardest — 🎯 tomorrow · 3 answers transcribed to Running_Log.md</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Logged May 19 16:00</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="font-family:var(--display);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-xs);margin-bottom:6px;">Corentin · 🇫🇷</div>
+
+      <div class="cc-card">
+        <div class="cc-card__label">Pre-arrival</div>
+        <div class="cc-card__title" style="font-size:13px;">No logs yet — arrives May 23</div>
+        <div class="cc-card__sub">First log entry expected Sat May 23 evening (arrival day)</div>
+        <div class="cc-card__meta">
+          <span class="cc-card__tag muted">Not yet</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PHASE SUBPANE — Phase A / B / C tracker per intern (v1, 2026-05-20).
+         Per the v1.0 program: A = Intro · B = Build · C = Personal/Capstone.
+         Schema target: shop_intern_phase (TBD — Phase 2). ═══ -->
+    <div class="cc-subpane" data-subtab="phase">
+      <div style="display:flex;align-items:baseline;gap:14px;padding-bottom:var(--sp-12);border-bottom:1px solid var(--border);margin-bottom:var(--sp-12);">
+        <div style="font-family:var(--display);font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.14em;">Phase tracker · A → B → C</div>
+        <div style="margin-left:auto;font-size:11px;color:var(--text-xs);text-transform:uppercase;letter-spacing:0.08em;">From AZCK Intern Program v1.0</div>
+      </div>
+
+      <div style="font-family:var(--display);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-xs);margin-bottom:6px;">Hannes · currently Phase A · Intro</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px;margin-bottom:var(--sp-16);">
+
+        <div class="cc-card amber">
+          <div class="cc-card__label">Phase A · Intro</div>
+          <div class="cc-card__title" style="font-size:13px;">Now</div>
+          <div class="cc-card__sub">Safety · PPE · shop tour · steel familiarity · grinder basics</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag amber">In progress · Day 2</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Phase B · Build</div>
+          <div class="cc-card__title" style="font-size:13px;">Next</div>
+          <div class="cc-card__sub">First knife · grinding · heat treat · finishing · sharpening</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Not started</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Phase C · Personal</div>
+          <div class="cc-card__title" style="font-size:13px;">Capstone</div>
+          <div class="cc-card__sub">TBD — Hannes picks a personal project for the last weeks</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Not started</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="font-family:var(--display);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-xs);margin-bottom:6px;">Corentin · pre-arrival</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:6px;">
+
+        <div class="cc-card">
+          <div class="cc-card__label">Phase A · Intro</div>
+          <div class="cc-card__title" style="font-size:13px;">Starts May 23</div>
+          <div class="cc-card__sub">Same intro as Hannes · safety · tour · steel</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Pre-arrival</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Phase B · Build</div>
+          <div class="cc-card__title" style="font-size:13px;">Mid-stay</div>
+          <div class="cc-card__sub">First knife · production lines · sharpening</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Pre-arrival</span>
+          </div>
+        </div>
+
+        <div class="cc-card">
+          <div class="cc-card__label">Phase C · Capstone</div>
+          <div class="cc-card__title" style="font-size:13px;">QuadFang broadhead</div>
+          <div class="cc-card__sub">17-week stay closes with a finished broadhead prototype</div>
+          <div class="cc-card__meta">
+            <span class="cc-card__tag muted">Pre-arrival</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cc-card" style="margin-top:var(--sp-16);background:var(--amber-soft);border-color:var(--amber-glow);">
+        <div class="cc-card__label">Source of truth</div>
+        <div class="cc-card__sub">My Drive / AZCK Ltd / Opportunities / Intern-Program-2026-Hannes-Corentin / AZCK_Intern_Program_v1.0.md</div>
+      </div>
+    </div>
+
+    <!-- ═══ AFTER-HOURS PROGRAM SUBPANE (bus #1970, 2026-06-01).
+         Pill row selects the PROGRAM (data-driven from assets/after-hours/programs.json
+         so adding a 3rd program is one JSON row, not a code change).
+         4-col mirror of Heat Treat:
+           Col 1: Day filter (Day 1..N + All)
+           Col 2: Step nav for selected day + search
+           Col 3: Program viewer (iframe of the HTML) + Print / Save PDF buttons
+           Col 4: CC Bus thread + send-row (project_slug = azck-shop-office-cowork) ═══ -->
+    <div class="cc-subpane" data-subtab="after-hours">
+      <div class="ah4-pills" data-ah-pills>
+        <div class="ah4-empty">Loading programs…</div>
+      </div>
+      <div id="ah4-mount" style="height:calc(100vh - 220px); min-height:480px;">
+        <div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs);padding:20px;">Pick a program above.</div></div>
+      </div>
+    </div>
+    <script>
+/* faces global the slabs lean on (42 call sites) — faces defines it near its bus feed */
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+window._htState = { steel: null, slug: null, phase: 'pre', procs: {} };
+
+window.renderShopHeatTreat = async function() {
+  if (!window.supa) return;
+  const lane = document.querySelector('.cc-lane[data-lane="shop"]');
+  if (!lane) return;
+  const sub = lane.querySelector('.cc-subpane[data-subtab="procedures"]');
+  if (!sub) return;
+  const host = sub.querySelector('#sp-md3-mount');
+  if (!host) return;
+
+  // ── Inject scoped styles once ────────────────────────────────────────
+  if (!document.getElementById('ht4-style')) {
+    const css = `
+      [data-lane="shop"] .ht4 { display:grid; grid-template-columns:1fr 1fr 2.5fr 1.5fr; gap:10px; height:100%; min-height:0; align-items:stretch; }
+      @media (max-width:1100px){ [data-lane="shop"] .ht4 { grid-template-columns:1fr 1fr; } }
+      [data-lane="shop"] .ht4-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-lane="shop"] .ht4-head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; display:flex; align-items:baseline; gap:8px; flex-shrink:0; }
+      [data-lane="shop"] .ht4-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
+      [data-lane="shop"] .ht4-body { flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+      [data-lane="shop"] .ht4-item { padding:8px 10px; border:1px solid transparent; border-radius:3px; cursor:pointer; font-size:12.5px; color:var(--text); line-height:1.4; }
+      [data-lane="shop"] .ht4-item:hover { background:var(--raised); border-color:var(--border); }
+      [data-lane="shop"] .ht4-item.active { background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
+      [data-lane="shop"] .ht4-group-head { font-family:var(--display); font-size:9px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs); padding:8px 4px 4px; border-bottom:1px dashed var(--border); margin-top:4px; }
+      [data-lane="shop"] .ht4-group-head:first-child { margin-top:0; padding-top:0; }
+      [data-lane="shop"] .ht4-item__sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:3px; }
+      [data-lane="shop"] .ht4-empty { font-family:var(--mono); font-size:10.5px; color:var(--text-xs); padding:16px 8px; text-align:center; }
+      [data-lane="shop"] .ht4-tabs { display:flex; gap:4px; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; flex-wrap:wrap; align-items:center; }
+      [data-lane="shop"] .ht4-tab { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:5px 10px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:pointer; }
+      [data-lane="shop"] .ht4-tab:hover { color:var(--amber); border-color:var(--amber); }
+      [data-lane="shop"] .ht4-tab.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      /* Print / Save PDF button on the right of the tabs row. */
+      [data-lane="shop"] .ht4-print-btn { margin-left:auto; font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:5px 12px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+      [data-lane="shop"] .ht4-print-btn:hover { color:var(--amber); border-color:var(--amber); }
+      /* PRINT SHEET — when body.ht4-printing, hide everything except the print-only host.
+         Tightened 2026-05-31: phases flow inline (no forced page-break per phase),
+         margins compressed, tables / blockquotes / lists stay intact across pages. */
+      @media print {
+        body.ht4-printing > *:not(.ht4-print-host) { display:none !important; }
+        body.ht4-printing .ht4-print-host { display:block !important; background:#fff !important; color:#000 !important; font-family:'Lexend', sans-serif !important; padding:0 !important; line-height:1.4; }
+        body.ht4-printing .ht4-print-host h1 { font-size:18px; margin:0 0 4px; color:#000; }
+        body.ht4-printing .ht4-print-host h2 { font-size:13px; margin:10px 0 5px; padding-bottom:2px; border-bottom:1.5px solid #000; color:#000; page-break-after:avoid; break-inside:avoid; }
+        body.ht4-printing .ht4-print-host h3 { font-size:11.5px; margin:7px 0 3px; color:#000; page-break-after:avoid; break-inside:avoid; }
+        body.ht4-printing .ht4-print-host p { font-size:10.5px; line-height:1.4; color:#000; margin:0 0 5px; }
+        body.ht4-printing .ht4-print-host ul, body.ht4-printing .ht4-print-host ol { margin:3px 0 6px; padding-left:18px; }
+        body.ht4-printing .ht4-print-host li { font-size:10.5px; line-height:1.35; color:#000; margin:1px 0; }
+        body.ht4-printing .ht4-print-host code { background:#eee; padding:1px 4px; border-radius:2px; font-size:10px; }
+        body.ht4-printing .ht4-print-host table { width:100%; border-collapse:collapse; margin:5px 0 7px; font-size:10px; break-inside:avoid; }
+        body.ht4-printing .ht4-print-host th, body.ht4-printing .ht4-print-host td { border:1px solid #888; padding:3px 6px; text-align:left; vertical-align:top; color:#000; }
+        body.ht4-printing .ht4-print-host th { background:#ddd; font-size:9.5px; }
+        body.ht4-printing .ht4-print-host blockquote { border-left:2.5px solid #000; padding:3px 8px; margin:5px 0; background:#f3f3f3; color:#000; font-size:10.5px; break-inside:avoid; }
+        body.ht4-printing .ht4-print-host input[type="checkbox"] { width:10px; height:10px; vertical-align:middle; margin-right:3px; }
+        body.ht4-printing .ht4-print-meta { font-family:'JetBrains Mono', monospace; font-size:9px; color:#444; margin:0 0 6px; padding-bottom:4px; border-bottom:1px solid #888; }
+        /* Phases flow naturally now — no forced page break per phase. Label
+           becomes a thin amber-replacement banner that anchors the section
+           but doesn't push to a new page. */
+        body.ht4-printing .ht4-print-phase { margin-top:8px; }
+        body.ht4-printing .ht4-print-phase:first-of-type { margin-top:4px; }
+        body.ht4-printing .ht4-print-phase__label { font-family:'Lexend', sans-serif; font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color:#fff; background:#000; padding:2px 6px; display:inline-block; margin:0 0 4px; }
+        body.ht4-printing .ht4-print-footer { margin-top:10px; padding-top:4px; border-top:1px solid #888; font-family:'JetBrains Mono', monospace; font-size:8px; color:#666; }
+        /* Keep short structures together so they don't split mid-row */
+        body.ht4-printing .ht4-print-host ul, body.ht4-printing .ht4-print-host ol { break-inside:avoid-page; }
+        @page { margin:14mm 14mm; }
+      }
+      /* Off-print, hide the print host completely so it never renders on screen. */
+      [data-lane="shop"] .ht4-print-host, body > .ht4-print-host { display:none; }
+      [data-lane="shop"] .ht4-phase-body { flex:1 1 0%; min-height:0; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--text); padding-right:6px; }
+      [data-lane="shop"] .ht4-phase-body h1 { font-family:var(--display); font-size:16px; color:var(--amber); margin:14px 0 8px; }
+      [data-lane="shop"] .ht4-phase-body h2 { font-family:var(--display); font-size:14px; color:var(--amber); margin:16px 0 8px; }
+      [data-lane="shop"] .ht4-phase-body h3 { font-family:var(--display); font-size:12.5px; color:var(--text); margin:12px 0 6px; letter-spacing:0.04em; }
+      [data-lane="shop"] .ht4-phase-body p { margin:0 0 10px; }
+      [data-lane="shop"] .ht4-phase-body ul, [data-lane="shop"] .ht4-phase-body ol { padding-left:20px; margin:0 0 10px; }
+      [data-lane="shop"] .ht4-phase-body li { margin:3px 0; }
+      [data-lane="shop"] .ht4-phase-body code { background:var(--raised); padding:1px 5px; border-radius:2px; font-family:var(--mono); font-size:11.5px; }
+      [data-lane="shop"] .ht4-phase-body table { width:100%; border-collapse:collapse; margin:10px 0; font-size:12px; }
+      [data-lane="shop"] .ht4-phase-body th, [data-lane="shop"] .ht4-phase-body td { border:1px solid var(--border); padding:6px 10px; text-align:left; vertical-align:top; }
+      [data-lane="shop"] .ht4-phase-body th { background:var(--raised); font-family:var(--display); font-size:10.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--amber); }
+      [data-lane="shop"] .ht4-phase-body blockquote { border-left:3px solid var(--amber); background:var(--amber-soft); padding:8px 12px; margin:10px 0; color:var(--text); }
+      [data-lane="shop"] .ht4-check { display:flex; gap:8px; align-items:flex-start; padding:4px 0; cursor:pointer; }
+      [data-lane="shop"] .ht4-check input[type="checkbox"] { margin-top:3px; accent-color:var(--amber); cursor:pointer; flex-shrink:0; }
+      [data-lane="shop"] .ht4-check.done span { color:var(--text-xs); text-decoration:line-through; }
+      [data-lane="shop"] .ht4-detail-meta { font-family:var(--mono); font-size:10.5px; color:var(--text-dim); display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border); flex-shrink:0; }
+      [data-lane="shop"] .ht4-detail-meta span { white-space:nowrap; }
+      [data-lane="shop"] .ht4-bus-label { font-family:var(--display); font-size:9.5px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-xs); margin:8px 0 6px; }
+      [data-lane="shop"] .ht4-bus { flex:1 1 0%; min-height:60px; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:6px; }
+      [data-lane="shop"] .ht4-msg { background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:6px 10px; font-size:11.5px; line-height:1.45; color:var(--text); }
+      [data-lane="shop"] .ht4-msg__head { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; }
+      [data-lane="shop"] .ht4-msg__from { color:var(--amber); font-weight:700; }
+      [data-lane="shop"] .ht4-send-row { display:flex; gap:6px; align-items:stretch; flex-shrink:0; margin:0 0 8px; padding-bottom:8px; border-bottom:1px solid var(--border); width:100%; }
+      [data-lane="shop"] .ht4-send-row textarea { flex:1 1 0%; width:100%; min-width:0; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:3px; font-family:var(--sans); font-size:12px; line-height:1.45; min-height:60px; max-height:300px; resize:vertical; box-sizing:border-box; }
+      [data-lane="shop"] .ht4-send-row button { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; background:var(--amber); color:#000; border:1px solid var(--amber); border-radius:3px; padding:0 14px; cursor:pointer; align-self:stretch; }
+      /* Reference docs (html_url, no runbook md) fill the phase column with the
+         branded HTML in an iframe — it scrolls internally, the column doesn't. */
+      [data-lane="shop"] .ht4-phase-body.ht4-refdoc { padding:0; overflow:hidden; display:flex; }
+      [data-lane="shop"] .ht4-phase-body.ht4-refdoc iframe { flex:1 1 0%; width:100%; min-height:0; border:0; display:block; background:#0a0a0a; border-radius:3px; }
+    `;
+    const tag = document.createElement('style'); tag.id = 'ht4-style'; tag.textContent = css; document.head.appendChild(tag);
+  }
+
+  // ── Shell ────────────────────────────────────────────────────────────
+  host.style.height = 'calc(100vh - 180px)';
+  host.style.minHeight = '480px';
+  host.innerHTML =
+    '<div class="ht4">' +
+      '<div class="ht4-col"><div class="ht4-head"><span>Material</span><span class="ht4-count" data-count="steels">…</span></div><div class="ht4-body" data-body="steels"><div class="ht4-empty">Loading…</div></div></div>' +
+      '<div class="ht4-col"><div class="ht4-head"><span>Procedures</span><span class="ht4-count" data-count="procs">—</span></div><div class="ht4-body" data-body="procs"><div class="ht4-empty">Pick a steel.</div></div></div>' +
+      '<div class="ht4-col">' +
+        '<div class="ht4-tabs">' +
+          '<button type="button" class="ht4-tab active" data-phase="pre">Pre</button>' +
+          '<button type="button" class="ht4-tab"        data-phase="during">During</button>' +
+          '<button type="button" class="ht4-tab"        data-phase="post">Post</button>' +
+          '<button type="button" class="ht4-tab"        data-phase="ref">Reference</button>' +
+          '<button type="button" class="ht4-print-btn" data-print title="Print or Save as PDF — opens the browser print dialog">⎙ Print / PDF</button>' +
+        '</div>' +
+        '<div class="ht4-phase-body" data-phase-body><div class="ht4-empty">Pick a procedure on the left.</div></div>' +
+      '</div>' +
+      '<div class="ht4-col">' +
+        '<div class="ht4-head"><span>Detail &amp; Bus</span></div>' +
+        '<div data-detail><div class="ht4-empty">Pick a procedure.</div></div>' +
+        '<div class="ht4-bus-label">Bus thread</div>' +
+        '<div data-ht-composer></div>' +
+        '<div class="ht4-bus" data-bus><div class="ht4-empty">—</div></div>' +
+      '</div>' +
+    '</div>';
+
+  const $steels  = host.querySelector('[data-body="steels"]');
+  const $procs   = host.querySelector('[data-body="procs"]');
+  const $cntS    = host.querySelector('[data-count="steels"]');
+  const $cntP    = host.querySelector('[data-count="procs"]');
+  const $phaseBody = host.querySelector('[data-phase-body]');
+  const $detail  = host.querySelector('[data-detail]');
+  const $bus     = host.querySelector('[data-bus]');
+  const $send    = host.querySelector('[data-send]');
+  const $sendIn  = host.querySelector('[data-send-input]');
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function htmlOf(md){ if (window.marked && window.marked.parse) { return window.marked.parse(md || ''); } return '<pre>' + esc(md || '') + '</pre>'; }
+
+  // Group ## sections of the procedure into 4 phases per Alessio's mental model.
+  const PHASE_MAP = {
+    pre:    ['prerequisites','critical specs','furnace verification checklist'],
+    during: ['procedure'],
+    post:   ['verification','history'],
+    ref:    ['purpose','troubleshooting','rollback','critical warnings','escalation','reference material']
+  };
+  function sectionsFor(md, phase){
+    if (!md) return '';
+    const lines = md.split(/\r?\n/);
+    const out = {};
+    let cur = null;
+    let bucket = [];
+    function flush(){ if (cur) (out[cur.toLowerCase()] = (out[cur.toLowerCase()] || '') + bucket.join('\n') + '\n'); }
+    lines.forEach(line => {
+      const h2 = line.match(/^## +(.+?)\s*$/);
+      if (h2) { flush(); cur = h2[1].trim(); bucket = []; return; }
+      bucket.push(line);
+    });
+    flush();
+    const wanted = PHASE_MAP[phase] || [];
+    let merged = '';
+    wanted.forEach(name => {
+      const k = name.toLowerCase();
+      if (out[k]) merged += '## ' + name.replace(/\b\w/g, c => c.toUpperCase()) + '\n' + out[k] + '\n';
+    });
+    if (!merged && phase === 'pre') {
+      // If the runbook is too short to split, dump everything under Pre.
+      merged = md;
+    }
+    return merged;
+  }
+
+  // After markdown→html, convert `- [ ]` list items into real persisted checkboxes.
+  function wireChecks(scope, slug){
+    const KEY = 'ht4.check.' + slug;
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){}
+    scope.querySelectorAll('li').forEach((li, idx) => {
+      const m = li.innerHTML.match(/^\s*\[( |x|X)\]\s+/);
+      if (!m) return;
+      const checked = (m[1].toLowerCase() === 'x') || !!saved['c' + idx];
+      const rest = li.innerHTML.replace(/^\s*\[( |x|X)\]\s+/, '');
+      li.classList.add('ht4-check');
+      li.innerHTML = '<input type="checkbox" data-ck="' + idx + '"' + (checked ? ' checked' : '') + '><span>' + rest + '</span>';
+      if (checked) li.classList.add('done');
+      const cb = li.querySelector('input');
+      cb.addEventListener('change', () => {
+        saved['c' + idx] = cb.checked;
+        try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch(e){}
+        li.classList.toggle('done', cb.checked);
+      });
+    });
+  }
+
+  // ── Renderers ────────────────────────────────────────────────────────
+  // Reference docs (Alessio direct 2026-06-10: Fundamentals > Metallurgy >
+  // 01 Steel Phases): a row with a same-site html_url and no runbook md is a
+  // branded standalone page, not a pre/during/post runbook — render it whole
+  // in an iframe and drop the phase tabs. Same-site only (leading /) so a
+  // bad html_url value can never auto-embed an external page.
+  function isRefDoc(proc){ return !!(proc && proc.html_url && proc.html_url.charAt(0) === '/') && !(proc.body_md || '').trim(); }
+  function renderPhase(){
+    const slug = window._htState.slug;
+    const proc = slug ? window._htState.procs[slug] : null;
+    const refDoc = isRefDoc(proc);
+    // Chrome reset happens BEFORE the early returns so a slow/failed fetch
+    // never strands the hidden tabs or the iframe layout class.
+    host.querySelectorAll('.ht4-tab').forEach(b => { b.style.display = refDoc ? 'none' : ''; });
+    $phaseBody.classList.toggle('ht4-refdoc', refDoc);
+    if (!slug) { $phaseBody.innerHTML = '<div class="ht4-empty">Pick a procedure on the left.</div>'; return; }
+    if (!proc) { $phaseBody.innerHTML = '<div class="ht4-empty">Loading procedure…</div>'; return; }
+    if (refDoc) {
+      $phaseBody.innerHTML = '<iframe src="' + esc(proc.html_url) + '" title="' + esc(proc.title || 'Reference') + '"></iframe>';
+      return;
+    }
+    const md = sectionsFor(proc.body_md || '', window._htState.phase);
+    $phaseBody.innerHTML = htmlOf(md) || '<div class="ht4-empty">Nothing in this phase.</div>';
+    wireChecks($phaseBody, slug);
+  }
+  function renderDetail(){
+    const slug = window._htState.slug;
+    if (!slug) { $detail.innerHTML = '<div class="ht4-empty">Pick a procedure.</div>'; return; }
+    const proc = window._htState.procs[slug];
+    if (!proc) return;
+    $detail.innerHTML =
+      '<div style="font-family:var(--display);font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">' + esc(proc.title) + '</div>' +
+      '<div class="ht4-detail-meta">' +
+        (proc.material ? '<span>' + esc(proc.material) + '</span>' : '') +
+        (proc.process ? '<span>· ' + esc(proc.process) + '</span>' : '') +
+        (proc.hardness_target ? '<span>· ' + esc(proc.hardness_target) + '</span>' : '') +
+        '<span>· ' + esc(proc.status || '—') + '</span>' +
+        (proc.owner ? '<span>· → ' + esc(proc.owner) + '</span>' : '') +
+      '</div>' +
+      (proc.html_url ? '<div style="margin:0 0 10px;"><a href="' + esc(proc.html_url) + '" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:10.5px;color:var(--amber);text-decoration:none;">Open full page ↗</a></div>' : '');
+  }
+  async function loadBus(slug){
+    $bus.innerHTML = '<div class="ht4-empty">Loading bus…</div>';
+    try {
+      const { data } = await window.supa.from('agent_messages')
+        .select('id, from_user, to_user, body, sent_at, priority')
+        .eq('project_slug','azck-shop-office-cowork')
+        .is('archived_at', null)
+        .ilike('body', '%' + slug + '%')
+        .order('sent_at', { ascending: true }).limit(100);
+      if (!data || !data.length) { $bus.innerHTML = '<div class="ht4-empty">No messages yet.</div>'; return; }
+      $bus.innerHTML = data.map(m =>
+        '<div class="ht4-msg">' +
+          '<div class="ht4-msg__head"><span class="ht4-msg__from">' + esc(m.from_user) + '</span> → ' + esc(m.to_user || '—') + ' · ' + esc(m.sent_at || '') + '</div>' +
+          esc(m.body) +
+        '</div>'
+      ).join('');
+      $bus.scrollTop = $bus.scrollHeight;
+    } catch (e) {
+      $bus.innerHTML = '<div class="ht4-empty" style="color:#f85149">Bus load failed: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function pickSlug(slug){
+    window._htState.slug = slug;
+    $procs.querySelectorAll('.ht4-item').forEach(el => el.classList.toggle('active', el.dataset.slug === slug));
+    if (!window._htState.procs[slug]) {
+      const { data } = await window.supa.from('shop_procedures')
+        .select('id, slug, title, body_md, html_url, material, process, hardness_target, owner, status, last_run_at')
+        .eq('slug', slug).single();
+      if (data) window._htState.procs[slug] = data;
+    }
+    renderDetail();
+    renderPhase();
+    loadBus(slug);
+  }
+  async function pickSteel(material){
+    window._htState.steel = material;
+    try { localStorage.setItem('azck_ht_last_steel', material); } catch(e) {}
+    $steels.querySelectorAll('.ht4-item').forEach(el => el.classList.toggle('active', el.dataset.steel === material));
+    $procs.innerHTML = '<div class="ht4-empty">Loading…</div>';
+    const { data } = await window.supa.from('shop_procedures')
+      .select('slug, title, process, hardness_target')
+      .eq('material', material).eq('status','active')
+      .order('title', { ascending: true });
+    $cntP.textContent = (data || []).length;
+    if (!data || !data.length) { $procs.innerHTML = '<div class="ht4-empty">No procedures for this steel.</div>'; return; }
+    $procs.innerHTML = data.map(p =>
+      '<div class="ht4-item" data-slug="' + esc(p.slug) + '">' +
+        esc(p.title) +
+        '<div class="ht4-item__sub">' + esc(p.process || '') + (p.hardness_target ? ' · ' + esc(p.hardness_target) : '') + '</div>' +
+      '</div>'
+    ).join('');
+    $procs.querySelectorAll('.ht4-item').forEach(el => el.addEventListener('click', () => pickSlug(el.dataset.slug)));
+    // Auto-pick first procedure so the right columns open immediately (Alessio direct, mirrors #119).
+    if (data.length) pickSlug(data[0].slug);
+  }
+
+  // ── Phase tab clicks ─────────────────────────────────────────────────
+  host.querySelectorAll('.ht4-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      host.querySelectorAll('.ht4-tab').forEach(b => b.classList.toggle('active', b === btn));
+      window._htState.phase = btn.dataset.phase;
+      renderPhase();
+    });
+  });
+
+  // ── Print / Save-as-PDF button ──────────────────────────────────────
+  // Builds a temporary off-screen host with the FULL runbook (all four
+  // phases stacked, page-break between each) + title + meta, then fires
+  // window.print(). The print stylesheet hides everything else. After the
+  // dialog closes the host is removed and the body class cleared.
+  host.querySelector('[data-print]').addEventListener('click', () => {
+    const slug = window._htState.slug;
+    if (!slug) { alert('Pick a procedure first.'); return; }
+    const proc = window._htState.procs[slug];
+    if (!proc) return;
+    // Reference docs carry their own @media print sheet — open the page in
+    // a new tab and fire the dialog there. (NOT iframe contentWindow.print():
+    // WebKit prints the parent dashboard instead, and an unloaded iframe
+    // prints blank — both silently.)
+    if (isRefDoc(proc)) {
+      const w = window.open(proc.html_url, '_blank');
+      try { if (w) w.addEventListener('load', () => { try { w.print(); } catch(e){} }); } catch(e) {}
+      return;
+    }
+    let printHost = document.body.querySelector('.ht4-print-host');
+    if (!printHost) {
+      printHost = document.createElement('div');
+      printHost.className = 'ht4-print-host';
+      document.body.appendChild(printHost);
+    }
+    const phases = [
+      { key: 'pre',    label: 'Pre — preparation' },
+      { key: 'during', label: 'During — at the kiln' },
+      { key: 'post',   label: 'Post — cleanup & verification' },
+      { key: 'ref',    label: 'Reference' }
+    ];
+    const now = new Date().toLocaleString();
+    const metaBits = [];
+    if (proc.material) metaBits.push(esc(proc.material));
+    if (proc.process)  metaBits.push(esc(proc.process));
+    if (proc.hardness_target) metaBits.push(esc(proc.hardness_target));
+    if (proc.status)   metaBits.push(esc(proc.status));
+    if (proc.owner)    metaBits.push('Owner: ' + esc(proc.owner));
+    let html = '<h1>' + esc(proc.title) + '</h1>'
+      + '<div class="ht4-print-meta">' + metaBits.join(' · ') + ' · Printed ' + esc(now) + '</div>';
+    phases.forEach(p => {
+      const md = sectionsFor(proc.body_md || '', p.key);
+      if (!md.trim()) return;
+      html += '<div class="ht4-print-phase">'
+        + '<div class="ht4-print-phase__label">' + esc(p.label) + '</div>'
+        + htmlOf(md)
+        + '</div>';
+    });
+    html += '<div class="ht4-print-footer">' + esc(proc.title) + ' · AZCK Shop · ' + esc(now) + '</div>';
+    printHost.innerHTML = html;
+    document.body.classList.add('ht4-printing');
+    function cleanup(){ document.body.classList.remove('ht4-printing'); printHost.innerHTML = ''; window.removeEventListener('afterprint', cleanup); }
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => { try { window.print(); } catch(e) { console.warn('[ht4] print failed', e); cleanup(); } }, 50);
+  });
+
+  // ── Send-row wiring ──────────────────────────────────────────────────
+  // Bus composer = the shared Interns-style box (bus #2081). Posts to the shop
+  // bus tagged with the selected procedure slug so loadBus(slug) still finds it.
+  if (window.CCBusComposer) {
+    window.CCBusComposer.mount(host.querySelector('[data-ht-composer]'), {
+      projectSlug: 'azck-shop-office-cowork',
+      label: 'New bus message',
+      placeholder: 'Type a message scoped to this procedure…',
+      buildBody: function (t) { return window._htState.slug ? '[' + window._htState.slug + '] ' + t : t; },
+      onSent: function () { if (window._htState.slug) loadBus(window._htState.slug); }
+    });
+  }
+
+  // ── Initial load: materials grouped by category (Alessio direct 2026-05-31)
+  try {
+    const { data } = await window.supa.from('shop_procedures')
+      .select('material, material_category').eq('status','active').order('material_category', { ascending: true }).order('material', { ascending: true });
+    const seen = new Set(); const byCat = {}; const cats = [];
+    (data || []).forEach(r => {
+      const m = r.material || 'Unspecified';
+      if (seen.has(m)) return; seen.add(m);
+      const c = r.material_category || 'Other';
+      if (!byCat[c]) { byCat[c] = []; cats.push(c); }
+      byCat[c].push(m);
+    });
+    const total = seen.size;
+    $cntS.textContent = total;
+    if (!total) { $steels.innerHTML = '<div class="ht4-empty">No active procedures.</div>'; return; }
+    // Render group heads + items in display order. Fundamentals (theory refs)
+    // lead, then Carbon / Stainless, others by name.
+    const order = ['Fundamentals','Carbon Steels','Stainless Steels'];
+    const ordered = order.filter(c => byCat[c]).concat(cats.filter(c => !order.includes(c)).sort());
+    let html = '';
+    ordered.forEach(cat => {
+      html += '<div class="ht4-group-head">' + esc(cat) + ' <span style="font-family:var(--mono);font-weight:400;color:var(--text-xs);">(' + byCat[cat].length + ')</span></div>';
+      byCat[cat].forEach(m => {
+        html += '<div class="ht4-item" data-steel="' + esc(m) + '">' + esc(m) + '</div>';
+      });
+    });
+    $steels.innerHTML = html;
+    $steels.querySelectorAll('.ht4-item').forEach(el => el.addEventListener('click', () => pickSteel(el.dataset.steel)));
+    // Auto-pick → cascades into first procedure → renders all four cols.
+    // Restore the operator's last steel (mirrors the lane/subtab restore);
+    // otherwise land on the first WORKING category so the Fundamentals
+    // theory refs don't hijack the shop-floor landing view.
+    let savedSteel = null; try { savedSteel = localStorage.getItem('azck_ht_last_steel'); } catch(e) {}
+    if (savedSteel && seen.has(savedSteel)) { pickSteel(savedSteel); }
+    else {
+      const first = ordered.find(c => c !== 'Fundamentals' && byCat[c] && byCat[c].length)
+                 || ordered.find(c => byCat[c] && byCat[c].length);
+      if (first) pickSteel(byCat[first][0]);
+    }
+  } catch (e) {
+    $steels.innerHTML = '<div class="ht4-empty" style="color:#f85149">Load error: ' + esc(e.message) + '</div>';
+  }
+};
+
+window._ahState = { program: null, day: 'all', programs: [] };
+
+window.renderShopAfterHours = async function() {
+  const lane = document.querySelector('.cc-lane[data-lane="shop"]');
+  if (!lane) return;
+  const sub = lane.querySelector('.cc-subpane[data-subtab="after-hours"]');
+  if (!sub) return;
+
+  // ── Inject scoped styles once ─────────────────────────────────────────
+  if (!document.getElementById('ah4-style')) {
+    const css = `
+      [data-subtab="after-hours"] .ah4-pills { display:flex; gap:6px; padding:4px 0 10px; border-bottom:1px solid var(--border); margin-bottom:10px; flex-wrap:wrap; align-items:center; flex:0 0 auto; }
+      [data-subtab="after-hours"] .ah4-pills__label { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-xs); margin-right:6px; }
+      [data-subtab="after-hours"] .ah4-pill { font-family:var(--display); font-size:10.5px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:5px 10px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:grab; user-select:none; }
+      [data-subtab="after-hours"] .ah4-pill:hover { color:var(--amber); border-color:var(--amber); }
+      [data-subtab="after-hours"] .ah4-pill.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-subtab="after-hours"] .ah4-pill:active { cursor:grabbing; }
+      /* drag-to-reorder states (Alessio direct 2026-06-01) */
+      [data-subtab="after-hours"] .ah4-pill--dragging { opacity:0.4; }
+      [data-subtab="after-hours"] .ah4-pill--droptarget { border-color:var(--amber); box-shadow:-3px 0 0 var(--amber); }
+      [data-subtab="after-hours"] .ah4-empty { font-family:var(--mono); font-size:10.5px; color:var(--text-xs); padding:16px 8px; text-align:center; }
+
+      [data-subtab="after-hours"] .ah4 { display:grid; grid-template-columns:1fr 1.2fr 2.5fr 1.5fr; gap:10px; height:100%; min-height:0; align-items:stretch; }
+      @media (max-width:1100px) { [data-subtab="after-hours"] .ah4 { grid-template-columns:1fr 1fr; } }
+      [data-subtab="after-hours"] .ah4-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-subtab="after-hours"] .ah4-head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; display:flex; align-items:baseline; gap:8px; flex-shrink:0; }
+      [data-subtab="after-hours"] .ah4-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
+      [data-subtab="after-hours"] .ah4-body { flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+      [data-subtab="after-hours"] .ah4-item { padding:8px 10px; border:1px solid transparent; border-radius:3px; cursor:pointer; font-size:12.5px; color:var(--text); line-height:1.4; }
+      [data-subtab="after-hours"] .ah4-item:hover { background:var(--raised); border-color:var(--border); }
+      [data-subtab="after-hours"] .ah4-item.active { background:var(--amber-soft,rgba(200,146,42,0.12)); border-color:var(--amber); color:var(--amber); }
+      [data-subtab="after-hours"] .ah4-item__sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:3px; }
+      [data-subtab="after-hours"] .ah4-search { width:100%; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:3px; font-family:var(--sans); font-size:12px; margin-bottom:6px; flex-shrink:0; }
+      [data-subtab="after-hours"] .ah4-toolbar { display:flex; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; flex-wrap:wrap; align-items:center; }
+      [data-subtab="after-hours"] .ah4-btn { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:5px 12px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; text-decoration:none; }
+      [data-subtab="after-hours"] .ah4-btn:hover { color:var(--amber); border-color:var(--amber); }
+      [data-subtab="after-hours"] .ah4-viewer { flex:1 1 0%; min-height:0; background:#fff; border:1px solid var(--border); border-radius:3px; overflow:hidden; }
+      [data-subtab="after-hours"] .ah4-viewer iframe { width:100%; height:100%; border:0; background:#fff; }
+
+      [data-subtab="after-hours"] .ah4-bus-label { font-family:var(--display); font-size:9.5px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-xs); margin:8px 0 6px; flex-shrink:0; }
+      [data-subtab="after-hours"] .ah4-bus { flex:1 1 0%; min-height:60px; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:6px; }
+      [data-subtab="after-hours"] .ah4-msg { background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:6px 10px; font-size:11.5px; line-height:1.45; color:var(--text); }
+      [data-subtab="after-hours"] .ah4-msg__head { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; }
+      [data-subtab="after-hours"] .ah4-msg__from { color:var(--amber); font-weight:700; }
+      [data-subtab="after-hours"] .ah4-send-row { display:flex; gap:6px; align-items:stretch; flex-shrink:0; margin:0 0 8px; padding-bottom:8px; border-bottom:1px solid var(--border); width:100%; }
+      [data-subtab="after-hours"] .ah4-send-row textarea { flex:1 1 0%; width:100%; min-width:0; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:3px; font-family:var(--sans); font-size:12px; line-height:1.45; min-height:60px; max-height:300px; resize:vertical; box-sizing:border-box; }
+      [data-subtab="after-hours"] .ah4-send-row button { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; background:var(--amber); color:#000; border:1px solid var(--amber); border-radius:3px; padding:0 14px; cursor:pointer; align-self:stretch; }
+    `;
+    const tag = document.createElement('style'); tag.id = 'ah4-style'; tag.textContent = css; document.head.appendChild(tag);
+  }
+
+  const $pills = sub.querySelector('[data-ah-pills]');
+  const $mount = sub.querySelector('#ah4-mount');
+  if (!$pills || !$mount) return;
+
+  // ── Load the program manifest (data-driven; add a 3rd program = 1 JSON row) ──
+  if (!window._ahState.programs.length) {
+    try {
+      const res = await fetch('assets/after-hours/programs.json', { cache: 'no-store' });
+      window._ahState.programs = await res.json();
+    } catch (e) {
+      $pills.innerHTML = '<div class="ah4-empty">Could not load programs.json — ' + (e && e.message || e) + '</div>';
+      return;
+    }
+  }
+  // ── Apply any saved custom pill order (drag-and-drop persistence) ──────
+  (function applySavedPillOrder() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem('cc.ah.pillorder') || 'null'); } catch (e) { saved = null; }
+    if (!Array.isArray(saved) || !saved.length) return;
+    const bySlug = {};
+    window._ahState.programs.forEach(p => { bySlug[p.slug] = p; });
+    const reordered = [];
+    saved.forEach(slug => { if (bySlug[slug]) { reordered.push(bySlug[slug]); delete bySlug[slug]; } });
+    // append any programs not in the saved order (newly added ones)
+    window._ahState.programs.forEach(p => { if (bySlug[p.slug]) reordered.push(p); });
+    if (reordered.length === window._ahState.programs.length) window._ahState.programs = reordered;
+  })();
+
+  const programs = window._ahState.programs;
+  if (!programs.length) { $pills.innerHTML = '<div class="ah4-empty">No programs defined.</div>'; return; }
+
+  // ── Render the pill row (draggable to reorder) ─────────────────────────
+  if (!window._ahState.program) window._ahState.program = programs[0].slug;
+  $pills.innerHTML = '<span class="ah4-pills__label">Program</span>' +
+    programs.map(p => '<button type="button" draggable="true" class="ah4-pill' + (p.slug === window._ahState.program ? ' active' : '') + '" data-prog="' + p.slug + '">' + p.label + '</button>').join('');
+
+  // Click → switch program (guarded so a drag doesn't also trigger a switch)
+  $pills.querySelectorAll('[data-prog]').forEach(b => {
+    b.addEventListener('click', () => {
+      if (b.dataset.dragging === '1') return;
+      window._ahState.program = b.getAttribute('data-prog');
+      window._ahState.day = 'all';
+      window.renderShopAfterHours();
+    });
+  });
+
+  // Drag-and-drop reorder — reorders in place + persists, no iframe reload
+  (function wirePillDnD() {
+    let dragSlug = null;
+    function persistOrder() {
+      const order = Array.from($pills.querySelectorAll('[data-prog]')).map(el => el.getAttribute('data-prog'));
+      try { localStorage.setItem('cc.ah.pillorder', JSON.stringify(order)); } catch (e) {}
+      const bySlug = {};
+      window._ahState.programs.forEach(p => { bySlug[p.slug] = p; });
+      window._ahState.programs = order.map(s => bySlug[s]).filter(Boolean);
+    }
+    $pills.querySelectorAll('[data-prog]').forEach(pill => {
+      pill.addEventListener('dragstart', (e) => {
+        dragSlug = pill.getAttribute('data-prog');
+        pill.dataset.dragging = '1';
+        pill.classList.add('ah4-pill--dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragSlug); } catch (x) {}
+      });
+      pill.addEventListener('dragend', () => {
+        pill.classList.remove('ah4-pill--dragging');
+        $pills.querySelectorAll('.ah4-pill--droptarget').forEach(el => el.classList.remove('ah4-pill--droptarget'));
+        setTimeout(() => { delete pill.dataset.dragging; }, 0);
+      });
+      pill.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+        if (!dragSlug || pill.getAttribute('data-prog') === dragSlug) return;
+        $pills.querySelectorAll('.ah4-pill--droptarget').forEach(el => el.classList.remove('ah4-pill--droptarget'));
+        pill.classList.add('ah4-pill--droptarget');
+      });
+      pill.addEventListener('dragleave', () => { pill.classList.remove('ah4-pill--droptarget'); });
+      pill.addEventListener('drop', (e) => {
+        e.preventDefault();
+        pill.classList.remove('ah4-pill--droptarget');
+        if (!dragSlug) return;
+        const dragged = $pills.querySelector('[data-prog="' + dragSlug + '"]');
+        if (!dragged || dragged === pill) return;
+        const rect = pill.getBoundingClientRect();
+        const after = (e.clientX - rect.left) > rect.width / 2;
+        pill.parentNode.insertBefore(dragged, after ? pill.nextSibling : pill);
+        persistOrder();
+      });
+    });
+  })();
+
+  const current = programs.find(p => p.slug === window._ahState.program) || programs[0];
+
+  // ── 4-col shell ───────────────────────────────────────────────────────
+  $mount.innerHTML =
+    '<div class="ah4">' +
+      '<div class="ah4-col"><div class="ah4-head"><span>Days</span><span class="ah4-count" data-count="days">…</span></div><div class="ah4-body" data-body="days"><div class="ah4-empty">Loading…</div></div></div>' +
+      '<div class="ah4-col"><div class="ah4-head"><span>Steps</span><span class="ah4-count" data-count="steps">—</span></div><input type="text" class="ah4-search" data-search placeholder="Search steps…"><div class="ah4-body" data-body="steps"><div class="ah4-empty">Pick a day on the left, or "All".</div></div></div>' +
+      '<div class="ah4-col">' +
+        '<div class="ah4-toolbar">' +
+          '<a class="ah4-btn" data-btn="pdf" href="' + current.pdf + '" download target="_blank" rel="noopener" title="Download the clean PDF — page footer only, no browser header">⬇ Save PDF</a>' +
+          '<button type="button" class="ah4-btn" data-btn="print" title="Print this program">⎙ Print</button>' +
+        '</div>' +
+        '<div class="ah4-viewer"><iframe data-ah-iframe src="' + current.html + '" title="' + current.label + ' program"></iframe></div>' +
+      '</div>' +
+      '<div class="ah4-col">' +
+        '<div class="ah4-head"><span>Bus thread</span><span class="ah4-count" data-count="bus">—</span></div>' +
+        '<div data-ah-composer></div>' +
+        '<div class="ah4-bus" data-bus><div class="ah4-empty">Loading…</div></div>' +
+      '</div>' +
+    '</div>';
+
+  const $iframe = $mount.querySelector('[data-ah-iframe]');
+  const $days   = $mount.querySelector('[data-body="days"]');
+  const $steps  = $mount.querySelector('[data-body="steps"]');
+  const $cntD   = $mount.querySelector('[data-count="days"]');
+  const $cntS   = $mount.querySelector('[data-count="steps"]');
+  const $search = $mount.querySelector('[data-search]');
+  const $bus    = $mount.querySelector('[data-bus]');
+  const $cntB   = $mount.querySelector('[data-count="bus"]');
+  const $send   = $mount.querySelector('[data-send]');
+  const $sendIn = $mount.querySelector('[data-send-input]');
+  const $print  = $mount.querySelector('[data-btn="print"]');
+
+  // Bus composer = the shared Interns-style box (bus #2081).
+  if (window.CCBusComposer) {
+    window.CCBusComposer.mount($mount.querySelector('[data-ah-composer]'), {
+      projectSlug: 'azck-shop-office-cowork',
+      label: 'New bus message',
+      placeholder: 'Type a message to log on the After-Hours bus…',
+      onSent: function () { loadBus(); }
+    });
+  }
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ── Print / Save-PDF → use the clean pre-rendered PDF (footer only, no browser
+  //    header). The PDF is rebuilt from the single Drive-master source, so it stays
+  //    current. Print opens the PDF; the viewer prints it chrome-free. Save-PDF is a
+  //    plain download link (the <a data-btn="pdf"> above).
+  if ($print) $print.addEventListener('click', () => {
+    window.open(current.pdf, '_blank', 'noopener');
+  });
+
+  // ── Parse iframe DOM after load: days + steps ─────────────────────────
+  let _days = []; // [{label, anchor (Element), steps:[{label, anchor (Element)}]}]
+  function parseProgram() {
+    let doc;
+    try { doc = $iframe.contentDocument; } catch (e) { return; }
+    if (!doc) return;
+    const titlePages = Array.from(doc.querySelectorAll('.day-title-page'));
+    const realDays = titlePages.filter(p => p.querySelector('.day-number'));
+    _days = realDays.map(p => {
+      const label = (p.querySelector('.day-number') && p.querySelector('.day-number').textContent.trim()) || 'Day';
+      const heading = (p.querySelector('.day-heading') && p.querySelector('.day-heading').textContent.trim()) || '';
+      // Steps live between this day's anchor and the next .day-title-page
+      const steps = [];
+      let n = p.nextElementSibling;
+      while (n && !n.classList.contains('day-title-page')) {
+        n.querySelectorAll && n.querySelectorAll('h3.step-title').forEach(h3 => {
+          const numEl = h3.querySelector('.step-number');
+          const num = numEl ? numEl.textContent.trim() : (steps.length + 1);
+          const rest = h3.textContent.replace(/^\s*\d+\s*/, '').trim();
+          steps.push({ label: num + '. ' + rest, anchor: h3 });
+        });
+        n = n.nextElementSibling;
+      }
+      return { label: label, heading: heading, anchor: p, steps: steps };
+    });
+    renderDays();
+    renderSteps();
+  }
+
+  function renderDays() {
+    if (!_days.length) { $days.innerHTML = '<div class="ah4-empty">No day sections found.</div>'; $cntD.textContent = '0'; return; }
+    const cur = window._ahState.day;
+    const rows = [];
+    rows.push('<div class="ah4-item' + (cur === 'all' ? ' active' : '') + '" data-day="all">All days</div>');
+    _days.forEach((d, i) => {
+      rows.push(
+        '<div class="ah4-item' + (cur === String(i) ? ' active' : '') + '" data-day="' + i + '">' +
+          esc(d.label) +
+          (d.heading ? '<div class="ah4-item__sub">' + esc(d.heading) + '</div>' : '') +
+        '</div>'
+      );
+    });
+    $days.innerHTML = rows.join('');
+    $cntD.textContent = String(_days.length);
+    $days.querySelectorAll('[data-day]').forEach(el => {
+      el.addEventListener('click', () => {
+        window._ahState.day = el.getAttribute('data-day');
+        renderDays();
+        renderSteps();
+        // Scroll the iframe to the day's anchor
+        const v = window._ahState.day;
+        if (v !== 'all') {
+          const d = _days[parseInt(v, 10)];
+          if (d && d.anchor) try { d.anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e){}
+        }
+      });
+    });
+  }
+
+  function renderSteps() {
+    const v = window._ahState.day;
+    const q = ($search && $search.value || '').toLowerCase().trim();
+    let pool;
+    if (v === 'all') {
+      pool = _days.flatMap((d, i) => d.steps.map(s => ({ day: i, label: d.label + ' · ' + s.label, anchor: s.anchor })));
+    } else {
+      const d = _days[parseInt(v, 10)];
+      pool = d ? d.steps.map(s => ({ day: parseInt(v, 10), label: s.label, anchor: s.anchor })) : [];
+    }
+    const filtered = q ? pool.filter(s => s.label.toLowerCase().includes(q)) : pool;
+    if (!filtered.length) { $steps.innerHTML = '<div class="ah4-empty">No steps' + (q ? ' match "' + esc(q) + '"' : '') + '.</div>'; $cntS.textContent = '0'; return; }
+    $steps.innerHTML = filtered.map((s, idx) => '<div class="ah4-item" data-step="' + idx + '">' + esc(s.label) + '</div>').join('');
+    $cntS.textContent = String(filtered.length);
+    $steps.querySelectorAll('[data-step]').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.getAttribute('data-step'), 10);
+        const s = filtered[idx];
+        if (s && s.anchor) try { s.anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e){}
+      });
+    });
+  }
+
+  if ($search) $search.addEventListener('input', renderSteps);
+
+  $iframe.addEventListener('load', parseProgram);
+  // If iframe was cached and load fired synchronously, parse now too.
+  setTimeout(parseProgram, 50);
+
+  // ── Col 4: Bus thread (project_slug = azck-shop-office-cowork) ────────
+  async function loadBus() {
+    // Wait up to 5s for supa (deferred script). Survives cold-start to this subtab.
+    if (!window.supa) {
+      for (let i = 0; i < 50; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        if (window.supa) break;
+      }
+    }
+    if (!window.supa) { $bus.innerHTML = '<div class="ah4-empty">Supabase not ready.</div>'; return; }
+    const { data, error } = await window.supa.from('agent_messages')
+      .select('id, from_user, to_user, body, created_at')
+      .eq('project_slug', 'azck-shop-office-cowork')
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) { $bus.innerHTML = '<div class="ah4-empty">Bus load failed: ' + esc(error.message) + '</div>'; return; }
+    const rows = (data || []).reverse();
+    $cntB.textContent = String(rows.length);
+    if (!rows.length) { $bus.innerHTML = '<div class="ah4-empty">No bus messages yet for this project.</div>'; return; }
+    $bus.innerHTML = rows.map(m =>
+      '<div class="ah4-msg"><div class="ah4-msg__head"><span class="ah4-msg__from">' + esc(m.from_user) + '</span> → ' + esc(m.to_user) + ' · ' + new Date(m.created_at).toLocaleString() + '</div>' + esc((m.body || '').slice(0, 600)) + '</div>'
+    ).join('');
+    $bus.scrollTop = $bus.scrollHeight;
+  }
+  loadBus();
+
+  if ($send) $send.addEventListener('click', async () => {
+    const body = ($sendIn && $sendIn.value || '').trim();
+    if (!body) return;
+    if (!window.supa) return;
+    const from = (window.ccCurrentOperator && window.ccCurrentOperator.slug) || 'alessio';
+    const { error } = await window.supa.from('agent_messages').insert({
+      from_user: from, to_user: 'forge-cowork', channel: 'general', priority: 'normal',
+      project_slug: 'azck-shop-office-cowork', body: body, status: 'sent'
+    });
+    if (error) { console.warn('[shop-ah] send failed', error); return; }
+    $sendIn.value = '';
+    loadBus();
+  });
+};
+
+window.addEventListener('cc-project-changed', () => { try { if (document.querySelector('.cc-subpane.active[data-subtab="after-hours"]')) window.renderShopAfterHours(); } catch(e) {} });
+
+// ═══ SWISS DELICIOUS · Just Cook → cream-HTML viewer (bus #2060, 2026-06-03) ═══
+// Click a Just Cook sub-list link → swap the Projects grid for an in-lane iframe of the cream
+// magazine page (assets/swiss-delicious/*). Iframe isolation keeps the light styling intact.
+// find+extend: scoped to [data-lane="swiss"], one delegated listener, no new viewer system.
+(function(){
+  if (window.__sdJustCookViewer) return; window.__sdJustCookViewer = true;
+  document.addEventListener('click', function(e){
+    var back = e.target.closest('[data-lane="swiss"] .sd-viewer__back');
+    if (back) {
+      var sp = back.closest('.cc-subpane'); if (!sp) return;
+      var vw = sp.querySelector('.sd-viewer'), gr = sp.querySelector('.sd-grid');
+      var fr = vw && vw.querySelector('iframe');
+      if (vw) vw.style.display = 'none';
+      if (fr) fr.src = 'about:blank';
+      if (gr) gr.style.display = '';
+      return;
+    }
+    var link = e.target.closest('[data-lane="swiss"] .sd-link');
+    if (!link) return;
+    var url = link.getAttribute('data-html'); if (!url) return;
+    var sp = link.closest('.cc-subpane'); if (!sp) return;
+    var vw = sp.querySelector('.sd-viewer'), gr = sp.querySelector('.sd-grid');
+    if (!vw) return;
+    var fr = vw.querySelector('iframe'),
+        ti = vw.querySelector('.sd-viewer__title'),
+        op = vw.querySelector('.sd-viewer__open');
+    if (ti) ti.textContent = link.getAttribute('data-title') || '';
+    if (op) op.setAttribute('href', url);
+    if (fr) fr.src = url;
+    if (gr) gr.style.display = 'none';
+    vw.style.display = 'flex';
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
+// SHOP v2 · Procedures
+//   - Card list grouped by category (.cc-card foundation, variant A locked)
+//   - Operator-mode modal with 5-section anchored nav
+//   - SECTION_MAP routes body_md headings into Pre-job / At-the-kiln /
+//     Post-job / If-wrong / Reference
+//   - Log-a-batch form posts to shop_procedure_runs + Supabase Storage photos
+//   - Active-run rail pinned above toolbar when a run is in progress
+// ═══════════════════════════════════════════════════════════════════════
+window._shopProcedures = null;
+window._shopActiveProcedure = null;      // current modal data
+window._shopCurrentSection = 'pre-job';
+window._shopPhotoUploads = [];            // {url, name} for the log-a-batch form
+window._shopRailTimer = null;
+
+window.loadShopProcedures = async function() {
+  // Plan A · Phase C (bus #1693): wait up to 5s for supa instead of bailing
+  // silently. Pre-fix the loader exited the instant supa wasn't ready, so a
+  // cold-start to SHOP (hash deep-link, refresh on the SHOP lane) rendered
+  // the "Loading procedures…" stub forever.
+  if (!window.supa) {
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (window.supa) break;
+    }
+    if (!window.supa) return;
+  }
+  const list = document.getElementById('sp-list');
+  if (!list) return;
+  if (!window._shopProcedures) {
+    list.innerHTML = '<div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--sp-muted,#6B6B6B);">Loading procedures…</div></div>';
+  }
+  const { data, error } = await window.supa.from('shop_procedures')
+    .select('id,slug,title,category,material,product_line,owner,status,last_run_at,tags,hardness_target,html_url,version')
+    .eq('status', 'active')
+    .order('category', { ascending: true })
+    .order('title', { ascending: true });
+  if (error) {
+    list.innerHTML = '<div class="cc-card"><div class="cc-card__sub" style="color:var(--red);text-align:center;">Load failed: ' + escapeHtml(error.message) + '</div></div>';
+    return;
+  }
+  window._shopProcedures = data || [];
+  const c = document.getElementById('sp-count');
+  if (c) c.textContent = (window._shopProcedures.length) + ' procedure' + (window._shopProcedures.length === 1 ? '' : 's');
+  window.renderShopProcedures();
+  window.refreshActiveRunRail();
+};
+window.renderShopProcedures = function() {
+  const list = document.getElementById('sp-list');
+  if (!list) return;
+  const all = window._shopProcedures || [];
+  const search = (document.getElementById('sp-search') && document.getElementById('sp-search').value || '').toLowerCase().trim();
+  const cat = (document.getElementById('sp-category') && document.getElementById('sp-category').value) || '';
+  const filtered = all.filter(p => {
+    if (cat && p.category !== cat) return false;
+    if (search) {
+      const hay = ((p.title || '') + ' ' + (p.material || '') + ' ' + ((p.tags || []).join(' '))).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  if (!filtered.length) {
+    list.innerHTML = '<div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--sp-muted,#6B6B6B);">' + (all.length ? 'No procedures match this filter.' : 'No procedures in this category yet.') + '</div></div>';
+    return;
+  }
+  const fmtDate = (iso) => { if (!iso) return 'never run'; try { return 'last ' + new Date(iso).toLocaleDateString(); } catch(e) { return String(iso); } };
+  const groups = {};
+  filtered.forEach(p => { (groups[p.category] = groups[p.category] || []).push(p); });
+  const order = ['heat-treat','sharpening','forging','grinding','finishing','tooling'];
+  list.innerHTML = order.filter(c => groups[c] && groups[c].length).map(c => {
+    const items = groups[c].map(p => {
+      const statusCls = p.status === 'active' ? 'amber' : (p.status === 'draft' ? 'muted' : 'muted');
+      return '<div class="cc-card sp-card" data-slug="' + escapeHtml(p.slug) + '" onclick="openProcedureDetail(\'' + escapeHtml(p.slug) + '\')">'
+        +   '<div class="cc-card__label">' + escapeHtml(p.material || '—') + (p.product_line ? ' · ' + escapeHtml(p.product_line) : '') + '</div>'
+        +   '<div class="cc-card__title">' + escapeHtml(p.title || '(untitled)') + '</div>'
+        +   '<div class="cc-card__meta">'
+        +     '<span class="cc-card__time">' + escapeHtml(fmtDate(p.last_run_at)) + '</span>'
+        +     (p.hardness_target ? '<span class="cc-card__tag amber">' + escapeHtml(p.hardness_target) + '</span>' : '')
+        +     '<span class="cc-card__tag ' + statusCls + '">' + escapeHtml(p.status || '—') + '</span>'
+        +     (p.html_url ? '<span class="cc-card__tag muted">print</span>' : '')
+        +   '</div>'
+        + '</div>';
+    }).join('');
+    const catLabel = c.replace(/-/g, ' ');
+    return '<div class="cc-divider">' + escapeHtml(catLabel) + ' · ' + groups[c].length + '</div><div class="sp-grid">' + items + '</div>';
+  }).join('');
+};
+
+// ── SECTION_MAP — routes body_md headings into the 5 use-moments ──────
+const SP_SECTION_MAP = {
+  'pre-job':     ['prerequisites','material state','tools and supplies','parts ready'],
+  'at-the-kiln': ['critical specs','procedure','critical warnings','furnace verification checklist'],
+  'post-job':    ['verification'],
+  'if-wrong':    ['troubleshooting','rollback','escalation'],
+  'reference':   ['reference material','history','purpose']
+};
+
+function spClassifyHeading(h) {
+  const t = String(h || '').toLowerCase().replace(/^#+\s*/, '').trim();
+  for (const sec of Object.keys(SP_SECTION_MAP)) {
+    for (const key of SP_SECTION_MAP[sec]) {
+      if (t === key || t.startsWith(key) || t.includes(key)) return sec;
+    }
+  }
+  return 'reference';
+}
+
+// Parse body_md into {sectionKey: [{heading, content}]}
+function spParseBody(md) {
+  const out = { 'pre-job':[], 'at-the-kiln':[], 'post-job':[], 'if-wrong':[], 'reference':[] };
+  if (!md) return out;
+  const lines = String(md).split('\n');
+  let current = { heading:'Overview', level:0, section:'reference', body:[] };
+  const blocks = [current];
+  for (const line of lines) {
+    const m = line.match(/^(#{2,3})\s+(.+)$/);
+    if (m) {
+      current = { heading: m[2].trim(), level: m[1].length, section: spClassifyHeading(m[2]), body: [] };
+      blocks.push(current);
+    } else {
+      current.body.push(line);
+    }
+  }
+  blocks.forEach(b => {
+    const content = b.body.join('\n').trim();
+    if (content || b.heading !== 'Overview') {
+      out[b.section].push({ heading: b.heading, level: b.level, content });
+    }
+  });
+  return out;
+}
+
+// Convert markdown checkbox lines into interactive <input> rows
+function spRenderCheckboxBlock(md) {
+  const lines = String(md).split('\n');
+  let html = '';
+  let buf = [];
+  const flushBuf = () => {
+    if (buf.length) {
+      const text = buf.join('\n').trim();
+      if (text) html += (window.marked ? window.marked.parse(text) : '<p>' + escapeHtml(text) + '</p>');
+      buf = [];
+    }
+  };
+  let cbIdx = 0;
+  for (const line of lines) {
+    const m = line.match(/^-\s*\[([ xX])\]\s*(.+)$/);
+    if (m) {
+      flushBuf();
+      const checked = m[1].trim().toLowerCase() === 'x';
+      const id = 'sp-cb-' + (cbIdx++);
+      const text = (window.marked ? window.marked.parseInline(m[2].trim()) : escapeHtml(m[2].trim()));
+      html += '<div class="sp-check"><input type="checkbox" id="' + id + '" ' + (checked?'checked':'') + ' onchange="spUpdateCheckCount()"><label for="' + id + '">' + text + '</label></div>';
+    } else {
+      buf.push(line);
+    }
+  }
+  flushBuf();
+  return html;
+}
+
+// Parse a markdown table into [{col:val,…}, …]
+function spParseTable(md) {
+  const lines = String(md).split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
+  if (lines.length < 2) return null;
+  const cols = lines[0].split('|').slice(1, -1).map(s => s.trim());
+  const rows = lines.slice(2).map(l => {
+    const cells = l.split('|').slice(1, -1).map(s => s.trim());
+    const obj = {};
+    cols.forEach((c, i) => obj[c] = cells[i] || '');
+    return obj;
+  });
+  return { cols, rows };
+}
+
+// Parse "Critical Specs" table into { target_temperature, hold, hardness, … }
+function spParseSpecs(md) {
+  const t = spParseTable(md);
+  if (!t) return [];
+  return t.rows.map(r => {
+    const k = Object.keys(r)[0]; const v = Object.keys(r)[1];
+    return { label: r[k], value: r[v] };
+  });
+}
+
+// Render each procedure step (### Step N: …) as a collapsible card
+function spRenderSteps(md) {
+  if (!md) return '';
+  const lines = md.split('\n');
+  let html = '';
+  let buf = []; let step = null; let stepIdx = 0;
+  const flush = () => {
+    if (step) {
+      const body = buf.join('\n').trim();
+      const rendered = (window.marked ? window.marked.parse(body) : '<p>' + escapeHtml(body) + '</p>');
+      const num = String(step.num || (stepIdx)).padStart(2,'0');
+      html += '<details class="sp-step" id="sp-step-' + stepIdx + '">'
+            +   '<summary>'
+            +     '<span class="sp-step__num">STEP ' + num + '</span>'
+            +     '<span class="sp-step__title">' + escapeHtml(step.title) + '</span>'
+            +     '<span class="sp-step__check"><input type="checkbox" onclick="event.stopPropagation();spUpdateStepCount()" aria-label="step done"></span>'
+            +   '</summary>'
+            +   '<div class="sp-step__body">' + rendered + '</div>'
+            + '</details>';
+    }
+    step = null; buf = [];
+  };
+  for (const line of lines) {
+    const m = line.match(/^###\s+Step\s+(\d+):?\s*(.*)$/i);
+    if (m) {
+      flush();
+      stepIdx++;
+      step = { num: m[1], title: m[2].trim() };
+    } else if (step) {
+      buf.push(line);
+    }
+  }
+  flush();
+  return html;
+}
+
+// Toggle global helpers for counter pills in the footer
+window.spUpdateCheckCount = function() {
+  const sec = document.getElementById('sp-sec-' + window._shopCurrentSection);
+  if (!sec) return;
+  const cbs = sec.querySelectorAll('input[type=checkbox]');
+  const done = Array.from(cbs).filter(c => c.checked).length;
+  const status = document.getElementById('sp-mod-status');
+  if (status) status.innerHTML = '<span class="num">' + done + '</span> of <span class="num">' + cbs.length + '</span> checks complete';
+};
+window.spUpdateStepCount = window.spUpdateCheckCount;
+
+// ── Render each of the 5 sections ─────────────────────────────────────
+function spRenderPreJob(blocks) {
+  if (!blocks.length) return '<p style="color:var(--sp-muted);">No pre-job content yet for this procedure.</p>';
+  return blocks.map(b => {
+    return '<div class="sp-block">'
+        +    '<div class="sp-block__label">' + escapeHtml(b.heading) + '</div>'
+        +    spRenderCheckboxBlock(b.content)
+        + '</div>';
+  }).join('');
+}
+
+function spRenderAtTheKiln(blocks, proc) {
+  let html = '';
+  // Find Critical Specs block
+  const specsBlock = blocks.find(b => /critical\s*specs/i.test(b.heading));
+  if (specsBlock) {
+    const specs = spParseSpecs(specsBlock.content);
+    // Filter to the headline 4 — temperature, soak, cool, hardness — if present
+    const pickup = [];
+    const tempRow = specs.find(s => /target temperature/i.test(s.label));
+    const soakRow = specs.find(s => /recommended soak|minimum soak/i.test(s.label));
+    const coolRow = specs.find(s => /cooling method/i.test(s.label));
+    const hardRow = specs.find(s => /expected hardness|hardness/i.test(s.label));
+    if (tempRow) pickup.push(tempRow);
+    if (soakRow) pickup.push(soakRow);
+    if (coolRow) pickup.push(coolRow);
+    if (hardRow) pickup.push(hardRow);
+    if (pickup.length) {
+      html += '<div class="sp-spec-row">' + pickup.map(s => {
+        // Strip bold markdown
+        const v = s.value.replace(/\*\*/g, '');
+        const isText = /air|cool|quench/i.test(v);
+        return '<div class="sp-spec-tile">'
+            +    '<div class="val' + (isText ? ' white' : '') + '">' + escapeHtml(v.split('(')[0].trim()) + '</div>'
+            +    '<div class="lbl">' + escapeHtml(s.label) + '</div>'
+            + '</div>';
+      }).join('') + '</div>';
+    }
+  }
+  // Procedure → collapsible steps
+  const procBlock = blocks.find(b => /^procedure$/i.test(b.heading));
+  if (procBlock) {
+    html += '<h2>Procedure</h2>' + spRenderSteps(procBlock.content);
+  }
+  // Critical warnings + furnace check → small panels
+  const warns = blocks.find(b => /critical warnings/i.test(b.heading));
+  if (warns) {
+    const body = warns.content;
+    html += '<h2>Critical warnings</h2>'
+         +  '<div class="sp-block warn">' + (window.marked ? window.marked.parse(body) : '<p>'+escapeHtml(body)+'</p>') + '</div>';
+  }
+  const fv = blocks.find(b => /furnace verification/i.test(b.heading));
+  if (fv) {
+    html += '<h2>Furnace verification (per batch)</h2>'
+         +  '<div class="sp-block">' + spRenderCheckboxBlock(fv.content) + '</div>';
+  }
+  return html || '<p style="color:var(--sp-muted);">No at-the-kiln content for this procedure.</p>';
+}
+
+function spRenderPostJob(blocks, proc) {
+  let html = '';
+  const v = blocks.find(b => /verification/i.test(b.heading));
+  if (v) {
+    html += '<h2>Verification</h2>'
+         +  '<div class="sp-block">' + spRenderCheckboxBlock(v.content) + '</div>';
+  }
+  // Log-a-batch form
+  html += '<h2>Log this batch</h2>'
+       +  '<form id="sp-batch-form" class="sp-form" onsubmit="event.preventDefault();spSaveBatch()">'
+       +    '<div class="sp-form-field"><label class="lbl" for="sp-bf-date">Run date</label>'
+       +      '<input type="date" id="sp-bf-date" required value="' + new Date().toISOString().slice(0,10) + '"></div>'
+       +    '<div class="sp-form-field"><label class="lbl" for="sp-bf-operator">Operator</label>'
+       +      '<input type="text" id="sp-bf-operator" required value="' + escapeHtml(proc.owner || 'Alessio') + '"></div>'
+       +    '<div class="sp-form-field"><label class="lbl" for="sp-bf-batch">Batch size</label>'
+       +      '<input type="number" id="sp-bf-batch" required min="1" placeholder="e.g. 8"></div>'
+       +    '<div class="sp-form-field"><label class="lbl" for="sp-bf-hrc">HRC reading</label>'
+       +      '<input type="number" id="sp-bf-hrc" required step="0.1" min="0" max="80" placeholder="e.g. 42.5" onchange="spAutoSetPassed()"></div>'
+       +    '<div class="sp-form-field full"><label class="lbl">Result</label>'
+       +      '<div class="sp-toggle">'
+       +        '<button type="button" id="sp-bf-pass-yes" class="on" onclick="spTogglePassed(true)">Passed</button>'
+       +        '<button type="button" id="sp-bf-pass-no"        onclick="spTogglePassed(false)">Failed</button>'
+       +      '</div></div>'
+       +    '<div class="sp-form-field full"><label class="lbl" for="sp-bf-notes">Notes (optional)</label>'
+       +      '<textarea id="sp-bf-notes" maxlength="500" placeholder="What you saw, what to change next batch…"></textarea></div>'
+       +    '<div class="sp-form-field full"><label class="lbl">Photos (optional)</label>'
+       +      '<label for="sp-bf-photos" class="sp-photo-drop" id="sp-bf-drop">+ Drop or tap to add photos (jpg / png / webp / heic, ≤10MB each)'
+       +        '<input type="file" id="sp-bf-photos" accept="image/jpeg,image/png,image/webp,image/heic" multiple capture="environment" onchange="spOnPhotoSelect(event)"></label>'
+       +      '<div class="sp-photo-thumbs" id="sp-bf-thumbs"></div></div>'
+       +  '</form>';
+  return html;
+}
+
+function spRenderIfWrong(blocks) {
+  let html = '';
+  const ts = blocks.find(b => /troubleshooting/i.test(b.heading));
+  if (ts) {
+    const t = spParseTable(ts.content);
+    if (t && t.cols.length >= 3) {
+      html += '<h2>Troubleshooting</h2><table class="sp-table"><thead><tr>'
+           +  t.cols.map(c => '<th>' + escapeHtml(c) + '</th>').join('')
+           +  '</tr></thead><tbody>'
+           +  t.rows.map(r => '<tr>' + t.cols.map(c => '<td>' + escapeHtml(r[c] || '') + '</td>').join('') + '</tr>').join('')
+           +  '</tbody></table>';
+    } else {
+      html += '<h2>Troubleshooting</h2><div class="sp-block">' + (window.marked ? window.marked.parse(ts.content) : '<p>'+escapeHtml(ts.content)+'</p>') + '</div>';
+    }
+  }
+  const rb = blocks.find(b => /rollback/i.test(b.heading));
+  if (rb) {
+    html += '<h2>Rollback</h2><div class="sp-block amber">' + (window.marked ? window.marked.parse(rb.content) : '<p>'+escapeHtml(rb.content)+'</p>') + '</div>';
+  }
+  const es = blocks.find(b => /escalation/i.test(b.heading));
+  if (es) {
+    const t = spParseTable(es.content);
+    if (t && t.cols.length >= 3) {
+      html += '<h2>Escalation</h2><table class="sp-table"><thead><tr>'
+           +  t.cols.map(c => '<th>' + escapeHtml(c) + '</th>').join('')
+           +  '</tr></thead><tbody>'
+           +  t.rows.map(r => '<tr>' + t.cols.map(c => '<td>' + escapeHtml(r[c] || '') + '</td>').join('') + '</tr>').join('')
+           +  '</tbody></table>';
+    } else {
+      html += '<h2>Escalation</h2><div class="sp-block">' + (window.marked ? window.marked.parse(es.content) : '<p>'+escapeHtml(es.content)+'</p>') + '</div>';
+    }
+  }
+  return html || '<p style="color:var(--sp-muted);">No troubleshooting yet for this procedure.</p>';
+}
+
+async function spRenderReference(blocks, proc) {
+  let html = '';
+  // History table from shop_procedure_runs (NOT markdown)
+  html += '<h2>History</h2>';
+  if (window.supa) {
+    const { data: runs, error } = await window.supa.from('shop_procedure_runs')
+      .select('run_date,operator,batch_size,hrc_reading,passed,notes,photo_urls')
+      .eq('procedure_slug', proc.slug)
+      .order('run_date', { ascending: false })
+      .limit(50);
+    if (!error && runs && runs.length) {
+      html += '<table class="sp-table"><thead><tr><th>Date</th><th>Operator</th><th>Batch</th><th>HRC</th><th>Result</th><th>Notes</th></tr></thead><tbody>'
+           + runs.map(r => '<tr>'
+                + '<td>' + escapeHtml(r.run_date || '') + '</td>'
+                + '<td>' + escapeHtml(r.operator || '') + '</td>'
+                + '<td>' + escapeHtml(String(r.batch_size || '')) + '</td>'
+                + '<td>' + escapeHtml(r.hrc_reading != null ? String(r.hrc_reading) : '') + '</td>'
+                + '<td>' + (r.passed === true ? 'Pass' : (r.passed === false ? 'Fail' : '—')) + '</td>'
+                + '<td>' + escapeHtml((r.notes || '').slice(0, 80)) + '</td>'
+              + '</tr>').join('')
+           + '</tbody></table>';
+    } else {
+      html += '<div class="sp-block"><div style="color:var(--sp-muted);font-size:12px;">No batches logged yet for this procedure.</div></div>';
+    }
+  }
+  // Material / Why / Purpose from body_md
+  const ref = blocks.filter(b => /reference|composition|purpose|why/i.test(b.heading));
+  ref.forEach(b => {
+    html += '<h2>' + escapeHtml(b.heading) + '</h2>'
+         +  '<div class="sp-block">' + (window.marked ? window.marked.parse(b.content) : '<p>'+escapeHtml(b.content)+'</p>') + '</div>';
+  });
+  // Companion files
+  if (proc.html_url) {
+    html += '<h2>Companion files</h2><div class="sp-block">'
+         +    '<a href="' + escapeHtml(proc.html_url) + '" target="_blank" rel="noopener" style="color:var(--sp-amber);text-decoration:none;">Printable HTML →</a>'
+         + '</div>';
+  }
+  // Version footer
+  html += '<div style="margin-top:18px;font-size:11px;color:var(--sp-muted);">Procedure version ' + escapeHtml(String(proc.version || 1)) + (proc.updated_at ? ' · last touched ' + new Date(proc.updated_at).toLocaleDateString() : '') + '</div>';
+  return html;
+}
+
+// ── Main modal open ───────────────────────────────────────────────────
+window.openProcedureDetail = async function(slug) {
+  if (!window.supa) return;
+  const { data: proc, error } = await window.supa.from('shop_procedures')
+    .select('id,slug,title,body_md,html_url,category,material,product_line,owner,status,hardness_target,last_run_at,tags,version,updated_at')
+    .eq('slug', slug).eq('status', 'active')
+    .maybeSingle();
+  if (error || !proc) { alert('Procedure not found: ' + (error && error.message || slug)); return; }
+  window._shopActiveProcedure = proc;
+  window._shopPhotoUploads = [];
+
+  // Header chip + title + print
+  document.getElementById('sp-mod-chip').textContent  = (proc.category || 'procedure').replace(/-/g, ' ').toUpperCase();
+  document.getElementById('sp-mod-title').textContent = proc.title || slug;
+  const printEl = document.getElementById('sp-mod-print');
+  if (proc.html_url) { printEl.href = proc.html_url; printEl.style.display = ''; } else { printEl.style.display = 'none'; }
+
+  // Metadata strip
+  const fmtDate = (iso) => { if (!iso) return 'Never'; try { return new Date(iso).toLocaleDateString(); } catch(e) { return String(iso); } };
+  const meta = document.getElementById('sp-mod-meta');
+  meta.innerHTML = [
+    proc.material      ? '<div class="sp-meta-field"><div class="sp-meta-lbl">Material</div><div class="sp-meta-val">' + escapeHtml(proc.material) + '</div></div>' : '',
+    proc.product_line  ? '<div class="sp-meta-field"><div class="sp-meta-lbl">Line</div><div class="sp-meta-val">' + escapeHtml(proc.product_line) + '</div></div>' : '',
+    proc.hardness_target ? '<div class="sp-meta-field"><div class="sp-meta-lbl">Target</div><div class="sp-meta-val amber">' + escapeHtml(proc.hardness_target) + '</div></div>' : '',
+    '<div class="sp-meta-field"><div class="sp-meta-lbl">Owner</div><div class="sp-meta-val">' + escapeHtml(proc.owner || '—') + '</div></div>',
+    '<div class="sp-meta-field"><div class="sp-meta-lbl">Last run</div><div class="sp-meta-val">' + escapeHtml(fmtDate(proc.last_run_at)) + '</div></div>',
+    '<div class="sp-meta-field"><div class="sp-meta-lbl">Status</div><div class="sp-meta-val"><span class="sp-meta-status"><span class="sp-meta-dot ' + escapeHtml(proc.status || 'draft') + '"></span>' + escapeHtml(proc.status || 'draft') + '</span></div></div>'
+  ].join('');
+
+  // Parse body into sections + render each
+  const blocks = spParseBody(proc.body_md);
+  document.getElementById('sp-sec-pre-job').innerHTML     = spRenderPreJob(blocks['pre-job']);
+  document.getElementById('sp-sec-at-the-kiln').innerHTML = spRenderAtTheKiln(blocks['at-the-kiln'], proc);
+  document.getElementById('sp-sec-post-job').innerHTML    = spRenderPostJob(blocks['post-job'], proc);
+  document.getElementById('sp-sec-if-wrong').innerHTML    = spRenderIfWrong(blocks['if-wrong']);
+  document.getElementById('sp-sec-reference').innerHTML   = '<div style="color:var(--sp-muted);">Loading history…</div>';
+  spRenderReference(blocks['reference'], proc).then(html => {
+    const el = document.getElementById('sp-sec-reference');
+    if (el) el.innerHTML = html;
+  });
+
+  // Reset to first section
+  document.querySelectorAll('#sp-mod-nav .sp-pill').forEach(p => p.classList.toggle('active', p.dataset.sec === 'pre-job'));
+  document.querySelectorAll('#sp-modal .sp-section').forEach(s => s.classList.toggle('active', s.dataset.sec === 'pre-job'));
+  window._shopCurrentSection = 'pre-job';
+  spUpdateFooterFor('pre-job');
+
+  document.getElementById('sp-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeProcedureDetail = function() {
+  document.getElementById('sp-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  window._shopActiveProcedure = null;
+  window._shopPhotoUploads = [];
+};
+
+window.switchProcedureSection = function(btn, sec) {
+  window._shopCurrentSection = sec;
+  document.querySelectorAll('#sp-mod-nav .sp-pill').forEach(p => p.classList.toggle('active', p === btn));
+  document.querySelectorAll('#sp-modal .sp-section').forEach(s => s.classList.toggle('active', s.dataset.sec === sec));
+  const content = document.querySelector('#sp-modal .sp-modal__content');
+  if (content) content.scrollTop = 0;
+  spUpdateFooterFor(sec);
+};
+
+function spUpdateFooterFor(sec) {
+  const status = document.getElementById('sp-mod-status');
+  const actions = document.getElementById('sp-mod-actions');
+  if (!status || !actions) return;
+  const order = ['pre-job','at-the-kiln','post-job','if-wrong','reference'];
+  const i = order.indexOf(sec);
+  const next = order[i+1];
+  // Default action
+  if (sec === 'post-job') {
+    actions.innerHTML = '<button class="sp-cta" type="button" onclick="spSaveBatch()">Save batch</button>'
+                     + '<button class="sp-footer-link" type="button" onclick="spSkipBatch()">Skip — already logged</button>';
+  } else if (sec === 'if-wrong') {
+    actions.innerHTML = '<button class="sp-cta secondary" type="button" onclick="spOpenBusIssue()">Still wrong? Open bus →</button>'
+                     +  (next ? '<button class="sp-cta" type="button" onclick="spJumpSection(\'' + next + '\')">Next: ' + spSecLabel(next) + ' →</button>' : '');
+  } else if (sec === 'reference') {
+    actions.innerHTML = '<button class="sp-cta secondary" type="button" onclick="closeProcedureDetail()">Close</button>';
+  } else {
+    actions.innerHTML = next ? '<button class="sp-cta" type="button" onclick="spJumpSection(\'' + next + '\')">Next: ' + spSecLabel(next) + ' →</button>' : '';
+  }
+  // Update count if section has checkboxes
+  spUpdateCheckCount();
+  if (!status.textContent || sec === 'reference' || sec === 'if-wrong' || sec === 'at-the-kiln') {
+    const v = (window._shopActiveProcedure && window._shopActiveProcedure.version) || 1;
+    status.innerHTML = 'Section ' + (i+1) + ' of 5 · v' + v;
+  }
+}
+function spSecLabel(sec) { return ({'pre-job':'Pre-job','at-the-kiln':'At the kiln','post-job':'Post-job','if-wrong':'If wrong','reference':'Reference'}[sec] || sec); }
+window.spJumpSection = function(sec) {
+  const btn = document.querySelector('#sp-mod-nav .sp-pill[data-sec="' + sec + '"]');
+  if (btn) switchProcedureSection(btn, sec);
+};
+
+// ── Log-a-batch · photo upload + save ─────────────────────────────────
+window.spTogglePassed = function(pass) {
+  document.getElementById('sp-bf-pass-yes').classList.toggle('on', pass === true);
+  document.getElementById('sp-bf-pass-no').classList.toggle('on', pass === false);
+};
+window.spAutoSetPassed = function() {
+  const proc = window._shopActiveProcedure;
+  if (!proc || !proc.hardness_target) return;
+  const m = String(proc.hardness_target).match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+  if (!m) return;
+  const lo = parseFloat(m[1]), hi = parseFloat(m[2]);
+  const val = parseFloat(document.getElementById('sp-bf-hrc').value);
+  if (Number.isFinite(val)) spTogglePassed(val >= lo && val <= hi);
+};
+window.spOnPhotoSelect = async function(ev) {
+  const files = Array.from(ev.target.files || []);
+  if (!files.length) return;
+  const proc = window._shopActiveProcedure;
+  if (!proc || !window.supa) return;
+  const thumbs = document.getElementById('sp-bf-thumbs');
+  for (const f of files) {
+    if (f.size > 10*1024*1024) { alert('Photo too big (max 10MB): ' + f.name); continue; }
+    const runId = 'pending-' + Date.now();
+    const path = proc.slug + '/' + runId + '/' + f.name.replace(/[^\w.-]+/g, '_');
+    const up = await window.supa.storage.from('shop-procedure-photos').upload(path, f, { upsert: false });
+    if (up.error) { alert('Upload failed: ' + up.error.message); continue; }
+    const pub = window.supa.storage.from('shop-procedure-photos').getPublicUrl(path);
+    const url = pub.data.publicUrl;
+    window._shopPhotoUploads.push({ url, name: f.name, path });
+    const img = document.createElement('img');
+    img.className = 'sp-photo-thumb';
+    img.src = URL.createObjectURL(f);
+    img.title = f.name;
+    thumbs.appendChild(img);
+  }
+};
+window.spSaveBatch = async function() {
+  const proc = window._shopActiveProcedure;
+  if (!proc || !window.supa) return;
+  const cta = document.querySelector('#sp-mod-actions .sp-cta');
+  const date = document.getElementById('sp-bf-date').value;
+  const operator = document.getElementById('sp-bf-operator').value.trim();
+  const batch = parseInt(document.getElementById('sp-bf-batch').value, 10);
+  const hrc = parseFloat(document.getElementById('sp-bf-hrc').value);
+  if (!date || !operator || !batch || !Number.isFinite(hrc)) {
+    alert('Need: run date, operator, batch size, HRC reading.');
+    return;
+  }
+  const passed = document.getElementById('sp-bf-pass-yes').classList.contains('on');
+  const notes = document.getElementById('sp-bf-notes').value.trim() || null;
+  const photoUrls = window._shopPhotoUploads.map(p => p.url);
+  if (cta) { cta.disabled = true; cta.textContent = 'Saving…'; }
+  const { data, error } = await window.supa.from('shop_procedure_runs').insert({
+    procedure_id:      proc.id,
+    procedure_slug:    proc.slug,
+    procedure_version: proc.version || 1,
+    run_date:          date,
+    operator,
+    batch_size:        batch,
+    hrc_reading:       hrc,
+    passed,
+    notes,
+    photo_urls:        photoUrls,
+    created_by:        operator
+  }).select('id').single();
+  if (error) {
+    if (cta) { cta.disabled = false; cta.textContent = 'Save batch'; }
+    alert('Save failed: ' + error.message);
+    return;
+  }
+  // Update procedure's last_run_at
+  await window.supa.from('shop_procedures').update({ last_run_at: new Date(date).toISOString() }).eq('id', proc.id);
+  // Bus FAIL alert
+  if (passed === false) {
+    await window.supa.from('agent_messages').insert({
+      from_user: 'forge-code', to_user: 'alessio',
+      channel: 'shop', priority: 'normal', status: 'sent',
+      from_instance: 'forge-code', from_instance_id: 'forge-code@beast',
+      body: 'Batch FAIL logged for ' + proc.title + ' · HRC ' + hrc + (notes ? ' · ' + notes : '')
+    });
+  }
+  if (cta) cta.textContent = 'Saved ✓';
+  setTimeout(() => { closeProcedureDetail(); loadShopProcedures(); }, 700);
+};
+window.spSkipBatch = function() { spJumpSection('if-wrong'); };
+window.spOpenBusIssue = async function() {
+  const proc = window._shopActiveProcedure;
+  if (!proc || !window.supa) return;
+  const detail = prompt('What went wrong? (1 line for the bus)');
+  if (!detail) return;
+  await window.supa.from('agent_messages').insert({
+    from_user: 'forge-code', to_user: 'alessio',
+    channel: 'shop', priority: 'urgent', status: 'sent',
+    from_instance: 'forge-code', from_instance_id: 'forge-code@beast',
+    body: 'Procedure issue · ' + proc.title + ' (' + proc.slug + ') · ' + detail
+  });
+  alert('Posted to bus for Alessio.');
+};
+
+// ── Active-run rail ───────────────────────────────────────────────────
+window.refreshActiveRunRail = async function() {
+  if (!window.supa) return;
+  const rail = document.getElementById('sp-runrail');
+  if (!rail) return;
+  // "in-progress" = a run inserted in last 6h with passed IS NULL
+  const since = new Date(Date.now() - 6*60*60*1000).toISOString();
+  const { data, error } = await window.supa.from('shop_procedure_runs')
+    .select('id,procedure_slug,run_date,created_at')
+    .is('passed', null).gte('created_at', since)
+    .order('created_at', { ascending: false }).limit(1);
+  if (error || !data || !data.length) { rail.classList.remove('open'); return; }
+  const run = data[0];
+  const proc = (window._shopProcedures || []).find(p => p.slug === run.procedure_slug);
+  document.getElementById('sp-runrail-title').textContent = proc ? proc.title : run.procedure_slug;
+  rail.dataset.slug = run.procedure_slug;
+  // Live timer
+  if (window._shopRailTimer) clearInterval(window._shopRailTimer);
+  const startTs = new Date(run.created_at).getTime();
+  const tick = () => {
+    const s = Math.floor((Date.now() - startTs) / 1000);
+    const m = Math.floor(s / 60), sec = s % 60;
+    document.getElementById('sp-runrail-timer').textContent = '· ' + m + ':' + String(sec).padStart(2,'0');
+  };
+  tick(); window._shopRailTimer = setInterval(tick, 1000);
+  rail.classList.add('open');
+};
+window.openActiveRun = function() {
+  const rail = document.getElementById('sp-runrail');
+  if (!rail || !rail.dataset.slug) return;
+  openProcedureDetail(rail.dataset.slug).then(() => spJumpSection('at-the-kiln'));
+};
+    </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
@@ -2255,7 +5149,8 @@ window.renderQfTracker = function(attempt){
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
 <script defer src="assets/cc-col-resize.js?v=20260805-svcport"></script>
-<script defer src="assets/cc-master-detail.js?v=20260805-kp"></script><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
+<script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
+<script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
 <script>
 'use strict';
 /* One Supabase client per tab (fleet law). Same house project as every face. */
@@ -2273,7 +5168,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 const LANES = [
   ['dashboard','DASHBOARD','The business at a glance.','Phase 3 builds this last, from real lanes.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
-  ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
+  ['shop','SHOP','Shop floor and retail.','LIVE — ported 2026-08-05 (port 6/6, string complete). Static section below; buildShell skips it.'],
   ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
@@ -2321,11 +5216,22 @@ function switchLane(id){
   if(id==='quadfang'){
     setTimeout(()=>{ try{ window.renderRnd && window.renderRnd(); window.renderQfTracker && window.renderQfTracker(); }catch(e){ console.warn('[qf] render failed',e); } }, 50);
   }
+  if(id==='shop'){
+    setTimeout(()=>{ try{ window.loadShopProcedures && window.loadShopProcedures(); }catch(e){ console.warn('[shop] load failed',e); } }, 50);
+    (function retry(n){ if(window.supa && window.CCMasterDetail){ try{ window.renderShopHeatTreat(); }catch(e){ console.warn('[shop-ht] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
+    if((document.querySelector('#lane-shop .cc-subpane.active')||{dataset:{}}).dataset.subtab==='after-hours')
+      setTimeout(()=>{ try{ window.renderShopAfterHours && window.renderShopAfterHours(); }catch(e){} }, 60);
+  }
 }
 
 /* ── subnav: per-lane subtabs. Services first; later phase-3 lanes add rows here.
    Order inside a row is his — new subtabs go LAST (the faces reshuffle lesson). ── */
 const SUBNAV = {
+  shop: [
+    { id:'procedures',  label:'Heat Treat'  },
+    { id:'interns',     label:'Interns'     },
+    { id:'after-hours', label:'After-Hours' },
+  ],
   quadfang: [
     { id:'progress',  label:'Progress'  },
     { id:'prototype', label:'Prototype' },
@@ -2369,6 +5275,8 @@ function switchSubtab(lane,target){
   try{ const want='#'+lane+'/'+target; if(location.hash!==want) history.replaceState(null,'',want); }catch(e){}
   if(lane==='services') svcRender(target);
   if(lane==='comms' && target==='bus' && window.renderBusRecent) window.renderBusRecent();
+  if(lane==='shop' && target==='after-hours' && window.renderShopAfterHours)
+    setTimeout(()=>{ try{ window.renderShopAfterHours(); }catch(e){ console.warn('[shop-ah] render failed',e); } }, 50);
 }
 /* Lazy renderers, faces retry pattern — deferred assets may land after the tap. */
 function svcRender(target){

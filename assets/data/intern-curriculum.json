@@ -1,0 +1,40 @@
+{
+  "title": "What we're teaching",
+  "icon": "📚",
+  "subtitle": "AZCK intern curriculum domains",
+  "sections": [
+    {
+      "icon": "🔥",
+      "heading": "Blacksmithing",
+      "groups": [
+        { "label": "Techniques", "chips": ["hammer control", "drawing", "upsetting", "tapering", "scrolling"] },
+        { "label": "Safety",     "chips": ["PPE", "hot steel awareness", "forge/anvil proximity", "fire watch"] },
+        { "label": "Tools",      "chips": ["forge", "anvil", "hammers", "tongs", "hardies", "swages"] }
+      ]
+    },
+    {
+      "icon": "🔪",
+      "heading": "Knife Making",
+      "groups": [
+        { "label": "Process",          "chips": ["Profiling", "Rough grinding", "Heat treating", "Finish grinding", "Handlework", "Sharpening"] },
+        { "label": "Outdoor (this term)", "chips": ["Batcher"] },
+        { "label": "Kitchen (this term)", "chips": ["Raptor Expert Slim", "paring knives"] }
+      ]
+    },
+    {
+      "icon": "⚒️",
+      "heading": "Sharpening",
+      "groups": [
+        { "label": "Methods",    "chips": ["Waterstones", "Electric grinders"] },
+        { "label": "Knife types","chips": ["Folding", "Kitchen"] },
+        { "label": "Theory",     "chips": ["Geometry", "Edge angle", "Edge metallurgy"] },
+        { "label": "Hands-on",   "chips": ["Just-go-and-sharpen practice"] }
+      ]
+    },
+    {
+      "icon": "🔬",
+      "heading": "Metallurgy (cross-cutting)",
+      "note": "Woven through Heat Treat · Sharpening · Blacksmithing — the science of working with metal, touched throughout rather than a standalone block."
+    }
+  ]
+}

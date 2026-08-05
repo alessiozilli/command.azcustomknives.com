@@ -1,0 +1,38 @@
+[
+  {
+    "slug": "badger",
+    "label": "Badger",
+    "html": "assets/after-hours/Knife Making Program - Badger (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - Badger (with cover).pdf"
+  },
+  {
+    "slug": "bulldog",
+    "label": "Bulldog",
+    "html": "assets/after-hours/Knife Making Program - Bulldog (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - Bulldog (with cover).pdf"
+  },
+  {
+    "slug": "falcon",
+    "label": "Falcon",
+    "html": "assets/after-hours/Knife Making Program - Falcon (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - Falcon (with cover).pdf"
+  },
+  {
+    "slug": "defender",
+    "label": "Defender",
+    "html": "assets/after-hours/Knife Making Program - Defender (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - Defender (with cover).pdf"
+  },
+  {
+    "slug": "5res",
+    "label": "5RES",
+    "html": "assets/after-hours/Knife Making Program - 5RES (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - 5RES (with cover).pdf"
+  },
+  {
+    "slug": "raptor",
+    "label": "Raptor",
+    "html": "assets/after-hours/Knife Making Program - Raptor (with cover).html",
+    "pdf":  "assets/after-hours/Knife Making Program - Raptor (with cover).pdf"
+  }
+]
