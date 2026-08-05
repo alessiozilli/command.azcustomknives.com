@@ -1,0 +1,254 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QuadFang Business Model Canvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Mukta:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forge:#E85D2C;
+    --charcoal:#1A1A1A;
+    --cream:#F2EDE5;
+    --steel:#8A8A8A;
+    --white:#FFFFFF;
+    --line:#D9D4CB;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  @page{ size:11in 8.5in; margin:0; }
+  html,body{
+    background:var(--charcoal);
+    font-family:'Mukta','Calibri',Arial,sans-serif;
+    color:var(--charcoal);
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .sheet{
+    width:11in; height:8.5in;
+    background:var(--cream);
+    padding:0.30in 0.34in 0.26in 0.34in;
+    display:flex; flex-direction:column;
+    margin:0 auto;
+  }
+
+  /* ---- Header ---- */
+  header{ display:flex; align-items:flex-end; justify-content:space-between;
+          border-bottom:3px solid var(--forge); padding-bottom:7px; margin-bottom:8px; }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .mark{ font-family:'Oswald','Impact',sans-serif; font-weight:700; font-size:25pt;
+         letter-spacing:1.2px; color:var(--charcoal); text-transform:uppercase; line-height:1;}
+  .mark span{ color:var(--forge); }
+  .sub{ font-family:'Oswald',sans-serif; font-weight:500; text-transform:uppercase;
+        letter-spacing:2.4px; font-size:8pt; color:var(--steel); }
+  .doc-title{ text-align:right; }
+  .doc-title .t1{ font-family:'Oswald',sans-serif; font-weight:600; text-transform:uppercase;
+        letter-spacing:1.5px; font-size:12.5pt; color:var(--charcoal); }
+  .doc-title .t2{ font-family:'Mukta',sans-serif; font-size:7.6pt; color:var(--steel); margin-top:1px;}
+
+  /* ---- Grid ---- */
+  .grid{ flex:1; display:grid; gap:7px;
+         grid-template-columns:repeat(5,1fr);
+         grid-template-rows: 1fr 1fr 0.62fr;
+         grid-template-areas:
+           "kp ka vp cr cs"
+           "kp kr vp ch cs"
+           "cost cost cost rev rev"; }
+  .cell{ grid-area:auto; }
+  .kp{grid-area:kp;} .ka{grid-area:ka;} .kr{grid-area:kr;} .vp{grid-area:vp;}
+  .cr{grid-area:cr;} .ch{grid-area:ch;} .cs{grid-area:cs;}
+  .cost{grid-area:cost;} .rev{grid-area:rev;}
+
+  .box{ background:var(--white); border:1px solid var(--line); border-radius:5px;
+        padding:7px 8px 6px 8px; display:flex; flex-direction:column; overflow:hidden;
+        box-shadow:0 1px 0 rgba(0,0,0,0.03); }
+  .box.vp{ border:1.6px solid var(--forge); }
+  .box.rev{ background:#FBF1EA; }
+
+  .hd{ display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .ic{ width:17px; height:17px; flex:0 0 17px; border-radius:3px; background:var(--forge);
+       color:var(--white); font-size:10px; line-height:17px; text-align:center; font-weight:700;}
+  .vp .ic{ background:var(--charcoal); }
+  h2{ font-family:'Oswald','Impact',sans-serif; font-weight:600; text-transform:uppercase;
+      letter-spacing:0.6px; font-size:9pt; color:var(--charcoal); }
+  .vp h2{ color:var(--forge); }
+  ul{ list-style:none; }
+  li{ font-size:7.4pt; line-height:1.28; color:#2c2c2c; padding-left:8px; position:relative;
+      margin-bottom:2.2px; }
+  li::before{ content:""; position:absolute; left:0; top:5px; width:3px; height:3px;
+      background:var(--forge); border-radius:50%; }
+  .vp li::before{ background:var(--charcoal); }
+  li b{ font-weight:600; color:var(--charcoal); }
+  .lead{ font-size:7.7pt; line-height:1.3; font-weight:500; color:var(--charcoal);
+      margin-bottom:5px; font-style:italic; border-left:2px solid var(--forge); padding-left:6px;}
+
+  .pricepill{ display:inline-block; background:var(--forge); color:#fff; font-family:'Oswald',sans-serif;
+      font-weight:700; font-size:9.5pt; letter-spacing:.4px; padding:2px 9px; border-radius:11px; margin:1px 0 4px 0;}
+
+  .twocol{ columns:2; column-gap:14px; }
+  .twocol li{ break-inside:avoid; }
+
+  footer{ display:flex; justify-content:space-between; align-items:center;
+      margin-top:7px; padding-top:5px; border-top:1px solid var(--line);
+      font-family:'Mukta',sans-serif; font-size:6.8pt; color:var(--steel); }
+  footer b{ color:var(--charcoal); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <header>
+      <div class="brand">
+        <div class="mark">QUAD<span>FANG</span></div>
+        <div class="sub">Premium Broadheads&nbsp;&nbsp;·&nbsp;&nbsp;a division of AZ Custom Knives Ltd.</div>
+      </div>
+      <div class="doc-title">
+        <div class="t1">Business Model Canvas</div>
+        <div class="t2">QF-100&nbsp;·&nbsp;Grande Prairie, Alberta&nbsp;·&nbsp;Prepared 2026-05-19&nbsp;·&nbsp;rev 2026-07-07</div>
+      </div>
+    </header>
+
+    <div class="grid">
+
+      <!-- KEY PARTNERS -->
+      <div class="box kp">
+        <div class="hd"><div class="ic">&#129309;</div><h2>Key Partners</h2></div>
+        <ul>
+          <li><b>local machine shop</b>: CNC machining, 10 prototypes, SLM drawings</li>
+          <li><b>Red Deer Polytechnic — CIM-TAC</b> (Ben Allan · Debjyoti Sen · Dr. Tonya Wolfe): metrology &amp; impact testing; NDA signed 2026-06-16; QuadFang keeps 100% IP</li>
+          <li><b>Alberta Innovates</b> (Kerrie Taylor · Matt Cornall · Linda Russell): technology advisors, IP-landscape guidance, voucher pathways</li>
+          <li><b>Swiss-lathe production shops</b> (Alberta outreach, NDAs ready): 17-4PH production turning</li>
+          <li><b>SLM 3D-print suppliers</b> (Edmonton, Calgary, Vancouver): production option for complex geometry</li>
+          <li><b>AZ Custom Knives Ltd.</b> parent: workshop, storefront, reputation, relationships</li>
+          <li><b>Community Futures GP / GPRIN / Innovate Northwest</b> (Jane Hunter-Uhryn · Holly Sorgen): coaching, mentorship, grant navigation</li>
+          <li><b>Funding partners:</b> NRC IRAP, Alberta Innovates, PrairiesCan, SR&amp;ED</li>
+          <li><b>Wix + Shopify</b> storefront and listings</li>
+          <li>Western Canada Knife Association, hunting community, Kyran's bowhunter network</li>
+        </ul>
+      </div>
+
+      <!-- KEY ACTIVITIES -->
+      <div class="box ka">
+        <div class="hd"><div class="ic">&#9881;</div><h2>Key Activities</h2></div>
+        <ul>
+          <li>Product design and R&amp;D in Fusion 360 (4-blade geometry)</li>
+          <li>Prototyping, QC to knife-shop standard; field testing with hunters (batch 1 in the field)</li>
+          <li>In-house heat treatment (H900, 44 HRC verified) and hand edge-finishing</li>
+          <li>Third-party metrology &amp; impact testing (RDP CIM-TAC)</li>
+          <li>Swiss-lathe CNC production coordination; SLM 3D-print stays an option</li>
+          <li>Brand building and content (the "by AZ" story, video, photography)</li>
+          <li>Direct-to-consumer sales and fulfillment</li>
+          <li>Grant applications and SR&amp;ED R&amp;D documentation</li>
+          <li>Trade shows (Grande Prairie Gun Show, Oct 16 to 18, 2026)</li>
+        </ul>
+      </div>
+
+      <!-- KEY RESOURCES -->
+      <div class="box kr">
+        <div class="hd"><div class="ic">&#128296;</div><h2>Key Resources</h2></div>
+        <ul>
+          <li><b>Alessio Zilli</b>: Swiss journeyman bladesmith, 25+ yrs. Design, R&amp;D, heat treatment, production</li>
+          <li><b>Reanna Leach</b>: operations, grants, admin, store, social</li>
+          <li><b>Kyran</b>: co-founder and business partner; high-end hunting expertise, influencer + bowhunter connections; runs all prototype testing</li>
+          <li>Proprietary 4-blade design (QF-100)</li>
+          <li>AZCK workshop, storefront, equipment (Grande Prairie)</li>
+          <li>Brand assets, Alessio's craftsmanship heritage and following</li>
+        </ul>
+      </div>
+
+      <!-- VALUE PROPOSITIONS -->
+      <div class="box vp">
+        <div class="hd"><div class="ic">&#10022;</div><h2>Value Propositions</h2></div>
+        <div class="lead">"The animal never sees what's coming, and the broadhead is already gone."</div>
+        <ul>
+          <li><b>QF-100:</b> 100-grain, 4-blade fixed broadhead engineered by a master bladesmith</li>
+          <li><b>Pass-through performance</b>, silent in flight, ethical clean kill</li>
+          <li><b>Flies closer to a field point than 2/3-blade heads:</b> less blade surface at equal cutting diameter, balanced weight, less re-tuning</li>
+          <li><b>Proprietary 4-blade geometry:</b> penetration and cutting that mass methods cannot match</li>
+          <li><b>Swiss-lathe CNC production:</b> repeatable knife-shop precision at production speed</li>
+          <li><b>Made in Canada;</b> every head meets custom knife-shop quality</li>
+          <li><b>Authentic heritage</b> versus faceless mass brands</li>
+          <li><b>The QuadFang mark:</b> four fangs leave an X-cut signature</li>
+        </ul>
+      </div>
+
+      <!-- CUSTOMER RELATIONSHIPS -->
+      <div class="box cr">
+        <div class="hd"><div class="ic">&#10084;</div><h2>Customer Relationships</h2></div>
+        <ul>
+          <li>Personal, brand-led relationship built on Alessio's story and reputation</li>
+          <li>Content-led engagement: behind-the-scenes manufacturing, the "by AZ" narrative</li>
+          <li>Community and social (Facebook, Instagram, knife and hunting circles)</li>
+          <li>Face-to-face at trade shows: demos and samples</li>
+          <li>Recurring relationship, broadheads are a consumable</li>
+          <li>Responsive, craftsman-direct service</li>
+        </ul>
+      </div>
+
+      <!-- CHANNELS -->
+      <div class="box ch">
+        <div class="hd"><div class="ic">&#128231;</div><h2>Channels</h2></div>
+        <ul>
+          <li><b>quadfang.com</b> (Wix e-commerce): primary direct-to-consumer, Phase 1: limited launch late 2026, validation-gated</li>
+          <li><b>Pre-launch waitlist</b> &amp; email list on quadfang.com</li>
+          <li>Existing AZCK social channels (Facebook, Instagram)</li>
+          <li>Trade shows and hunting / outdoor expos</li>
+          <li><b>Phase 2 (2027):</b> Canadian outdoor retailers, distributors, Amazon</li>
+          <li><b>Phase 3 (2027 to 2028):</b> U.S. entry and Europe online (export-development support)</li>
+        </ul>
+      </div>
+
+      <!-- CUSTOMER SEGMENTS -->
+      <div class="box cs">
+        <div class="hd"><div class="ic">&#127919;</div><h2>Customer Segments</h2></div>
+        <ul>
+          <li><b>Premium bowhunters:</b> performance and innovation over price</li>
+          <li><b>Big-game &amp; elk hunters:</b> want deep penetration and tough, solid fixed blades</li>
+          <li><b>Crossbow hunters:</b> fastest-growing entry group; a heavy fixed blade suits the bolts</li>
+          <li><b>Women bowhunters:</b> ~28% of bowhunters and the fastest-growing group</li>
+          <li><b>Youth &amp; new / adult-onset hunters:</b> the recruitment wave, gateway buyers</li>
+          <li><b>Hog &amp; predator hunters:</b> tough hides reward fixed-blade durability</li>
+          <li><b>Made-in-Canada buyers:</b> seek North American designed and built gear</li>
+          <li><b>Craft, heritage &amp; collectors:</b> artisan quality, real story, gifting</li>
+          <li><b>Guides, outfitters &amp; pro-staff:</b> credibility and volume; recommend to clients</li>
+          <li><b>Phase 2 and beyond:</b> retailers and distributors (wholesale)</li>
+        </ul>
+      </div>
+
+      <!-- COST STRUCTURE -->
+      <div class="box cost">
+        <div class="hd"><div class="ic">&#128178;</div><h2>Cost Structure</h2></div>
+        <ul class="twocol">
+          <li>Prototyping (10 heads + 2 SLM drawings, local machine shop)</li>
+          <li>Swiss-lathe production runs: setup + per-unit machining</li>
+          <li>Third-party testing &amp; validation (RDP CIM-TAC scope)</li>
+          <li>Brand and marketing (website, photography, trade shows, content)</li>
+          <li>Legal and IP (trademarks + patent provision, $14.5K budgeted)</li>
+          <li>Packaging (sealed dual-pack design and production)</li>
+          <li>Testing and certification</li>
+          <li>Shared AZCK overhead (workshop, storefront)</li>
+          <li><b>Cycle time 45 min &rarr; ~17 s</b> on Swiss-lathe; unit cost drops with batch volume</li>
+        </ul>
+      </div>
+
+      <!-- REVENUE STREAMS -->
+      <div class="box rev">
+        <div class="hd"><div class="ic">&#128176;</div><h2>Revenue Streams</h2></div>
+        <span class="pricepill">$89 sealed dual pack &nbsp;·&nbsp; one SKU</span>
+        <ul>
+          <li><b>QuadFang QF-100</b> sold as a sealed 2-pack at $89 (one price)</li>
+          <li>Direct-to-consumer via quadfang.com (Phase 1); wholesale to retailers and distributors (Phase 2)</li>
+          <li>Recurring revenue, broadheads are a consumable repurchased regularly</li>
+          <li><b>Outlook (tracker base case):</b> Yr 1 ~$19K&nbsp;·&nbsp;Yr 2 ~$77K&nbsp;·&nbsp;Yr 3 ~$194K</li>
+          <li><b>49% direct margin</b> at prototype cost; <b>60% target</b> at production cost</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <footer>
+      <div>Template courtesy of <b>Jane Hunter</b>, Community Futures / Innovate Northwest&nbsp;·&nbsp;built on the Osterwalder Business Model Canvas</div>
+      <div><b>AZ Custom Knives Ltd.</b>&nbsp;·&nbsp;alessio.zilli@azcustomknives.com&nbsp;·&nbsp;1-780-831-2987</div>
+    </footer>
+  </div>
+</body>
+</html>
