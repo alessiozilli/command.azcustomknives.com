@@ -6,7 +6,7 @@
 <title>AZCK Command — the business</title>
 <link rel="icon" href="az-sigil.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Lexend:wght@300;400;500;600&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 <style>
 /* ── AZCK COMMAND — the business face. Phase 2 shell (plan d0e8cab3, Three homes). ──
    Skeleton per Alessio 2026-08-05: his header bones, full-width use, dark + light,
@@ -43,6 +43,13 @@ nav button{font:500 12.5px/1 Oswald,sans-serif;letter-spacing:1.6px;text-transfo
     padding:9px 13px;cursor:pointer}
 nav button:hover{color:var(--ink)}
 nav button.active{color:var(--ink);border-bottom-color:var(--red-hot)}
+/* ── subnav — second row, per-lane subtabs (phase 3: services first) ── */
+#subnav{display:flex;gap:6px;padding:8px 18px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+#subnav:empty{display:none}
+#subnav button{font:600 10.5px/1 Oswald,sans-serif;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-dim);background:var(--panel-2);border:1px solid var(--line);border-radius:3px;padding:6px 12px;cursor:pointer}
+#subnav button:hover{color:var(--ink)}
+#subnav button.active{background:var(--red);border-color:var(--red);color:#fff}
+.pill.on{border-color:var(--red-hot);color:var(--red-hot)}
 /* ── lanes — full width, no wasted gutters ── */
 main{flex:1;width:100%;padding:22px 18px}
 .lane{display:none;max-width:none}
@@ -91,15 +98,1324 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     <img src="az-sigil.svg" alt="">
     <h1>AZCK <span>COMMAND</span></h1>
     <div class="spacer"></div>
+    <button class="pill" id="editBtn" type="button" title="Toggle drag-to-resize on lane columns">&#9998;</button>
     <button class="pill" id="themeBtn" type="button">theme</button>
     <button class="pill" id="userPill" type="button">…</button>
   </header>
   <nav id="nav"></nav>
-  <main id="lanes"></main>
+  <div id="subnav"></div>
+  <main id="lanes">
+  <section class="lane" id="lane-services" data-lane="services">
+    <style>
+      /* ═══ COMMAND SHIM (2026-08-05, Three-homes phase 3) — the Services chunk below
+         is a faithful port from azck-faces and speaks the faces token language. This
+         block maps those tokens onto the command shell's palette, scoped to this lane
+         only, so the ported CSS runs byte-identical instead of hand-rewritten.
+         Amber stays amber INSIDE the lane on purpose: it is load-bearing — the
+         calendar reads amber=booking / red=blocked / grey=gcal, and that colour
+         code is months of muscle memory. The shell chrome around it stays red. ═══ */
+      [data-lane="services"]{
+        --surface:var(--panel); --raised:var(--panel-2); --overlay:var(--panel-2);
+        --border:var(--line); --border-hi:#3a3e46;
+        --text:var(--ink); --text-dim:var(--ink-dim); --text-xs:var(--ink-faint);
+        --amber:#c8922a; --amber-dim:#9c7021;
+        --amber-soft:rgba(200,146,42,0.08); --amber-glow:rgba(200,146,42,0.15);
+        --green:#2ea043; --green-bg:rgba(46,160,67,0.12);
+        --yellow:#d29922; --yellow-bg:rgba(210,153,34,0.12);
+        --red:#e5534b; --red-bg:rgba(229,83,75,0.12);
+        --blue:#4493d4; --blue-bg:rgba(68,147,212,0.12);
+        --sp-2:2px; --sp-4:4px; --sp-6:6px; --sp-8:8px; --sp-10:10px;
+        --sp-12:12px; --sp-16:16px; --sp-20:20px; --sp-24:24px; --sp-32:32px;
+        --mono:'JetBrains Mono',Consolas,monospace; --sans:'Lexend',sans-serif;
+        --display:'Lexend',sans-serif; --display-tabs:'Oswald';
+      }
+      html[data-theme="light"] [data-lane="services"]{
+        --border-hi:#bbc3cc;
+        --amber:#a06c10; --amber-dim:#7a5010;
+        --amber-soft:rgba(160,108,16,0.06); --amber-glow:rgba(160,108,16,0.12);
+      }
+      /* faces globals the chunk leans on, scoped to the lane */
+      [data-lane="services"] .cc-subpane { display:none; }
+      [data-lane="services"] .cc-subpane.active { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+      [data-lane="services"] .cc-subpane.active > * { flex:1; min-height:0; }
+      [data-lane="services"] .cc-subtab { font-family:var(--display); font-size:10px; padding:5px 12px; border:1px solid var(--border); border-radius:3px; background:var(--raised); color:var(--text-dim); cursor:pointer; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; }
+      [data-lane="services"] .cc-subtab.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-lane="services"] .cc-subtab:hover:not(.active) { color:var(--amber); border-color:var(--amber); }
+      [data-lane="services"] .cc-stub { background:var(--surface); border:1px dashed var(--border); border-radius:4px; padding:var(--sp-16); color:var(--text-xs); font-size:12px; text-align:center; }
+      [data-lane="services"] .cc-subnav__hint { font-family:var(--mono); font-size:10px; color:var(--text-xs); padding:8px 0; }
+      [data-lane="services"] .cc-card { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:var(--sp-12); transition:border-color 0.12s; position:relative; overflow:hidden; }
+      [data-lane="services"] .cc-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:transparent; }
+      [data-lane="services"] .cc-card.red::before { background:var(--red); }
+      [data-lane="services"] .cc-card__label { font-family:var(--display); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs); margin-bottom:var(--sp-6); }
+      [data-lane="services"] .cc-card__title { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--text); line-height:1.35; margin-bottom:var(--sp-4); word-wrap:break-word; }
+      [data-lane="services"] .cc-card__sub { font-size:12px; color:var(--text-dim); line-height:1.4; }
+      [data-lane="services"] .cc-card__meta { display:flex; align-items:center; gap:var(--sp-8); margin-top:var(--sp-8); padding-top:var(--sp-8); border-top:1px solid var(--border); flex-wrap:wrap; }
+      [data-lane="services"] .cc-card__tag { display:inline-flex; align-items:center; padding:1px 6px; border-radius:3px; font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:0.04em; }
+      [data-lane="services"] .cc-card__tag.amber { background:var(--amber-soft); color:var(--amber); }
+      [data-lane="services"] .cc-card__tag.green { background:var(--green-bg); color:var(--green); }
+      [data-lane="services"] .cc-card__tag.red { background:var(--red-bg); color:var(--red); }
+      [data-lane="services"] .cc-modal__field { font-family:var(--mono); font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:3px; padding:var(--sp-8) var(--sp-10); }
+      [data-lane="services"] .cc-modal__field:focus { outline:none; border-color:var(--amber); }
+      /* command-adapt: faces caps lane height via a body-flex chain; command's page
+         scrolls. The calendar and schedule subtabs get their own viewport height so
+         each column scrolls itself — same behaviour the queue/bookings grids already
+         carry in their own calc() heights. */
+      #lane-services.active { display:flex; flex-direction:column; min-height:0; }
+      #lane-services .svcal { height:calc(100vh - 250px); min-height:420px; }
+      #lane-services .cc-subpane[data-subtab="schedule"].active > .sv3 { height:calc(100vh - 250px); min-height:420px; }
+    </style>
+    <style>
+      /* Three-split like OPERATOR › TASKS (.ts3) — each column scrolls itself because
+         .cc-lane clips overflow (that bug ate the schedule section on 2026-07-12). */
+      [data-lane="services"] .sv3 { display:grid; grid-template-columns:var(--sv-cols, 1.3fr 10px 1.2fr 10px 1fr); gap:0; align-items:stretch; flex:1; min-height:0; margin:var(--sp-12) var(--sp-16); }
+      [data-lane="services"] .sv3-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; min-width:0; min-height:0; max-height:100%; overflow-y:auto; }
+      [data-lane="services"] .sv3-col__head { font-family:var(--display-tabs,var(--display,'Oswald'),sans-serif); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+      [data-lane="services"] .sv3-resize { cursor:col-resize; position:relative; align-self:stretch; touch-action:none; pointer-events:none; background:transparent; transition:background .12s; }
+      body.cc-edit-on [data-lane="services"] .sv3-resize { pointer-events:auto; background:linear-gradient(to right, transparent calc(50% - 1px), var(--amber-dim,var(--amber)) calc(50% - 1px), var(--amber-dim,var(--amber)) calc(50% + 1px), transparent calc(50% + 1px)); }
+      body.cc-edit-on [data-lane="services"] .sv3-resize:hover, body.cc-edit-on [data-lane="services"] .sv3-resize.dragging { background:linear-gradient(to right, transparent calc(50% - 1.5px), var(--amber) calc(50% - 1.5px), var(--amber) calc(50% + 1.5px), transparent calc(50% + 1.5px)); }
+      @media (max-width:960px) { [data-lane="services"] .sv3 { grid-template-columns:1fr; overflow-y:auto; gap:var(--sp-10); } [data-lane="services"] .sv3-resize { display:none; } [data-lane="services"] .sv3-col { max-height:none; overflow:visible; } }
+      /* ── CALENDAR subtab (2026-07-12, Alessio direct: subtabs + visual booking calendar) ── */
+      [data-lane="services"] .cc-subpane.active { padding:var(--sp-12) var(--sp-16); }
+      [data-lane="services"] .cc-subpane .sv3 { margin:0; }
+      [data-lane="services"] .svcal { display:flex; flex-direction:column; min-height:0; }
+      [data-lane="services"] .svcal-bar { display:flex; gap:6px; align-items:center; margin-bottom:var(--sp-8); flex-wrap:wrap; flex:0 0 auto; }
+      [data-lane="services"] .svcal-title { font-family:var(--display); font-size:14px; letter-spacing:.08em; text-transform:uppercase; color:var(--text); min-width:160px; text-align:center; }
+      [data-lane="services"] .svcal-vbtn.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-lane="services"] .svcal-body { display:grid; grid-template-columns:1fr 300px; gap:var(--sp-10); flex:1; min-height:0; }
+      [data-lane="services"] .svcal-grid, [data-lane="services"] .svcal-detail { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; overflow-y:auto; min-height:0; }
+      [data-lane="services"] .svcal-dow { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }
+      [data-lane="services"] .svcal-dow div { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); text-align:center; padding:2px 0; }
+      [data-lane="services"] .svcal-cells { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+      [data-lane="services"] .svcal-day { border:1px solid var(--border); border-radius:4px; min-height:84px; padding:4px; cursor:pointer; display:flex; flex-direction:column; gap:2px; min-width:0; }
+      [data-lane="services"] .svcal-day:hover { border-color:var(--amber); }
+      [data-lane="services"] .svcal-day.pad { border:0; cursor:default; }
+      [data-lane="services"] .svcal-day.sel { border-color:var(--amber); background:rgba(255,176,0,.08); }
+      [data-lane="services"] .svcal-day.today .svcal-num { color:var(--amber); font-weight:700; }
+      [data-lane="services"] .svcal-num { font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+      [data-lane="services"] .svcal-chip { font-family:var(--mono); font-size:9px; border-radius:3px; padding:1px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      [data-lane="services"] .svcal-chip.b { background:rgba(255,176,0,.15); color:var(--amber); border:1px solid rgba(255,176,0,.4); }
+      [data-lane="services"] .svcal-chip.x { background:rgba(204,31,31,.18); color:#ff7a7a; border:1px solid rgba(204,31,31,.5); }
+      [data-lane="services"] .svcal-chip.g { background:var(--raised,rgba(255,255,255,.04)); color:var(--text-dim); border:1px solid var(--border); }
+      [data-lane="services"] .svcal-week { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+      [data-lane="services"] .svcal-wday { border:1px solid var(--border); border-radius:4px; padding:6px; min-height:220px; cursor:pointer; display:flex; flex-direction:column; gap:3px; min-width:0; }
+      [data-lane="services"] .svcal-wday.sel { border-color:var(--amber); background:rgba(255,176,0,.08); }
+      [data-lane="services"] .svcal-wday__h { font-family:var(--mono); font-size:9px; color:var(--text-dim); }
+      [data-lane="services"] .svcal-year { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:var(--sp-10); }
+      [data-lane="services"] .svcal-mini { border:1px solid var(--border); border-radius:6px; padding:8px; cursor:pointer; }
+      [data-lane="services"] .svcal-mini:hover { border-color:var(--amber); }
+      [data-lane="services"] .svcal-mini__t { font-family:var(--display); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text); margin-bottom:6px; }
+      [data-lane="services"] .svcal-mini__g { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+      [data-lane="services"] .svcal-mini__d { height:14px; border-radius:2px; background:var(--raised,rgba(255,255,255,.03)); font-size:8px; font-family:var(--mono); color:var(--text-xs); display:flex; align-items:center; justify-content:center; }
+      [data-lane="services"] .svcal-mini__d.b { background:rgba(255,176,0,.35); color:#000; }
+      [data-lane="services"] .svcal-mini__d.x { background:rgba(204,31,31,.45); color:#fff; }
+      [data-lane="services"] .svcal-mini__d.e { background:transparent; }
+      [data-lane="services"] .svcal-dhead { font-family:var(--display); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--amber); padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+      [data-lane="services"] .svcal-dsec { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin:10px 0 4px; }
+      @media (max-width:960px){ [data-lane="services"] .svcal-body { grid-template-columns:1fr; } [data-lane="services"] .svcal-grid { max-height:50vh; } }
+      /* ── BOOKINGS subtab — the CC layout standard (Alessio ruling 2026-07-27):
+         nav | product | bus. It used to be ONE full-width column: 8 cards
+         stretched across 1500px, no detail pane, no bus. Mirrors .p3d-3col. ── */
+      [data-lane="services"] .svb-3col { display:grid; grid-template-columns:1.15fr 2.4fr 1.5fr; gap:10px; height:calc(100vh - 205px); min-height:420px; align-items:stretch; position:relative; }
+      [data-lane="services"] .svb-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-lane="services"] .svb-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      [data-lane="services"] .svb-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
+      [data-lane="services"] .svb-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
+      /* Pill row = the subtabbing-within-the-subtab for this collection. */
+      [data-lane="services"] .svb-pills { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; flex-shrink:0; }
+      [data-lane="services"] .svb-pill { font-family:var(--mono); font-size:9px; padding:3px 8px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; user-select:none; }
+      [data-lane="services"] .svb-pill:hover { color:var(--amber); border-color:var(--amber); }
+      [data-lane="services"] .svb-pill.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      /* Fold-out card. The WHOLE header row is the fold control — never a caret-only
+         target (PR #301 shipped an 11px caret and the open card could not be shut). */
+      [data-lane="services"] .svb-card { padding:8px 10px; border:1px solid transparent; border-radius:3px; cursor:pointer; display:flex; align-items:flex-start; gap:7px; }
+      [data-lane="services"] .svb-card:hover { background:var(--raised); border-color:var(--border); }
+      [data-lane="services"] .svb-card.active { background:var(--amber-soft); border-color:var(--amber); }
+      [data-lane="services"] .svb-card__t { flex:1 1 auto; min-width:0; font-size:12.5px; color:var(--text); line-height:1.4; }
+      [data-lane="services"] .svb-card.active .svb-card__t { color:var(--amber); }
+      [data-lane="services"] .svb-card__sub { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:3px; }
+      [data-lane="services"] .svb-caret { flex:0 0 auto; width:14px; text-align:center; font-size:9px; line-height:1.9; color:var(--text-dim); user-select:none; }
+      [data-lane="services"] .svb-card:hover .svb-caret, [data-lane="services"] .svb-card.active .svb-caret { color:var(--amber); }
+      [data-lane="services"] .svb-facts { margin:2px 0 8px; }
+      [data-lane="services"] .svb-facts[hidden] { display:none; }
+      [data-lane="services"] .svb-fact { display:block; padding:4px 10px 4px 18px; font-size:11.5px; color:var(--text-dim); border-radius:3px; word-break:break-word; }
+      [data-lane="services"] .svb-fact b { color:var(--text-xs); font-weight:400; font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; margin-right:6px; }
+      [data-lane="services"] .svb-group { font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-xs); margin:10px 0 4px; padding-left:2px; }
+      [data-lane="services"] .svb-group:first-child { margin-top:0; }
+      /* CENTRE = the product. */
+      [data-lane="services"] .svb-meta { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); display:flex; gap:10px; flex-wrap:wrap; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:10px; }
+      [data-lane="services"] .svb-meta b { color:var(--text-dim); font-weight:400; }
+      [data-lane="services"] .svb-detail h3 { font-family:var(--display); font-size:15px; color:var(--amber); margin:0 0 6px; letter-spacing:.04em; }
+      [data-lane="services"] .svb-row { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; align-items:baseline; }
+      [data-lane="services"] .svb-row__k { font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-xs); flex:0 0 92px; }
+      [data-lane="services"] .svb-row__v { color:var(--text); flex:1 1 auto; min-width:0; word-break:break-word; }
+      [data-lane="services"] .svb-acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
+      [data-lane="services"] .svb-empty { font-family:var(--mono); font-size:11px; color:var(--text-xs); padding:16px; text-align:center; }
+      [data-lane="services"] .svb-msg { background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:6px 10px; font-size:11.5px; line-height:1.45; color:var(--text); margin-bottom:6px; }
+      [data-lane="services"] .svb-msg__head { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; }
+      /* ── QUEUE subtab (bus #3883, 2026-07-30) — the shop's intake surface.
+         Layout standard: nav (jobs) | product (detail + intake) | Project Bus.
+         Resizes via .svq-3col in cc-col-resize.js SURFACES. ── */
+      [data-lane="services"] .svq-3col { display:grid; grid-template-columns:1.25fr 2.3fr 1.45fr; gap:10px; height:calc(100vh - 205px); min-height:420px; align-items:stretch; position:relative; }
+      [data-lane="services"] .svq-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-lane="services"] .svq-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      [data-lane="services"] .svq-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
+      [data-lane="services"] .svq-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
+      /* THE button. Everything else on this tab is secondary. */
+      [data-lane="services"] .svq-new { width:100%; padding:13px 12px; background:var(--amber); color:#000; border:0; border-radius:5px; font-family:var(--display); font-size:14px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; flex-shrink:0; margin-bottom:10px; }
+      [data-lane="services"] .svq-new:hover { filter:brightness(1.08); }
+      [data-lane="services"] .svq-new.open { background:var(--raised); color:var(--text-dim); border:1px solid var(--border); }
+      [data-lane="services"] .svq-form { display:none; }
+      [data-lane="services"] .svq-form.on { display:block; }
+      [data-lane="services"] .svq-f { margin-bottom:9px; }
+      [data-lane="services"] .svq-f label { display:block; font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-xs); margin-bottom:3px; }
+      [data-lane="services"] .svq-f input, [data-lane="services"] .svq-f select { width:100%; box-sizing:border-box; background:var(--raised); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--sans,inherit); font-size:14px; padding:9px 10px; }
+      [data-lane="services"] .svq-f input:focus, [data-lane="services"] .svq-f select:focus { outline:0; border-color:var(--amber); }
+      [data-lane="services"] .svq-rush { display:flex; align-items:center; gap:9px; padding:9px 10px; background:var(--raised); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:13px; color:var(--text); }
+      [data-lane="services"] .svq-rush input { width:18px; height:18px; accent-color:#cc1f1f; }
+      [data-lane="services"] .svq-save { width:100%; padding:12px; background:var(--amber); color:#000; border:0; border-radius:5px; font-family:var(--display); font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-top:4px; }
+      [data-lane="services"] .svq-save:disabled { opacity:.5; cursor:default; }
+      /* Job rows in the nav column. */
+      [data-lane="services"] .svq-card { padding:9px 10px; border:1px solid transparent; border-left:3px solid transparent; border-radius:3px; cursor:pointer; margin-bottom:3px; }
+      [data-lane="services"] .svq-card:hover { background:var(--raised); border-color:var(--border); }
+      [data-lane="services"] .svq-card.active { background:var(--amber-soft); border-color:var(--amber); }
+      [data-lane="services"] .svq-card.rush { border-left-color:#cc1f1f; }
+      [data-lane="services"] .svq-card.closed { opacity:.55; }
+      [data-lane="services"] .svq-card__t { font-size:13px; color:var(--text); line-height:1.35; }
+      [data-lane="services"] .svq-card.active .svq-card__t { color:var(--amber); }
+      [data-lane="services"] .svq-card__sub { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:3px; display:flex; gap:7px; flex-wrap:wrap; }
+      [data-lane="services"] .svq-tag { font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; padding:1px 5px; border-radius:2px; border:1px solid var(--border); color:var(--text-dim); }
+      [data-lane="services"] .svq-tag.rush { background:rgba(204,31,31,.18); color:#ff7a7a; border-color:rgba(204,31,31,.5); }
+      [data-lane="services"] .svq-tag.late { background:rgba(255,176,0,.15); color:var(--amber); border-color:rgba(255,176,0,.45); }
+      /* Where it came from: a booked appointment reads blue, a shop job reads plain. */
+      [data-lane="services"] .svq-tag.web { background:rgba(88,166,255,.14); color:#58a6ff; border-color:rgba(88,166,255,.45); }
+      [data-lane="services"] .svq-tag.shop { background:var(--raised); color:var(--text-dim); }
+      [data-lane="services"] .svq-card.web { border-left-color:rgba(88,166,255,.55); }
+      [data-lane="services"] .svq-card.web.rush { border-left-color:#cc1f1f; }
+      [data-lane="services"] .svq-group { font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-xs); margin:11px 0 4px; padding-left:2px; }
+      [data-lane="services"] .svq-group:first-child { margin-top:0; }
+      [data-lane="services"] .svq-acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
+      [data-lane="services"] .svq-act { font-family:var(--display); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 14px; background:var(--raised); border:1px solid var(--border); border-radius:4px; color:var(--text-dim); cursor:pointer; }
+      [data-lane="services"] .svq-act:hover { border-color:var(--amber); color:var(--amber); }
+      [data-lane="services"] .svq-act.on { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-lane="services"] .svq-empty { font-family:var(--mono); font-size:11px; color:var(--text-xs); padding:16px; text-align:center; }
+      /* CLICK-NOT-TYPE intake (Alessio 2026-07-31). Twenty knives is nine taps,
+         not a paragraph. Prices come from the live Square catalog. */
+      [data-lane="services"] .svq-chips { display:flex; gap:5px; flex-wrap:wrap; }
+      [data-lane="services"] .svq-chip { font-family:var(--mono); font-size:11px; padding:7px 11px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer; user-select:none; }
+      [data-lane="services"] .svq-chip:hover { border-color:var(--amber); color:var(--amber); }
+      [data-lane="services"] .svq-chip.on { background:var(--amber); color:#000; border-color:var(--amber); font-weight:700; }
+      [data-lane="services"] .svq-chip__p { opacity:.6; margin-left:4px; }
+      [data-lane="services"] .svq-chip.on .svq-chip__p { opacity:.8; }
+      [data-lane="services"] .svq-chip__n { display:inline-block; min-width:15px; margin-left:5px; padding:0 4px; background:var(--amber); color:#000; border-radius:8px; font-weight:700; }
+      [data-lane="services"] .svq-add { width:100%; padding:10px; margin:2px 0 10px; background:var(--raised); color:var(--amber); border:1px solid var(--amber); border-radius:5px; font-family:var(--display); font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; }
+      [data-lane="services"] .svq-add:hover { background:var(--amber); color:#000; }
+      [data-lane="services"] .svq-lines { margin-bottom:10px; }
+      [data-lane="services"] .svq-line { display:flex; align-items:center; gap:8px; padding:6px 9px; background:var(--raised); border:1px solid var(--border); border-radius:4px; margin-bottom:4px; font-size:12.5px; color:var(--text); }
+      [data-lane="services"] .svq-line__x { margin-left:auto; background:none; border:0; color:var(--text-xs); cursor:pointer; font-size:14px; padding:0 2px; }
+      [data-lane="services"] .svq-line__x:hover { color:#ff7a7a; }
+      [data-lane="services"] .svq-line__c { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+      [data-lane="services"] .svq-total { padding:9px 11px; background:var(--raised); border:1px solid var(--amber); border-radius:5px; margin-bottom:11px; font-family:var(--display); font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); display:flex; justify-content:space-between; }
+      [data-lane="services"] .svq-total b { color:var(--amber); font-size:16px; }
+      [data-lane="services"] .svq-hits { border:1px solid var(--border); border-radius:4px; margin-top:4px; max-height:190px; overflow-y:auto; }
+      [data-lane="services"] .svq-hits[hidden] { display:none; }
+      [data-lane="services"] .svq-hit { padding:7px 10px; cursor:pointer; font-size:12.5px; color:var(--text); border-bottom:1px solid var(--border); }
+      [data-lane="services"] .svq-hit:last-child { border-bottom:0; }
+      [data-lane="services"] .svq-hit:hover { background:var(--amber-soft); color:var(--amber); }
+      [data-lane="services"] .svq-hit small { display:block; font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:2px; }
+      @media (max-width:700px) {
+        [data-lane="services"] .svq-3col { grid-template-columns:1fr; height:auto; min-height:0; }
+        [data-lane="services"] .svq-col { max-height:none; overflow:visible; }
+        [data-lane="services"] .svq-col__body { overflow:visible; }
+      }
+      [data-lane="services"] .svb-msg__from { color:var(--amber); font-weight:700; }
+      [data-lane="services"] .svb-msg__body { white-space:pre-wrap; word-break:break-word; max-height:180px; overflow-y:auto; }
+      /* ≤700px: stack like .in-3col — page scrolls, columns flow naturally. */
+      @media (max-width:700px){
+        [data-lane="services"] .svb-3col { grid-template-columns:1fr; height:auto; min-height:0; }
+        [data-lane="services"] .svb-col { overflow:visible; }
+        [data-lane="services"] .svb-col__body { overflow-y:visible; }
+      }
+    </style>
+    <!-- ═══ CALENDAR subpane (default) — week/month/year booking overview.
+         Bookings (amber) + blocked time (red) + Google Calendar via the synced
+         calendar_events table (grey). Click a day → detail + block/unblock. ═══ -->
+    <div class="cc-subpane active" data-subtab="calendar">
+      <div class="svcal">
+        <div class="svcal-bar">
+          <button type="button" class="cc-subtab" onclick="svcCalNav(-1)">‹</button>
+          <span class="svcal-title" id="svcal-title">…</span>
+          <button type="button" class="cc-subtab" onclick="svcCalNav(1)">›</button>
+          <button type="button" class="cc-subtab" onclick="svcCalToday()">Today</button>
+          <span style="flex:1;"></span>
+          <button type="button" class="cc-subtab svcal-vbtn" data-v="week" onclick="svcCalView('week')">Week</button>
+          <button type="button" class="cc-subtab svcal-vbtn active" data-v="month" onclick="svcCalView('month')">Month</button>
+          <button type="button" class="cc-subtab svcal-vbtn" data-v="year" onclick="svcCalView('year')">Year</button>
+        </div>
+        <div class="svcal-body">
+          <div class="svcal-grid" id="svcal-grid"><div class="cc-stub">Loading calendar…</div></div>
+          <div class="svcal-detail" id="svcal-detail"><div class="cc-stub">Pick a day to see it here.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ BOOKINGS subpane — CC layout standard: nav | product | bus ═══
+         LEFT   requests as fold-out cards, grouped, with a status pill row.
+         CENTRE the booking itself + the status actions.
+         RIGHT  Project Bus (CCBusComposer + azck-operations-cowork thread).
+         Columns resize via cc-col-resize.js (.svb-3col in SURFACES, ✎ edit mode);
+         every column scrolls on its own; ≤700px stacks (mirrors .in-3col). -->
+    <div class="cc-subpane" data-subtab="bookings">
+      <div class="svb-3col">
+        <div class="svb-col">
+          <div class="svb-col__head">Requests
+            <span class="svb-count"><span id="svc-count">—</span> shown</span>
+            <button type="button" class="cc-subtab" style="margin-left:6px;" onclick="window.renderServices&&window.renderServices()">↻</button>
+          </div>
+          <div class="svb-pills" id="svc-pills"></div>
+          <div class="svb-col__body" id="svc-bookings-list"><div class="svb-empty">Loading bookings…</div></div>
+        </div>
+        <div class="svb-col">
+          <div class="svb-col__head">Booking</div>
+          <div class="svb-col__body svb-detail" id="svc-detail"><div class="svb-empty">Pick a request on the left.</div></div>
+        </div>
+        <div class="svb-col">
+          <div class="svb-col__head">Project Bus <span class="svb-count" id="svc-bus-count">…</span></div>
+          <div id="svc-bus-composer"></div>
+          <div class="svb-col__body" id="svc-bus-list"><div class="svb-empty">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ QUEUE subpane (bus #3883, 2026-07-30) — every job in the shop, one list.
+         Layout standard: jobs (nav) | job + intake (product) | Project Bus (right).
+         Columns resize via .svq-3col in cc-col-resize.js SURFACES. ═══ -->
+    <div class="cc-subpane" data-subtab="queue">
+      <div class="svq-3col">
+        <div class="svq-col">
+          <div class="svq-col__head">Jobs
+            <span class="svq-count"><span id="svq-count">—</span> shown</span>
+            <button type="button" class="cc-subtab" style="margin-left:6px;" onclick="window.renderQueue&&window.renderQueue()">↻</button>
+          </div>
+          <div class="svb-pills" id="svq-pills"></div>
+          <div class="svq-col__body" id="svq-list"><div class="svq-empty">Loading the queue…</div></div>
+        </div>
+        <div class="svq-col">
+          <div class="svq-col__head">Job</div>
+          <button type="button" class="svq-new" id="svq-new-btn">+ New job</button>
+          <div class="svq-col__body">
+            <div class="svq-form" id="svq-form">
+              <div class="svq-f"><label>What kind of job</label>
+                <select id="svq-type">
+                  <option value="sharpening">Sharpening</option>
+                  <option value="engraving">Engraving</option>
+                  <option value="sheath">Sheath</option>
+                  <option value="custom_knife">Custom knife</option>
+                  <option value="repair">Repair</option>
+                  <option value="restoration">Restoration</option>
+                  <option value="class">Class</option>
+                  <option value="other">Other</option>
+                </select></div>
+              <!-- ONE customer field, not two. The first cut had a search box AND a
+                   name box stacked together and it was not obvious which to use. -->
+              <div class="svq-f"><label>Customer — tap to see past customers, or just type a new name</label>
+                <input id="svq-name" type="text" autocomplete="off" placeholder="Who dropped it off">
+                <div class="svq-hits" id="svq-cust-hits" hidden></div>
+              </div>
+              <div class="svq-f"><label>Phone</label><input id="svq-phone" type="tel" autocomplete="off" inputmode="tel" placeholder="So we can call when it is ready"></div>
+              <div class="svq-f"><label>Email</label><input id="svq-email" type="email" autocomplete="off" placeholder="optional"></div>
+
+              <!-- WHAT CAME IN — click, never write. Every price is Square's own. -->
+              <div class="svq-f"><label>What came in</label><div class="svq-chips" id="svq-kind"></div></div>
+              <div class="svq-f" id="svq-variant-wrap"><label id="svq-variant-lbl">Type</label><div class="svq-chips" id="svq-variant"></div></div>
+              <div class="svq-f" id="svq-size-wrap"><label>Size</label><div class="svq-chips" id="svq-size"></div></div>
+              <div class="svq-f" id="svq-qty-wrap"><label>How many</label><div class="svq-chips" id="svq-qty"></div></div>
+              <button type="button" class="svq-add" id="svq-add-line">+ Add to this job</button>
+              <div class="svq-lines" id="svq-lines"></div>
+
+              <div class="svq-f"><label>Extras — tap once per one you need</label><div class="svq-chips" id="svq-extras"></div></div>
+              <div class="svq-total" id="svq-total">Total <b>$0.00</b></div>
+
+              <div class="svq-f"><label>Promised for</label><input id="svq-date" type="date"></div>
+              <div class="svq-f"><label>Where is it</label>
+                <div class="svq-chips" id="svq-loc-chips"></div>
+                <input id="svq-loc" type="text" autocomplete="off" placeholder="or type somewhere else" style="margin-top:6px">
+              </div>
+              <!-- There was nowhere to write anything down, so the location box was
+                   being used as a notes dump. This is that missing field. -->
+              <div class="svq-f"><label>Notes — anything about this job</label>
+                <textarea id="svq-notes" rows="3" placeholder="e.g. handle is loose, customer wants it back before the weekend"
+                  style="width:100%;box-sizing:border-box;background:var(--raised);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--sans,inherit);font-size:14px;padding:9px 10px;resize:vertical;"></textarea>
+              </div>
+              <button type="button" class="svq-save" id="svq-save">Add to the queue</button>
+            </div>
+            <div class="svq-detail" id="svq-detail"><div class="svq-empty">Pick a job on the left, or tap + New job.</div></div>
+          </div>
+        </div>
+        <div class="svq-col">
+          <div class="svq-col__head">Project Bus <span class="svq-count" id="svq-bus-count">…</span></div>
+          <div id="svq-bus-composer"></div>
+          <div class="svq-col__body" id="svq-bus-list"><div class="svq-empty">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SCHEDULE subpane — weekly template + blocked time ═══ -->
+    <div class="cc-subpane" data-subtab="schedule">
+    <div class="sv3" style="grid-template-columns:1fr 1fr;gap:var(--sp-10);">
+      <div class="sv3-col" id="sv3-sched">
+        <div class="sv3-col__head">Schedule — what customers can book</div>
+        <div class="cc-subnav__hint" style="margin-bottom:var(--sp-8);">The website reads this live. Blocked time (right) wins over this template.</div>
+        <div id="svc-hours"><div class="cc-stub">Loading schedule…</div></div>
+        <div style="display:flex;gap:var(--sp-8);flex-wrap:wrap;margin:var(--sp-8) 0;">
+          <select id="svc-oh-service" class="cc-modal__field" style="flex:1;min-width:120px;"></select>
+          <select id="svc-oh-day" class="cc-modal__field" style="flex:1;min-width:110px;">
+            <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+            <option value="3" selected>Wednesday</option><option value="4">Thursday</option>
+            <option value="5">Friday</option><option value="6">Saturday</option>
+          </select>
+        </div>
+        <input id="svc-oh-times" class="cc-modal__field" style="width:100%;" placeholder="Times, comma separated — e.g. 9:00 AM, 10:00 AM, 1:00 PM. Empty = day off.">
+        <button type="button" class="cc-subtab" style="margin:var(--sp-8) 0 0;" onclick="svcSaveHours()">Save day</button>
+      </div>
+      <div class="sv3-col" id="sv3-blocks">
+        <div class="sv3-col__head">Blocked time — when we're away</div>
+        <div id="svc-blocks"><div class="cc-stub">Loading blocks…</div></div>
+        <div style="display:flex;gap:var(--sp-8);flex-wrap:wrap;margin:var(--sp-8) 0;">
+          <input id="svc-bl-from" type="date" class="cc-modal__field" style="flex:1;min-width:120px;" title="From">
+          <input id="svc-bl-to" type="date" class="cc-modal__field" style="flex:1;min-width:120px;" title="To — empty means one day">
+          <select id="svc-bl-service" class="cc-modal__field" style="flex:1;min-width:120px;"></select>
+        </div>
+        <input id="svc-bl-times" class="cc-modal__field" style="width:100%;" placeholder="Times to block, comma separated — empty blocks the whole day">
+        <input id="svc-bl-reason" class="cc-modal__field" style="width:100%;margin-top:var(--sp-8);" placeholder="Why (stays private — customers never see this)">
+        <button type="button" class="cc-subtab" style="margin:var(--sp-8) 0 0;" onclick="svcAddBlock()">+ Block it</button>
+      </div>
+    </div>
+    </div>
+    <script>
+    /* ═══ SERVICES › BOOKINGS — the CC layout standard (Alessio ruling 2026-07-27)
+       LEFT   nav: status pill row + requests as FOLD-OUT CARDS, grouped by service.
+       CENTRE the product: the booking itself, plus the status actions.
+       RIGHT  the Project Bus: the ONE shared composer + azck-operations-cowork thread.
+
+       It was a single full-width column before: 8 cards stretched across 1500px,
+       nothing to click into, no bus.
+
+       Living data only — every field is read from az_service_bookings at render
+       time (rule no_hardcoded_state_in_html). WRITERS: the public booking page on
+       azcustomknives.com inserts (policy az_bookings_anon_insert) and the status
+       buttons here update (policy az_bookings_auth_update, signed-in staff). ═══ */
+    window._svbState = { rows: null, active: null, open: {}, filter: 'open', busTimer: null };
+
+    window._svbBuckets = [
+      { key:'open',     label:'Open',     test: s => ['done','archived','cancelled'].indexOf(s) === -1 },
+      { key:'done',     label:'Done',     test: s => s === 'done' },
+      { key:'archived', label:'Archived', test: s => s === 'archived' || s === 'cancelled' },
+      { key:'all',      label:'All',      test: () => true }
+    ];
+
+    window.renderServices = async function(){
+      const host = document.getElementById('svc-bookings-list'); if(!host) return;
+      if(!window.supa){ host.innerHTML='<div class="svb-empty">Sign in to view bookings.</div>'; return; }
+      if(!window._svbState.rows) host.innerHTML='<div class="svb-empty">Loading bookings…</div>';
+      try{
+        const { data, error } = await window.supa.from('az_service_bookings')
+          .select('id,created_at,category,service,preferred_date,preferred_time,quantity,customer_name,customer_phone,customer_email,notes,status')
+          .order('created_at',{ascending:false}).limit(200);
+        if(error) throw error;
+        window._svbState.rows = data || [];
+        window.svbPaint();
+      }catch(e){
+        console.warn('[services] load failed', e);
+        host.innerHTML='<div class="svb-empty">Could not load bookings — tap ↻ to try again.</div>';
+      }
+      window.svbMountBus();
+    };
+
+    window.svbEsc = s => (s==null?'':String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+
+    window.svbPaint = function(){
+      const esc = window.svbEsc, st = window._svbState;
+      const host = document.getElementById('svc-bookings-list');
+      const pills = document.getElementById('svc-pills');
+      const rows = st.rows || [];
+      if(!host) return;
+
+      // ── Pill row: the subtabbing-within-the-subtab for this collection ──
+      if(pills){
+        pills.innerHTML = window._svbBuckets.map(b =>
+          '<span class="svb-pill'+(st.filter===b.key?' active':'')+'" data-b="'+b.key+'">'
+          + esc(b.label) + ' ' + rows.filter(r => b.test(r.status)).length + '</span>').join('');
+        pills.querySelectorAll('.svb-pill').forEach(el => el.addEventListener('click', () => {
+          st.filter = el.dataset.b; window.svbPaint();
+        }));
+      }
+
+      const bucket = window._svbBuckets.find(b => b.key === st.filter) || window._svbBuckets[0];
+      const list = rows.filter(r => bucket.test(r.status));
+      const cnt = document.getElementById('svc-count'); if(cnt) cnt.textContent = list.length;
+
+      if(!list.length){
+        host.innerHTML = '<div class="svb-empty">Nothing in ' + esc(bucket.label.toLowerCase()) + '.</div>';
+        window.svbDetail(null);
+        return;
+      }
+      // Keep the active booking if it survived the filter, else take the newest.
+      if(!list.some(r => String(r.id) === String(st.active))) st.active = list[0].id;
+
+      // Group by what was booked, so the column reads as a shop list.
+      const groups = [];
+      list.forEach(b => {
+        const g = b.service || b.category || 'Booking';
+        let e = groups.find(x => x.name === g);
+        if(!e){ e = { name:g, items:[] }; groups.push(e); }
+        e.items.push(b);
+      });
+
+      host.innerHTML = groups.map(g =>
+        '<div class="svb-group">' + esc(g.name) + ' · ' + g.items.length + '</div>'
+        + g.items.map(b => {
+          const key = String(b.id);
+          // Alessio 2026-07-27: every card starts FOLDED so the column stays short.
+          // Exception: a group holding a single item has nothing to choose between.
+          if(st.open[key] === undefined) st.open[key] = g.items.length === 1;
+          const open = !!st.open[key], on = String(b.id) === String(st.active);
+          const when = (b.preferred_date||'') + (b.preferred_time ? (' · '+b.preferred_time) : '');
+          const facts = [
+            when ? ['When', when] : null,
+            b.quantity ? ['Qty', '×'+b.quantity] : null,
+            b.customer_phone ? ['Phone', b.customer_phone] : null,
+            b.customer_email ? ['Email', b.customer_email] : null,
+            b.notes ? ['Notes', b.notes] : null
+          ].filter(Boolean);
+          return '<div class="svb-card'+(on?' active':'')+'" data-id="'+esc(b.id)+'">'
+            + '<span class="svb-caret">'+(open?'&#9660;':'&#9654;')+'</span>'
+            + '<span class="svb-card__t">'+esc(b.customer_name||'—')
+            + '<div class="svb-card__sub">'+esc(b.status||'new')+(when?(' · '+esc(when)):'')+'</div>'
+            + '</span></div>'
+            + '<div class="svb-facts"'+(open?'':' hidden')+'>'
+            + facts.map(f => '<span class="svb-fact"><b>'+esc(f[0])+'</b>'+esc(f[1])+'</span>').join('')
+            + '</div>';
+        }).join('')
+      ).join('');
+
+      // The WHOLE header row is the fold control — a big target on a phone and no
+      // dead zone that silently re-opens what you just closed (the PR #301 bug).
+      // Tapping the card you are already on folds it shut; tapping another opens it.
+      // Either way the centre keeps showing its booking — folding never blanks it.
+      host.querySelectorAll('.svb-card').forEach(el => el.addEventListener('click', () => {
+        const id = el.dataset.id;
+        if(String(st.active) === String(id)) st.open[String(id)] = !st.open[String(id)];
+        else { st.active = id; st.open[String(id)] = true; }
+        window.svbPaint();
+      }));
+
+      window.svbDetail(list.find(r => String(r.id) === String(st.active)) || null);
+    };
+
+    // ── CENTRE: the booking + the actions that move it ──
+    window.svbDetail = function(b){
+      const esc = window.svbEsc, det = document.getElementById('svc-detail');
+      if(!det) return;
+      if(!b){ det.innerHTML = '<div class="svb-empty">Pick a request on the left.</div>'; return; }
+      const when = (b.preferred_date||'') + (b.preferred_time ? (' · '+b.preferred_time) : '');
+      const row = (k,v) => v ? '<div class="svb-row"><div class="svb-row__k">'+esc(k)+'</div><div class="svb-row__v">'+v+'</div></div>' : '';
+      const st = b.status || 'new';
+      // id is a UUID, not a number — the action is wired by listener off a data
+      // attribute rather than interpolated into an inline onclick, so the id stays
+      // a string and never needs quote-escaping inside an HTML attribute.
+      const btn = (label, next) =>
+        `<button type="button" class="cc-subtab" data-next="${esc(next)}">${esc(label)}</button>`;
+      const acts = [
+        st !== 'done'     ? btn('Mark done', 'done')  : '',
+        st !== 'archived' ? btn('Archive',   'archived') : '',
+        st !== 'new'      ? btn('Reopen',    'new')   : ''
+      ].join('');
+      det.innerHTML =
+        '<div class="svb-meta"><span>request <b>#'+esc(b.id)+'</b></span>'
+        + '<span>received <b>'+esc(String(b.created_at||'').replace('T',' ').slice(0,16))+'</b></span>'
+        + '<span>status <b>'+esc(st)+'</b></span></div>'
+        + '<h3>'+esc(b.customer_name||'—')+'</h3>'
+        + row('Service', esc(b.service||b.category||'—'))
+        + row('When', esc(when||'—'))
+        + row('Quantity', b.quantity ? esc('×'+b.quantity) : '')
+        + row('Phone', b.customer_phone ? '<a href="tel:'+esc(b.customer_phone)+'">'+esc(b.customer_phone)+'</a>' : '')
+        + row('Email', b.customer_email ? '<a href="mailto:'+esc(b.customer_email)+'">'+esc(b.customer_email)+'</a>' : '')
+        + row('Notes', b.notes ? esc(b.notes) : '')
+        + '<div class="svb-acts">'+acts+'</div>';
+      det.querySelectorAll('.svb-acts button').forEach(el => el.addEventListener('click', () => {
+        el.disabled = true; el.textContent = 'Saving…';
+        window.svbSetStatus(b.id, el.dataset.next);
+      }));
+    };
+
+    window.svbSetStatus = async function(id, status){
+      if(!window.supa) return;
+      const { error } = await window.supa.from('az_service_bookings').update({ status: status }).eq('id', id);
+      if(error){ console.warn('[services] status update failed', error); alert('Could not change it: '+error.message); return; }
+      window.renderServices();
+    };
+
+    /* ═══════════ QUEUE (bus #3883, 2026-07-30) ═══════════
+       az_shop_queue is the shop's intake book. Website bookings flow in via
+       trg_booking_to_queue; everything else (engraving, sheaths, walk-ins,
+       custom work) arrives through the + New job button below. Nothing here is
+       hardcoded — the table IS the state. */
+    /* ── THE PRICE BOOK — read from the live Square catalog 2026-07-31 ──────────
+       Only the walk-in sharpening lines Alessio asked for. No hourly, no minimum
+       charge, no courses. Knives run $20 + inch; scissors and shears carry their
+       own ladders; the extras are Square's real add-on variations. If a price
+       moves in Square, it moves here — re-read the catalog, do not guess. */
+    const SVQ_PRICES = {
+      // NOTE: a size KEY must never contain a double quote — it rides in an HTML
+      // attribute and the inch mark broke the chip markup. Key is plain, label shows the ".
+      knives: { label:'Knives', variantLabel:null, variants:null,
+        sizes: Array.from({length:18}, (_,i) => ({ key:String(i+1), label:(i+1)+'"', cad:20+(i+1) })),
+        extraSizes: [{ key:'bread', label:'Bread knife', cad:50 }] },
+      axes: { label:'Axes', variantLabel:'Finish',
+        variants: [{ key:'standard', label:'Standard', cad:20 }, { key:'razor', label:'Razor sharp', cad:50 }],
+        sizes: null },
+      // Scissors carry the SAME four kinds as grooming shears (Alessio, bus #4035).
+      // Square prices standard as the base ladder, then +$20 for thinning and +$20
+      // for curved — so curved thinning is +$40. I had only shipped two of the four.
+      scissors: { label:'Scissors', variantLabel:'Kind',
+        variants: [
+          { key:'standard', label:'Standard',        base:40 },   // 2" = $42 … 9" = $49
+          { key:'thinning', label:'Thinning',        base:60 },   // standard + $20
+          { key:'curved',   label:'Curved',          base:60 },   // standard + $20
+          { key:'curvthin', label:'Curved thinning', base:80 }    // standard + $40
+        ],
+        sizes: Array.from({length:8}, (_,i) => ({ key:String(i+2), label:(i+2)+'"', inch:i+2 })) },
+      shears: { label:'Grooming shears', variantLabel:'Kind',
+        variants: [
+          { key:'standard', label:'Standard', base:40 },        // 5" = $45 … 10" = $50
+          { key:'curved',   label:'Curved',   base:60 },        // 5" = $65 … 10" = $70
+          { key:'thinning', label:'Thinning', base:60 },
+          { key:'curvthin', label:'Curved thinning', base:80 }  // 5" = $85 … 10" = $90
+        ],
+        sizes: Array.from({length:6}, (_,i) => ({ key:String(i+5), label:(i+5)+'"', inch:i+5 })) }
+    };
+    // Extras. Each tap adds one. Rush is Alessio's number, NOT in the Square
+    // catalog — everything else is a real Square variation.
+    // CLEANING IS NOT ONE THING (Alessio, bus #4035) — the first cut had a single
+    // "Cleaning $10" chip, so he typed the real breakdown into the location box
+    // because there was nowhere else to put it. These are Square's own variations.
+    const SVQ_EXTRAS = [
+      { key:'rush',      label:'Rush job',           cad:20, flag:true },
+      { key:'chip',      label:'Chip fix',           cad:10 },
+      { key:'tip',       label:'Tip fix',            cad:10 },
+      { key:'serration', label:'Serration side',     cad:10 },
+      { key:'ultra',     label:'Ultrasonic clean',   cad:10 },
+      { key:'disasm',    label:'Disassembly',        cad:20 },
+      { key:'disclean',  label:'Disassembly + clean',cad:30 },
+      { key:'nano',      label:'Nano oil',           cad:5  },
+      { key:'mirror',    label:'Mirror finish',      cad:20 },
+      { key:'repair',    label:'Scissor repair',     cad:10 }
+    ];
+    const SVQ_LOCS = ['Service Division', 'Blue Building', 'Front shelf', 'Bench'];
+    const SVQ_QTYS = [1,2,3,4,5,6,7,8,9,10];
+
+    window._svqState = { rows:null, sel:null, filter:'open', busy:false,
+                         kind:'knives', variant:null, size:null, qty:1,
+                         lines:[], extras:{}, loc:null, customers:null };
+    const SVQ_TYPES = { sharpening:'Sharpening', engraving:'Engraving', sheath:'Sheath', custom_knife:'Custom knife', repair:'Repair', restoration:'Restoration', class:'Class', other:'Other' };
+    const SVQ_OPEN  = ['new','in_progress'];
+    const SVQ_FILTERS = [
+      { key:'open',   label:'Open',       test: r => SVQ_OPEN.indexOf(r.status) !== -1 },
+      { key:'appt',   label:'Appointments', test: r => svqIsAppt(r) && SVQ_OPEN.indexOf(r.status) !== -1 },
+      { key:'jobs',   label:'Jobs',         test: r => !svqIsAppt(r) && SVQ_OPEN.indexOf(r.status) !== -1 },
+      { key:'rush',   label:'Rush',       test: r => r.rush && SVQ_OPEN.indexOf(r.status) !== -1 },
+      { key:'done',   label:'Done',       test: r => r.status === 'done' },
+      { key:'closed', label:'Picked up',  test: r => r.status === 'picked_up' || r.status === 'cancelled' },
+      { key:'all',    label:'All',        test: () => true }
+    ];
+    const svqDay = s => s ? String(s).slice(0,10) : '';
+    const svqToday = () => new Date().toISOString().slice(0,10);
+    // Own escaper: the page's esc() lives in another script block and is NOT in this
+    // closure — depending on it silently blanked the list (caught on the live board).
+    const svqEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    // APPOINTMENT vs JOB (Alessio, 2026-07-30 — corrected after he caught the first cut).
+    // The split is NOT where it came from. Two corporate engraving jobs (All Star
+    // Telescope, Energi Transport) carry intake_by='website' because someone once
+    // touched the enquiry form, and origin alone labelled them as bookings. Wrong.
+    //   APPOINTMENT = came through the booking form AND carries a real date. Immediate.
+    //   JOB         = no committed date (engraving ten knives, walk-in). Month of leeway.
+    // A row with no promised_date is a JOB no matter where it entered the system.
+    const svqIsAppt = r => (!!r.source_booking_id || r.intake_by === 'website') && !!r.promised_date;
+
+    window.renderQueue = async function(){
+      const host = document.getElementById('svq-list'); if(!host) return;
+      if(!window.supa){ host.innerHTML='<div class="svq-empty">Sign in to see the queue.</div>'; return; }
+      try{
+        const { data, error } = await window.supa.from('az_shop_queue')
+          .select('id,job_type,customer_name,customer_phone,item_summary,quantity,promised_date,rush,status,item_location,notes,line_items,price_cad,received_at,started_at,done_at,picked_up_at,intake_by')
+          .order('received_at', { ascending:false });
+        if(error) throw error;
+        window._svqState.rows = data || [];
+      }catch(e){
+        console.warn('[queue] load failed', e);
+        host.innerHTML='<div class="svq-empty">Could not load the queue: '+svqEsc(e.message||String(e))+'</div>';
+        return;
+      }
+      window.svqPaint();
+      window.svqMountBus();
+    };
+
+    window.svqPaint = function(){
+      const rows = window._svqState.rows || [];
+      const f = SVQ_FILTERS.find(x => x.key === window._svqState.filter) || SVQ_FILTERS[0];
+      // Rush first, then soonest promised date (nulls last), then oldest intake.
+      const shown = rows.filter(f.test).sort((a,b) => {
+        const ao = SVQ_OPEN.indexOf(a.status) !== -1, bo = SVQ_OPEN.indexOf(b.status) !== -1;
+        if(ao !== bo) return ao ? -1 : 1;                       // open jobs above closed
+        if(!!a.rush !== !!b.rush) return a.rush ? -1 : 1;        // rush to the top
+        const ad = a.promised_date || '9999-12-31', bd = b.promised_date || '9999-12-31';
+        if(ad !== bd) return ad < bd ? -1 : 1;                   // soonest promised, nulls last
+        return (a.received_at||'') < (b.received_at||'') ? -1 : 1;
+      });
+
+      const pills = document.getElementById('svq-pills');
+      if(pills) pills.innerHTML = SVQ_FILTERS.map(x =>
+        '<span class="svb-pill'+(x.key===window._svqState.filter?' active':'')+'" data-svqf="'+x.key+'">'
+        + x.label + ' ' + rows.filter(x.test).length + '</span>').join('');
+
+      const cnt = document.getElementById('svq-count'); if(cnt) cnt.textContent = shown.length;
+      const host = document.getElementById('svq-list');
+      if(!shown.length){ host.innerHTML = '<div class="svq-empty">Nothing here. Tap + New job to log one.</div>'; }
+      else{
+        const today = svqToday();
+        host.innerHTML = shown.map(r => {
+          const open = SVQ_OPEN.indexOf(r.status) !== -1;
+          const web  = svqIsAppt(r);
+          // Only a BOOKED appointment can be "past due" — a shop job with a month of
+          // leeway must never wear a late flag just because its date slipped by.
+          const late = open && web && r.promised_date && r.promised_date < today;
+          const tags = '<span class="svq-tag '+(web?'web':'shop')+'">'+(web?'Appointment':'Job')+'</span>'
+                     + (r.rush ? '<span class="svq-tag rush">Rush</span>' : '')
+                     + (late ? '<span class="svq-tag late">Past due</span>' : '')
+                     + '<span class="svq-tag">'+svqEsc((r.status||'').replace('_',' '))+'</span>';
+          return '<div class="svq-card'+(open?'':' closed')+(r.rush?' rush':'')+(web?' web':'')+(window._svqState.sel===r.id?' active':'')+'" data-svqid="'+r.id+'">'
+            + '<div class="svq-card__t">'+svqEsc(r.customer_name||'—')+' · '+svqEsc(SVQ_TYPES[r.job_type]||r.job_type)+'</div>'
+            + '<div class="svq-card__sub">'+svqEsc(r.item_summary||'')
+            + (r.promised_date?(web?' · booked ':' · wanted by ')+svqEsc(r.promised_date):' · no date set')+'</div>'
+            + '<div class="svq-card__sub">'+tags+'</div>'
+            + '</div>';
+        }).join('');
+      }
+      if(window._svqState.sel) window.svqPaintDetail(window._svqState.sel);
+    };
+
+    window.svqPaintDetail = function(id){
+      const r = (window._svqState.rows||[]).find(x => x.id === id);
+      const host = document.getElementById('svq-detail'); if(!host) return;
+      if(!r){ host.innerHTML = '<div class="svq-empty">Pick a job on the left, or tap + New job.</div>'; return; }
+      const row = (k,v) => v ? '<div class="svb-row"><div class="svb-row__k">'+k+'</div><div class="svb-row__v">'+svqEsc(String(v))+'</div></div>' : '';
+      const web = svqIsAppt(r);
+      host.innerHTML = '<h3 style="font-family:var(--display);font-size:15px;color:var(--amber);margin:0 0 8px;">'
+          + svqEsc(r.customer_name||'—') + ' · ' + svqEsc(SVQ_TYPES[r.job_type]||r.job_type) + '</h3>'
+        + row('Kind', web ? 'Appointment — booked date, treat as immediate'
+                          : 'Job — no committed date, work it in')
+        + row('Came in via', r.intake_by)
+        + row('What', r.item_summary) + row('How many', r.quantity)
+        + ((r.line_items && r.line_items.length)
+            ? '<div class="svq-lines" style="margin:8px 0">' + r.line_items.map(l =>
+                '<div class="svq-line"><span>'+svqEsc(l.label)+'</span><span class="svq-line__c">$'
+                + Number(l.line_cad||0).toFixed(2)+'</span></div>').join('') + '</div>'
+            : '')
+        + row('Phone', r.customer_phone) + row(web ? 'Booked for' : 'Wanted by', r.promised_date)
+        + row('Rush', r.rush ? 'YES' : '') + row('Where', r.item_location)
+        + row('Status', (r.status||'').replace('_',' ')) + row('Price', r.price_cad ? '$'+r.price_cad : '')
+        + row('Taken in', svqDay(r.received_at)) + row('By', r.intake_by)
+        + row('Started', svqDay(r.started_at)) + row('Done', svqDay(r.done_at))
+        + row('Picked up', svqDay(r.picked_up_at)) + row('Notes', r.notes)
+        + '<div class="svq-acts">'
+        + '<button type="button" class="svq-act'+(r.started_at?' on':'')+'" data-svqact="started" data-svqrow="'+r.id+'">Started</button>'
+        + '<button type="button" class="svq-act'+(r.done_at?' on':'')+'" data-svqact="done" data-svqrow="'+r.id+'">Done</button>'
+        + '<button type="button" class="svq-act'+(r.picked_up_at?' on':'')+'" data-svqact="picked_up" data-svqrow="'+r.id+'">Picked up</button>'
+        + '</div>';
+    };
+
+    window.svqAct = async function(id, act){
+      if(!window.supa || window._svqState.busy) return;
+      const now = new Date().toISOString();
+      const patch = act === 'started'   ? { started_at:now,   status:'in_progress' }
+                  : act === 'done'      ? { done_at:now,      status:'done' }
+                  :                       { picked_up_at:now, status:'picked_up' };
+      window._svqState.busy = true;
+      const { error } = await window.supa.from('az_shop_queue').update(patch).eq('id', id);
+      window._svqState.busy = false;
+      if(error){ alert('Could not save that: '+error.message); return; }
+      window.renderQueue();
+    };
+
+    /* Every customer we have ever taken work from (view az_customer_directory).
+       THE FREEZE (Alessio, dictating a name into this field): the first cut fired
+       a fresh full-directory fetch on EVERY input event with no in-flight guard.
+       Dictation emits input events in a burst, so one spoken name launched dozens
+       of concurrent queries and the tab locked up. Now: one fetch per session,
+       shared by every caller, and the keystrokes are debounced. */
+    window._svqCustFetch = null;
+    window.svqLoadCustomers = function(){
+      const S = window._svqState;
+      if(S.customers) return Promise.resolve(S.customers);
+      if(window._svqCustFetch) return window._svqCustFetch;      // one in flight, ever
+      window._svqCustFetch = window.supa.from('az_customer_directory')
+        .select('name,phone,email,jobs').limit(2000)
+        .then(r => {
+          window._svqCustFetch = null;
+          if(r.error){ console.warn('[queue] customer directory failed', r.error); S.customers = null; return { err: r.error }; }
+          S.customers = r.data || [];
+          return S.customers;
+        })
+        .catch(e => { window._svqCustFetch = null; console.warn('[queue] customer directory threw', e); return { err:e }; });
+      return window._svqCustFetch;
+    };
+
+    let _svqCustTimer = null;
+    window.svqSearchCustomers = function(q){                     // debounced, never awaited by the handler
+      clearTimeout(_svqCustTimer);
+      _svqCustTimer = setTimeout(() => { window.svqPaintCustomers(q); }, 220);
+    };
+
+    window.svqPaintCustomers = async function(q){
+      const box = document.getElementById('svq-cust-hits'); if(!box) return;
+      const term = (q||'').trim().toLowerCase();
+      let all;
+      try { all = await window.svqLoadCustomers(); }
+      catch(e){ all = { err:e }; }
+      if(all && all.err){                                        // say it, never fail silent
+        box.hidden = false;
+        box.innerHTML = '<div class="svq-hit">Could not load past customers — just type the name, it still saves.</div>';
+        return;
+      }
+      const list = Array.isArray(all) ? all : [];
+      // Empty field = show the most recent, so the list is visible WITHOUT typing.
+      const hits = (term.length < 1 ? list.slice(0,10)
+                                    : list.filter(c => (c.name||'').toLowerCase().includes(term)).slice(0,12));
+      if(!hits.length){
+        box.hidden = false;
+        box.innerHTML = '<div class="svq-hit">No match — that is fine, a new name is saved as you typed it.</div>';
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML = (term.length < 1 ? '<div class="svq-hit" style="cursor:default;color:var(--text-xs)">Recent customers — tap one, or keep typing</div>' : '')
+        + hits.map((c,i) => '<div class="svq-hit" data-svqcust="'+i+'">'+svqEsc(c.name)
+        + '<small>'+svqEsc(c.phone||'no phone')+' · '+svqEsc(c.email||'no email')+' · '+c.jobs+' job'+(c.jobs===1?'':'s')+'</small></div>').join('');
+      box._hits = hits;
+    };
+
+    window.svqSave = async function(){
+      const S = window._svqState;
+      const g = i => { const el = document.getElementById(i); return ((el && el.value) || '').trim(); };
+      const name = g('svq-name');
+      if(!name){ alert('Customer name is needed.'); return; }
+      if(!S.lines.length){ alert('Add at least one line — pick what came in, a size, how many, then + Add to this job.'); return; }
+      const btn = document.getElementById('svq-save');
+      if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+      const unlock = () => { if(btn){ btn.disabled = false; btn.textContent = 'Add to the queue'; } };
+
+      // Extras ride as their own priced lines so the job reads back honestly.
+      const lines = S.lines.slice();
+      SVQ_EXTRAS.forEach(x => { if(S.extras[x.key]) lines.push(
+        { kind:'extra', label:S.extras[x.key]+' × '+x.label, qty:S.extras[x.key], unit_cad:x.cad, line_cad:x.cad*S.extras[x.key] }); });
+
+      const rec = {
+        job_type: g('svq-type'), customer_name: name,
+        customer_phone: g('svq-phone')||null, customer_email: g('svq-email')||null,
+        item_summary: S.lines.map(l=>l.label).join(' · '),
+        quantity: S.lines.reduce((a,l)=>a+l.qty,0),
+        promised_date: g('svq-date')||null,
+        item_location: g('svq-loc') || S.loc || null,
+        notes: g('svq-notes') || null,
+        rush: !!S.extras.rush, line_items: lines, price_cad: window.svqTotal(),
+        status:'new', intake_by:'counter'
+      };
+      // The button must ALWAYS come back, whatever happens below — a stuck
+      // "Saving…" with no way forward is the worst failure this form can have.
+      try {
+        const { error } = await window.supa.from('az_shop_queue').insert(rec);
+        if(error){ unlock(); alert('Could not add it: '+error.message); return; }
+      } catch(e){ unlock(); alert('Could not add it: '+(e && e.message || e)); return; }
+      unlock();
+      // Null-safe: a renamed or removed field must never throw AFTER a job has saved.
+      ['svq-name','svq-phone','svq-email','svq-date','svq-loc','svq-notes'].forEach(i => {
+        const el = document.getElementById(i); if(el) el.value = '';
+      });
+      Object.assign(S, { lines:[], extras:{}, size:null, qty:1, loc:null });
+      const hitsBox = document.getElementById('svq-cust-hits'); if(hitsBox) hitsBox.hidden = true;
+      window.svqToggleForm(false);
+      window.renderQueue();
+    };
+
+    /* ── The click-built job ─────────────────────────────────────────────── */
+    const svqChip = (id, lbl, on, price) => '<span class="svq-chip'+(on?' on':'')+'" data-svqc="'+id+'">'
+      + svqEsc(lbl) + (price!=null ? '<span class="svq-chip__p">$'+price+'</span>' : '') + '</span>';
+
+    // What one line costs. Knives and the shear ladders are base + inch.
+    window.svqUnitPrice = function(kind, variantKey, size){
+      const k = SVQ_PRICES[kind]; if(!k) return 0;
+      if(kind === 'knives'){
+        const s = (k.sizes.concat(k.extraSizes)).find(x => x.key === size);
+        return s ? s.cad : 0;
+      }
+      const v = (k.variants||[]).find(x => x.key === variantKey);
+      if(!v) return 0;
+      if(v.cad != null) return v.cad;                       // axes: flat price
+      const inch = parseInt(String(size),10);
+      return isNaN(inch) ? 0 : v.base + inch;               // scissors / shears ladder
+    };
+
+    window.svqPaintBuilder = function(){
+      const S = window._svqState, k = SVQ_PRICES[S.kind];
+      document.getElementById('svq-kind').innerHTML =
+        Object.keys(SVQ_PRICES).map(id => svqChip('kind:'+id, SVQ_PRICES[id].label, S.kind===id)).join('');
+
+      const vw = document.getElementById('svq-variant-wrap');
+      if(k.variants){
+        vw.hidden = false;
+        document.getElementById('svq-variant-lbl').textContent = k.variantLabel;
+        document.getElementById('svq-variant').innerHTML = k.variants.map(v =>
+          svqChip('var:'+v.key, v.label, S.variant===v.key, v.cad!=null?v.cad:null)).join('');
+      } else { vw.hidden = true; }
+
+      const sw = document.getElementById('svq-size-wrap');
+      const sizes = k.sizes ? k.sizes.concat(k.extraSizes||[]) : null;
+      if(sizes){
+        sw.hidden = false;
+        document.getElementById('svq-size').innerHTML = sizes.map(s =>
+          svqChip('size:'+s.key, s.label, S.size===s.key,
+                  window.svqUnitPrice(S.kind, S.variant, s.key) || null)).join('');
+      } else { sw.hidden = true; }
+
+      document.getElementById('svq-qty').innerHTML =
+        SVQ_QTYS.map(n => svqChip('qty:'+n, String(n), S.qty===n)).join('');
+      document.getElementById('svq-extras').innerHTML =
+        SVQ_EXTRAS.map(x => '<span class="svq-chip'+(S.extras[x.key]?' on':'')+'" data-svqc="ex:'+x.key+'">'
+          + svqEsc(x.label) + '<span class="svq-chip__p">$'+x.cad+'</span>'
+          + (S.extras[x.key] ? '<span class="svq-chip__n">'+S.extras[x.key]+'</span>' : '') + '</span>').join('');
+      document.getElementById('svq-loc-chips').innerHTML =
+        SVQ_LOCS.map(l => svqChip('loc:'+l, l, S.loc===l)).join('');
+
+      document.getElementById('svq-lines').innerHTML = S.lines.map((l,i) =>
+        '<div class="svq-line"><span>'+svqEsc(l.label)+'</span>'
+        + '<span class="svq-line__c">'+l.qty+' × $'+l.unit_cad+' = $'+l.line_cad.toFixed(2)+'</span>'
+        + '<button type="button" class="svq-line__x" data-svqdel="'+i+'" title="Remove">×</button></div>').join('');
+
+      document.getElementById('svq-total').innerHTML = 'Total <b>$'+window.svqTotal().toFixed(2)+'</b>';
+    };
+
+    window.svqTotal = function(){
+      const S = window._svqState;
+      let t = S.lines.reduce((a,l) => a + l.line_cad, 0);
+      SVQ_EXTRAS.forEach(x => { if(S.extras[x.key]) t += x.cad * S.extras[x.key]; });
+      return t;
+    };
+
+    window.svqAddLine = function(){
+      const S = window._svqState, k = SVQ_PRICES[S.kind];
+      if(k.variants && !S.variant){ alert('Pick a '+k.variantLabel.toLowerCase()+' first.'); return; }
+      if(k.sizes && !S.size){ alert('Pick a size first.'); return; }
+      const unit = window.svqUnitPrice(S.kind, S.variant, S.size);
+      const vlbl = k.variants ? (k.variants.find(v=>v.key===S.variant)||{}).label+' ' : '';
+      const sObj = (k.sizes||[]).concat(k.extraSizes||[]).find(x => x.key === S.size);
+      const slbl = sObj ? sObj.label+' ' : '';
+      // Keep the plural: "3 × 8" knives" reads right; naive de-pluralising gave "knive".
+      const label = S.qty + ' × ' + vlbl + slbl + k.label.toLowerCase();
+      S.lines.push({ kind:S.kind, label:label, qty:S.qty, unit_cad:unit, line_cad:unit*S.qty });
+      S.size = null; S.qty = 1;
+      window.svqPaintBuilder();
+    };
+
+    window.svqToggleForm = function(on){
+      const f = document.getElementById('svq-form'), b = document.getElementById('svq-new-btn'), d = document.getElementById('svq-detail');
+      const show = (on === undefined) ? !f.classList.contains('on') : on;
+      f.classList.toggle('on', show);
+      b.classList.toggle('open', show);
+      b.textContent = show ? '× Cancel' : '+ New job';
+      d.style.display = show ? 'none' : '';
+      if(show){ window.svqPaintBuilder(); window.svqLoadCustomers();
+        setTimeout(()=>{ try{ document.getElementById('svq-name').focus(); }catch(e){} }, 30); }
+    };
+
+    window.svqMountBus = function(){
+      (function mount(n){
+        const host = document.getElementById('svq-bus-composer');
+        if(!host) return;
+        if(host.dataset.ccbcMounted){ window.loadSvqBus(); return; }
+        if(!window.CCBusComposer){ if(n < 60) setTimeout(() => mount(n+1), 100); return; }
+        window.CCBusComposer.mount(host, {
+          projectSlug: 'azck-operations-cowork',
+          label: 'New bus message',
+          placeholder: 'Type a message about the queue…',
+          onSent: window.loadSvqBus
+        });
+        window.loadSvqBus();
+      })(0);
+    };
+
+    window.loadSvqBus = async function(){
+      const host = document.getElementById('svq-bus-list'); if(!host || !window.supa) return;
+      const { data, error } = await window.supa.from('agent_messages')
+        .select('id,from_user,to_user,body,created_at')
+        .eq('project_slug','azck-operations-cowork').is('archived_at',null)
+        .order('created_at',{ascending:false}).limit(30);
+      const c = document.getElementById('svq-bus-count'); if(c) c.textContent = error ? '—' : (data||[]).length;
+      if(error){ host.innerHTML = '<div class="svq-empty">Bus unavailable.</div>'; return; }
+      host.innerHTML = (data||[]).length ? data.map(m =>
+        '<div class="svb-msg"><div class="svb-msg__head">#'+m.id+' · '+svqEsc(m.from_user)+' → '+svqEsc(m.to_user)+' · '+svqDay(m.created_at)+'</div>'
+        + svqEsc((m.body||'').slice(0,400)) + '</div>').join('') : '<div class="svq-empty">No messages yet.</div>';
+    };
+
+    // Delegated taps — the lists repaint constantly, so bind once on the lane.
+    // Wrapped: a throw in here would kill every later listener on the page.
+    document.addEventListener('click', function(e){ try { svqOnClick(e); }
+      catch(err){ console.warn('[queue] click handler', err); } });
+    function svqOnClick(e){
+      if(!e.target || !e.target.closest) return;       // clicks can land on non-elements
+      const p = e.target.closest('[data-svqf]');       if(p){ window._svqState.filter = p.dataset.svqf; window.svqPaint(); return; }
+      const a = e.target.closest('[data-svqact]');     if(a){ window.svqAct(a.dataset.svqrow, a.dataset.svqact); return; }
+      const c = e.target.closest('[data-svqid]');      if(c){ window._svqState.sel = c.dataset.svqid; window.svqToggleForm(false); window.svqPaint(); return; }
+      if(e.target.closest('#svq-new-btn')){ window.svqToggleForm(); return; }
+      if(e.target.closest('#svq-save')){ window.svqSave(); return; }
+      if(e.target.closest('#svq-add-line')){ window.svqAddLine(); return; }
+      // Every builder chip is one tap on one piece of state.
+      const ch = e.target.closest('[data-svqc]');
+      if(ch){
+        const S = window._svqState, v = ch.dataset.svqc, k = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':')+1);
+        if(k==='kind'){ S.kind = val; S.variant = null; S.size = null; }
+        else if(k==='var'){ S.variant = (S.variant===val ? null : val); }
+        else if(k==='size'){ S.size = (S.size===val ? null : val); }
+        else if(k==='qty'){ S.qty = Number(val); }
+        else if(k==='loc'){ S.loc = (S.loc===val ? null : val); }
+        else if(k==='ex'){                                  // tap again = one more
+          S.extras[val] = (S.extras[val]||0) + 1;
+          if(e.shiftKey || S.extras[val] > 9) delete S.extras[val];   // shift-tap clears
+        }
+        window.svqPaintBuilder(); return;
+      }
+      const del = e.target.closest('[data-svqdel]');
+      if(del){ window._svqState.lines.splice(Number(del.dataset.svqdel),1); window.svqPaintBuilder(); return; }
+      const hit = e.target.closest('[data-svqcust]');
+      if(hit){
+        const box = document.getElementById('svq-cust-hits');
+        const c = (box._hits||[])[Number(hit.dataset.svqcust)];
+        if(c){
+          document.getElementById('svq-name').value  = c.name || '';
+          document.getElementById('svq-phone').value = c.phone || '';
+          document.getElementById('svq-email').value = c.email || '';
+        }
+        clearTimeout(_svqCustTimer);        // the fill must not re-open the list
+        box.hidden = true; return;
+      }
+      // Tapping anywhere else closes the picker.
+      if(!e.target.closest('#svq-name') && !e.target.closest('#svq-cust-hits')){
+        const b = document.getElementById('svq-cust-hits'); if(b) b.hidden = true;
+      }
+    }
+    // Dictation and typing both land here. Debounced — see svqSearchCustomers.
+    document.addEventListener('input', function(e){
+      if(e.target && e.target.id === 'svq-name') window.svqSearchCustomers(e.target.value);
+    });
+    // Tap the field and the list appears with no typing at all.
+    document.addEventListener('focusin', function(e){
+      if(e.target && e.target.id === 'svq-name') window.svqPaintCustomers(e.target.value);
+    });
+
+    // ── RIGHT: Project Bus — the Interns pattern via the ONE shared composer ──
+    window.svbMountBus = function(){
+      (function mount(n){
+        const host = document.getElementById('svc-bus-composer');
+        if(!host || host.dataset.ccbcMounted) { window.loadSvcBus(); return; }
+        if(!window.CCBusComposer){ if(n < 60) setTimeout(() => mount(n+1), 100); return; }
+        window.CCBusComposer.mount(host, {
+          projectSlug: 'azck-operations-cowork',
+          label: 'New bus message',
+          placeholder: 'Type a message about bookings…',
+          onSent: window.loadSvcBus
+        });
+        window.loadSvcBus();
+      })(0);
+      if(window._svbState.busTimer) clearInterval(window._svbState.busTimer);
+      window._svbState.busTimer = setInterval(() => {
+        const l = document.querySelector('.lane[data-lane="services"]');
+        if(!l || !l.classList.contains('active')) return; // lane hidden — skip, keep timer (command lanes toggle .active, not inline display)
+        window.loadSvcBus();
+      }, 60000);
+    };
+
+    window.loadSvcBus = async function(){
+      if(!window.supa) return;
+      const esc = window.svbEsc;
+      const list = document.getElementById('svc-bus-list'), cnt = document.getElementById('svc-bus-count');
+      if(!list) return;
+      const { data, error } = await window.supa.from('agent_messages')
+        .select('id,from_user,to_user,channel,body,created_at')
+        .eq('project_slug','azck-operations-cowork')
+        .order('created_at',{ascending:false}).limit(30);
+      if(error){ console.warn('[services] bus fetch failed', error); return; }
+      const rows = data || [];
+      list.innerHTML = rows.length ? rows.map(m => {
+        const t = m.created_at ? new Date(m.created_at).toLocaleString('en-CA',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        return '<div class="svb-msg"><div class="svb-msg__head"><span class="svb-msg__from">'+esc(m.from_user)+'</span> → '+esc(m.to_user)+' · '+esc(m.channel)+' · '+esc(t)+'</div>'
+             + '<div class="svb-msg__body">'+esc(m.body)+'</div></div>';
+      }).join('') : '<div class="svb-empty">No messages yet.</div>';
+      if(cnt) cnt.textContent = rows.length;
+    };
+    </script>
+    <script>
+    /* SERVICES schedule control (2026-07-12) — writes az_open_hours + az_time_blocks.
+       The SAME tables drive pages/booking.html on azcustomknives.com and the copy in
+       Reanna's CC (rl-command-centre index.html) — keep all three in step. */
+    (function(){
+      var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var BASE_SVCS=['knife','scissor','axe','restoration'];
+      var esc=function(s){return (s==null?'':String(s)).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});};
+      function cap(s){return s? s.charAt(0).toUpperCase()+s.slice(1):s;}
+      async function who(){ try{ var u=await window.supa.auth.getUser(); return (u.data&&u.data.user&&u.data.user.email)||'cc'; }catch(e){ return 'cc'; } }
+
+      window.renderSvcSchedule = async function(){
+        var hoursHost=document.getElementById('svc-hours'), blocksHost=document.getElementById('svc-blocks');
+        if(!hoursHost||!blocksHost) return;
+        if(!window.supa){ hoursHost.innerHTML='<div class="cc-stub">Sign in to manage the schedule.</div>'; blocksHost.innerHTML=''; return; }
+        try{
+          var oh=await window.supa.from('az_open_hours').select('service,weekday,times,active').order('service').order('weekday');
+          if(oh.error) throw oh.error;
+          var by={}; (oh.data||[]).forEach(function(r){ (by[r.service]=by[r.service]||[]).push(r); });
+          var svcs=BASE_SVCS.slice(); Object.keys(by).forEach(function(s){ if(svcs.indexOf(s)===-1) svcs.push(s); });
+          hoursHost.innerHTML = svcs.map(function(s){
+            var rows=(by[s]||[]).map(function(r){
+              return '<div class="cc-card__sub" style="display:flex;gap:8px;align-items:center;">'
+                +'<b style="min-width:34px;">'+DAYS[r.weekday]+'</b><span style="flex:1;">'+esc((r.times||[]).join(' · ')||'—')+'</span>'
+                +'<button type="button" class="cc-subtab" onclick="svcEditHours(\''+s+'\','+r.weekday+')">Edit</button></div>';
+            }).join('') || '<div class="cc-card__sub">No open days — customers cannot book this.</div>';
+            return '<div class="cc-card" style="margin-bottom:var(--sp-8);"><div class="cc-card__label">'+esc(cap(s))+'</div>'+rows+'</div>';
+          }).join('');
+          var sel=document.getElementById('svc-oh-service');
+          if(sel) sel.innerHTML=svcs.map(function(s){return '<option value="'+s+'">'+esc(cap(s))+'</option>';}).join('');
+          var bsel=document.getElementById('svc-bl-service');
+          if(bsel) bsel.innerHTML='<option value="">All services</option>'+svcs.map(function(s){return '<option value="'+s+'">'+esc(cap(s))+'</option>';}).join('');
+        }catch(e){ console.warn('[services] hours load failed',e); hoursHost.innerHTML='<div class="cc-stub">Could not load the schedule — tap Refresh.</div>'; }
+        try{
+          var tb=await window.supa.from('az_time_blocks').select('id,date_from,date_to,times,service,reason,created_by').gte('date_to', new Date().toISOString().slice(0,10)).order('date_from');
+          if(tb.error) throw tb.error;
+          blocksHost.innerHTML=(tb.data&&tb.data.length)? tb.data.map(function(b){
+            var span=b.date_from===b.date_to? b.date_from : (b.date_from+' → '+b.date_to);
+            return '<div class="cc-card red" style="margin-bottom:var(--sp-8);">'
+              +'<div class="cc-card__title">'+esc(span)+' <span class="cc-card__tag red">'+((b.times&&b.times.length)?esc(b.times.join(' · ')):'whole day')+'</span></div>'
+              +'<div class="cc-card__sub">'+esc(b.service?cap(b.service):'All services')+(b.reason?(' — '+esc(b.reason)):'')+'</div>'
+              +'<div class="cc-card__meta"><button type="button" class="cc-subtab" onclick="svcDelBlock(\''+b.id+'\')">✕ Unblock</button></div>'
+              +'</div>';
+          }).join('') : '<div class="cc-stub">Nothing blocked — the weekly template is fully open.</div>';
+        }catch(e){ console.warn('[services] blocks load failed',e); blocksHost.innerHTML='<div class="cc-stub">Could not load blocks — tap Refresh.</div>'; }
+      };
+
+      window.svcEditHours=function(s,wd){
+        var sel=document.getElementById('svc-oh-service'), day=document.getElementById('svc-oh-day'), t=document.getElementById('svc-oh-times');
+        if(sel) sel.value=s; if(day) day.value=String(wd);
+        window.supa.from('az_open_hours').select('times').eq('service',s).eq('weekday',wd).maybeSingle()
+          .then(function(r){ if(t){ t.value=(r.data&&r.data.times)?r.data.times.join(', '):''; t.focus(); } });
+      };
+
+      window.svcSaveHours=async function(){
+        if(!window.supa) return;
+        var s=document.getElementById('svc-oh-service').value, wd=parseInt(document.getElementById('svc-oh-day').value,10);
+        var raw=document.getElementById('svc-oh-times').value||'';
+        var times=raw.split(',').map(function(x){return x.trim();}).filter(Boolean);
+        var by=await who(); var r;
+        if(!times.length){ r=await window.supa.from('az_open_hours').delete().eq('service',s).eq('weekday',wd); }
+        else { r=await window.supa.from('az_open_hours').upsert({service:s,weekday:wd,times:times,active:true,updated_at:new Date().toISOString(),updated_by:by},{onConflict:'service,weekday'}); }
+        if(r.error){ alert('Could not save: '+r.error.message); return; }
+        document.getElementById('svc-oh-times').value='';
+        window.renderSvcSchedule();
+      };
+
+      window.svcAddBlock=async function(){
+        if(!window.supa) return;
+        var f=document.getElementById('svc-bl-from').value, to=document.getElementById('svc-bl-to').value||f;
+        if(!f){ alert('Pick at least a start date.'); return; }
+        var raw=document.getElementById('svc-bl-times').value||'';
+        var times=raw.split(',').map(function(x){return x.trim();}).filter(Boolean);
+        var svc=document.getElementById('svc-bl-service').value||null;
+        var reason=document.getElementById('svc-bl-reason').value||null;
+        var by=await who();
+        var r=await window.supa.from('az_time_blocks').insert({date_from:f,date_to:to,times:times.length?times:null,service:svc,reason:reason,created_by:by});
+        if(r.error){ alert('Could not block: '+r.error.message); return; }
+        ['svc-bl-from','svc-bl-to','svc-bl-times','svc-bl-reason'].forEach(function(id){var el=document.getElementById(id); if(el) el.value='';});
+        window.renderSvcSchedule();
+      };
+
+      window.svcDelBlock=async function(id){
+        if(!window.supa) return;
+        var r=await window.supa.from('az_time_blocks').delete().eq('id',id);
+        if(r.error){ alert('Could not unblock: '+r.error.message); return; }
+        window.renderSvcSchedule();
+      };
+
+      var prevRS=window.renderServices;
+      window.renderServices=function(){ if(prevRS) prevRS(); window.renderSvcSchedule(); };
+    })();
+    </script>
+    <script>
+    /* SERVICES calendar (2026-07-12, Alessio direct) — week/month/year view of
+       az_service_bookings (amber) + az_time_blocks (red) + calendar_events, the
+       Google Calendar mirror the sync worker keeps fresh (grey). Click a day →
+       detail pane with block/unblock. Weekly template editing stays in SCHEDULE. */
+    (function(){
+      var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+      var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var esc=function(s){return (s==null?'':String(s)).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});};
+      var view='month', cur=new Date(), sel=null, cache={bookings:[],blocks:[],gcal:[]};
+      cur.setHours(0,0,0,0);
+      function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+      function todayIso(){ return iso(new Date()); }
+      function range(){
+        if(view==='week'){ var s=new Date(cur); s.setDate(s.getDate()-s.getDay()); var e=new Date(s); e.setDate(e.getDate()+6); return [s,e]; }
+        if(view==='year'){ return [new Date(cur.getFullYear(),0,1), new Date(cur.getFullYear(),11,31)]; }
+        return [new Date(cur.getFullYear(),cur.getMonth(),1), new Date(cur.getFullYear(),cur.getMonth()+1,0)];
+      }
+      async function load(){
+        var g=document.getElementById('svcal-grid'); if(!g) return;
+        if(!window.supa){ g.innerHTML='<div class="cc-stub">Sign in to see the calendar.</div>'; return; }
+        var r=range(), a=iso(r[0]), b=iso(r[1]);
+        try{
+          var q=await Promise.all([
+            window.supa.from('az_service_bookings').select('preferred_date,preferred_time,customer_name,service,status,quantity')
+              .gte('preferred_date',a).lte('preferred_date',b)
+              .not('status','in','(cancelled,archived,declined)'),
+            window.supa.from('az_time_blocks').select('id,date_from,date_to,times,service,reason').lte('date_from',b).gte('date_to',a),
+            window.supa.from('calendar_events').select('summary,start_time,end_time,all_day')
+              .gte('start_time',a+'T00:00:00').lte('start_time',b+'T23:59:59').order('start_time').limit(500)
+          ]);
+          if(q[0].error||q[1].error||q[2].error) throw (q[0].error||q[1].error||q[2].error);
+          cache={bookings:q[0].data||[],blocks:q[1].data||[],gcal:q[2].data||[]};
+          paint();
+        }catch(e){
+          console.warn('[svcal] load failed',e);
+          // 42501 = anon denied the private block "reason" column — means not signed in.
+          g.innerHTML='<div class="cc-stub">'+((e&&e.code==='42501')?'Sign in to see the calendar.':'Could not load the calendar — try again.')+'</div>';
+        }
+      }
+      function dayB(d){ return cache.bookings.filter(function(x){ return x.preferred_date===d; }); }
+      function dayX(d){ return cache.blocks.filter(function(x){ return x.date_from<=d && x.date_to>=d; }); }
+      function dayG(d){ return cache.gcal.filter(function(x){ return String(x.start_time||'').slice(0,10)===d; }); }
+      function gTime(x){ if(x.all_day) return 'all day'; try{ return new Date(x.start_time).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+      function chipsFor(d, max){
+        var h='';
+        var xs=dayX(d); if(xs.length) h+='<span class="svcal-chip x">'+(xs.some(function(x){return !x.times||!x.times.length;})?'AWAY':'partly away')+'</span>';
+        var bs=dayB(d);
+        bs.slice(0,max).forEach(function(x){ h+='<span class="svcal-chip b">'+esc(((x.preferred_time||'')+' '+String(x.customer_name||'booking').split(' ')[0]).trim())+'</span>'; });
+        if(bs.length>max) h+='<span class="svcal-chip b">+'+(bs.length-max)+' more</span>';
+        var gs=dayG(d); if(gs.length) h+='<span class="svcal-chip g">&#128197; '+gs.length+' cal</span>';
+        return h;
+      }
+      function calTitle(){
+        if(view==='week'){ var r=range(); return MONTHS[r[0].getMonth()].slice(0,3)+' '+r[0].getDate()+' – '+MONTHS[r[1].getMonth()].slice(0,3)+' '+r[1].getDate()+', '+r[1].getFullYear(); }
+        if(view==='year') return String(cur.getFullYear());
+        return MONTHS[cur.getMonth()]+' '+cur.getFullYear();
+      }
+      function paint(){
+        var g=document.getElementById('svcal-grid'); if(!g) return;
+        var t=document.getElementById('svcal-title'); if(t) t.textContent=calTitle();
+        document.querySelectorAll('[data-lane="services"] .svcal-vbtn').forEach(function(b){ b.classList.toggle('active', b.dataset.v===view); });
+        var td=todayIso(), h='';
+        if(view==='month'){
+          h='<div class="svcal-dow">'+DOW.map(function(x){return '<div>'+x+'</div>';}).join('')+'</div><div class="svcal-cells">';
+          var first=new Date(cur.getFullYear(),cur.getMonth(),1), days=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate();
+          for(var i=0;i<first.getDay();i++) h+='<div class="svcal-day pad"></div>';
+          for(var d=1;d<=days;d++){
+            var ds=iso(new Date(cur.getFullYear(),cur.getMonth(),d));
+            h+='<div class="svcal-day'+(sel===ds?' sel':'')+(ds===td?' today':'')+'" onclick="svcCalPick(\''+ds+'\')"><span class="svcal-num">'+d+'</span>'+chipsFor(ds,2)+'</div>';
+          }
+          h+='</div>';
+        } else if(view==='week'){
+          var r=range(); h='<div class="svcal-week">';
+          for(var i2=0;i2<7;i2++){
+            var dd=new Date(r[0]); dd.setDate(dd.getDate()+i2); var ds2=iso(dd);
+            h+='<div class="svcal-wday'+(sel===ds2?' sel':'')+'" onclick="svcCalPick(\''+ds2+'\')">'
+              +'<div class="svcal-wday__h">'+DOW[dd.getDay()]+' '+dd.getDate()+(ds2===td?' · today':'')+'</div>'
+              +chipsFor(ds2,6)+'</div>';
+          }
+          h+='</div>';
+        } else {
+          h='<div class="svcal-year">';
+          for(var m=0;m<12;m++){
+            var dm=new Date(cur.getFullYear(),m+1,0).getDate();
+            var mh='<div class="svcal-mini" onclick="svcCalMonth('+m+')"><div class="svcal-mini__t">'+MONTHS[m]+'</div><div class="svcal-mini__g">';
+            var fd=new Date(cur.getFullYear(),m,1).getDay();
+            for(var p=0;p<fd;p++) mh+='<div class="svcal-mini__d e"></div>';
+            for(var d2=1;d2<=dm;d2++){
+              var ds3=iso(new Date(cur.getFullYear(),m,d2));
+              var cls=dayX(ds3).length?' x':(dayB(ds3).length?' b':'');
+              mh+='<div class="svcal-mini__d'+cls+'">'+d2+'</div>';
+            }
+            h+=mh+'</div></div>';
+          }
+          h+='</div>';
+        }
+        g.innerHTML=h;
+        detail();
+      }
+      function detail(){
+        var el=document.getElementById('svcal-detail'); if(!el) return;
+        if(!sel){ el.innerHTML='<div class="cc-stub">Pick a day to see it here.</div>'; return; }
+        var d=new Date(sel+'T12:00:00');
+        var h='<div class="svcal-dhead">'+DOW[d.getDay()]+', '+MONTHS[d.getMonth()].slice(0,3)+' '+d.getDate()+'</div>';
+        var bs=dayB(sel);
+        h+='<div class="svcal-dsec">Bookings</div>';
+        h+= bs.length? bs.map(function(x){ return '<div class="cc-card__sub">'+esc((x.preferred_time||'—')+' · '+(x.customer_name||'')+' · '+(x.service||'')+(x.quantity>1?(' ×'+x.quantity):''))+' <span class="cc-card__tag '+(x.status==='confirmed'?'green':'amber')+'">'+esc(x.status||'new')+'</span></div>'; }).join('') : '<div class="cc-card__sub" style="color:var(--text-dim);">None.</div>';
+        var xs=dayX(sel);
+        h+='<div class="svcal-dsec">Blocked</div>';
+        h+= xs.length? xs.map(function(x){
+          var one=x.date_from===x.date_to;
+          return '<div class="cc-card__sub">'+((x.times&&x.times.length)?esc(x.times.join(' · ')):'Whole day')+' · '+esc(x.service||'all services')+(x.reason?(' — '+esc(x.reason)):'')
+            +(one?(' <button type="button" class="cc-subtab" onclick="svcCalUnblock(\''+x.id+'\')">Unblock</button>')
+                 :(' <span style="color:var(--text-dim);">(part of '+esc(x.date_from)+' → '+esc(x.date_to)+' — manage in SCHEDULE)</span>'))+'</div>';
+        }).join('') : '<div class="cc-card__sub" style="color:var(--text-dim);">Open as scheduled.</div>';
+        var gs=dayG(sel);
+        h+='<div class="svcal-dsec">Google Calendar</div>';
+        h+= gs.length? gs.map(function(x){ return '<div class="cc-card__sub">'+esc(gTime(x))+' · '+esc(x.summary||'(no title)')+'</div>'; }).join('') : '<div class="cc-card__sub" style="color:var(--text-dim);">Nothing synced.</div>';
+        if(!xs.some(function(x){ return !x.times||!x.times.length; })){
+          h+='<div class="svcal-dsec">Block this day</div>'
+            +'<input id="svcal-reason" class="cc-modal__field" style="width:100%;" placeholder="Why (private — optional)">'
+            +'<button type="button" class="cc-subtab" style="margin-top:var(--sp-8);" onclick="svcCalBlockDay()">Block the whole day</button>';
+        }
+        el.innerHTML=h;
+      }
+      window.svcCalPick=function(d){ sel=d; paint(); };
+      window.svcCalView=function(v){ view=v; sel=null; load(); };
+      window.svcCalToday=function(){ cur=new Date(); cur.setHours(0,0,0,0); sel=todayIso(); load(); };
+      window.svcCalNav=function(dir){
+        if(view==='week') cur.setDate(cur.getDate()+7*dir);
+        else if(view==='year') cur.setFullYear(cur.getFullYear()+dir);
+        else cur.setMonth(cur.getMonth()+dir);
+        sel=null; load();
+      };
+      window.svcCalMonth=function(m){ cur=new Date(cur.getFullYear(),m,1); view='month'; sel=null; load(); };
+      window.svcCalBlockDay=async function(){
+        if(!window.supa||!sel) return;
+        var reason=(document.getElementById('svcal-reason')||{}).value||null;
+        var by='cc'; try{ var u=await window.supa.auth.getUser(); by=(u.data&&u.data.user&&u.data.user.email)||'cc'; }catch(e){}
+        var r=await window.supa.from('az_time_blocks').insert({date_from:sel,date_to:sel,times:null,service:null,reason:reason,created_by:by});
+        if(r.error){ alert('Could not block: '+r.error.message); return; }
+        load(); if(window.renderSvcSchedule) window.renderSvcSchedule();
+      };
+      window.svcCalUnblock=async function(id){
+        if(!window.supa) return;
+        var r=await window.supa.from('az_time_blocks').delete().eq('id',id);
+        if(r.error){ alert('Could not unblock: '+r.error.message); return; }
+        load(); if(window.renderSvcSchedule) window.renderSvcSchedule();
+      };
+      window.renderSvcCalendar=function(){ load(); };
+    })();
+    </script>
+  </section>
+  </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
+<script defer src="assets/cc-col-resize.js?v=20260805-svcport"></script><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
 <script>
 'use strict';
 /* One Supabase client per tab (fleet law). Same house project as every face. */
@@ -108,13 +1424,15 @@ const supa = window.supabase.createClient(
   'sb_publishable_xnDjiN2NRly0mU4aRMpLjA_HVqqcjxI',
   { auth: { storageKey: 'azck_command_auth' } }   // own session bucket — no token handoff, ever
 );
+window.supa = supa; // the ported Services code + the shared composer address the client as window.supa — one client, one page (fleet law)
 const ALLOWED = ['alessio.zilli@azcustomknives.com','admin@azcustomknives.com'];
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
    nothing pretends to be live until phase 3 moves the real tab in. */
 const LANES = [
   ['dashboard','DASHBOARD','The business at a glance.','Phase 3 builds this last, from real lanes.'],
-  ['services','SERVICES','Queue, bookings, calendar, schedule.','Moves here from the builder face in phase 3 — first in line.'],
+  ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
   ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','Moves in phase 3.'],
@@ -133,17 +1451,75 @@ function buildShell(){
     if(i===0) b.classList.add('active');
     b.onclick=()=>switchLane(id);
     nav.appendChild(b);
-    const s=document.createElement('section');
-    s.className='lane'+(i===0?' active':''); s.id='lane-'+id;
-    s.innerHTML=`<h2>${label}</h2><div class="card"><b>${what}</b>
+    let s=document.getElementById('lane-'+id);   // ported lanes (services) ship as static sections
+    if(!s){
+      s=document.createElement('section');
+      s.className='lane'; s.id='lane-'+id;
+      s.innerHTML=`<h2>${label}</h2><div class="card"><b>${what}</b>
       <div class="dim">${when}</div>
       <div class="stamp">Empty on purpose — no fake sync buttons. Plan: Three homes, phase 3.</div></div>`;
-    main.appendChild(s);
+      main.appendChild(s);
+    }
+    if(i===0) s.classList.add('active');
   });
 }
 function switchLane(id){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.lane===id));
   document.querySelectorAll('.lane').forEach(l=>l.classList.toggle('active',l.id==='lane-'+id));
+  renderSubnav(id);
+  try{ if(!SUBNAV[id] && location.hash!=='#'+id) history.replaceState(null,'','#'+id); }catch(e){}
+  if(id==='services'){
+    const t=(document.querySelector('#lane-services .cc-subpane.active')||{dataset:{}}).dataset.subtab||'calendar';
+    svcRender(t);
+  }
+}
+
+/* ── subnav: per-lane subtabs. Services first; later phase-3 lanes add rows here.
+   Order inside a row is his — new subtabs go LAST (the faces reshuffle lesson). ── */
+const SUBNAV = {
+  services: [
+    { id:'calendar', label:'Calendar' },
+    { id:'bookings', label:'Bookings' },
+    { id:'schedule', label:'Schedule' },
+    { id:'queue',    label:'Queue'    },
+  ],
+};
+function renderSubnav(lane){
+  const wrap=$('#subnav'); if(!wrap) return;
+  const subs=SUBNAV[lane]||[];
+  if(!subs.length){ wrap.innerHTML=''; return; }
+  const laneEl=document.getElementById('lane-'+lane);
+  let active=null;
+  try{ active=localStorage.getItem('azck_command_subtab_'+lane); }catch(e){}
+  if(!subs.some(s=>s.id===active)){
+    const cur=laneEl&&laneEl.querySelector('.cc-subpane.active');
+    active=cur?cur.dataset.subtab:subs[0].id;
+  }
+  wrap.innerHTML=subs.map(s=>'<button type="button" data-lane="'+lane+'" data-subtab="'+s.id+'"'+(s.id===active?' class="active"':'')+'>'+s.label+'</button>').join('');
+  wrap.querySelectorAll('button').forEach(b=>b.onclick=()=>switchSubtab(lane,b.dataset.subtab));
+  if(laneEl) laneEl.querySelectorAll('.cc-subpane').forEach(p=>p.classList.toggle('active',p.dataset.subtab===active));
+}
+function switchSubtab(lane,target){
+  const laneEl=document.getElementById('lane-'+lane); if(!laneEl) return;
+  document.querySelectorAll('#subnav button').forEach(b=>b.classList.toggle('active',b.dataset.subtab===target));
+  laneEl.querySelectorAll('.cc-subpane').forEach(p=>p.classList.toggle('active',p.dataset.subtab===target));
+  try{ localStorage.setItem('azck_command_subtab_'+lane,target); }catch(e){}
+  try{ const want='#'+lane+'/'+target; if(location.hash!==want) history.replaceState(null,'',want); }catch(e){}
+  if(lane==='services') svcRender(target);
+}
+/* Lazy renderers, faces retry pattern — deferred assets may land after the tap. */
+function svcRender(target){
+  (function retry(n){
+    if(window.supa){
+      try{
+        if(target==='queue' && window.renderQueue) window.renderQueue();
+        else if(target==='calendar' && window.renderSvcCalendar) window.renderSvcCalendar();
+        else if(window.renderServices) window.renderServices();  // bookings + schedule ride together (faces wiring)
+      }catch(e){ console.warn('[services] render failed',e); }
+      return;
+    }
+    if(n<60) setTimeout(()=>retry(n+1),100);
+  })(0);
 }
 
 /* theme — dark default, toggle persisted */
@@ -152,6 +1528,9 @@ function applyTheme(t){ document.documentElement.dataset.theme=t; localStorage.s
 $('#themeBtn').onclick=()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
 applyTheme(localStorage.getItem(THEME_KEY)||'dark');
 
+/* ✎ edit — resize bars on the lane grids show only while this is on (faces pattern) */
+$('#editBtn').onclick=()=>{ const on=document.body.classList.toggle('cc-edit-on'); $('#editBtn').classList.toggle('on',on); };
+
 /* gate */
 async function boot(){
   const {data:{session}} = await supa.auth.getSession();
@@ -159,7 +1538,17 @@ async function boot(){
     $('#gate').style.display='none'; $('#app').style.display='flex';
     $('#userPill').textContent=session.user.email.split('@')[0];
     $('#userPill').onclick=async()=>{ await supa.auth.signOut(); location.reload(); };
+    /* Bus identity for the shared composer: NEVER presign — admin@ is Reanna's seat.
+       (feedback_never_presign_as_alessio; the composer falls back to alessio only
+       where this hook is absent, i.e. on the faces build it was mirrored from.) */
+    window.CC_BUS_IDENTITY=()=> (session.user.email||'').toLowerCase()==='admin@azcustomknives.com' ? 'reanna' : 'alessio';
     if(!$('#nav').children.length) buildShell();
+    /* deep-link: #lane or #lane/subtab survives refresh (faces pattern) */
+    const h=(location.hash||'').replace('#','').split('/');
+    if(h[0] && document.getElementById('lane-'+h[0])){
+      switchLane(h[0]);
+      if(h[1] && SUBNAV[h[0]]) switchSubtab(h[0],h[1]);
+    }
   } else if(session){
     await supa.auth.signOut();
     $('#err').textContent='That login has no seat here.';
