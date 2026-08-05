@@ -105,7 +105,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
   <nav id="nav"></nav>
   <div id="subnav"></div>
   <main id="lanes">
-  <section class="lane" id="lane-services" data-lane="services">
+  <section class="lane faces-tokens" id="lane-services" data-lane="services">
     <style>
       /* ═══ COMMAND SHIM (2026-08-05, Three-homes phase 3) — the Services chunk below
          is a faithful port from azck-faces and speaks the faces token language. This
@@ -114,7 +114,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
          Amber stays amber INSIDE the lane on purpose: it is load-bearing — the
          calendar reads amber=booking / red=blocked / grey=gcal, and that colour
          code is months of muscle memory. The shell chrome around it stays red. ═══ */
-      [data-lane="services"]{
+      .faces-tokens{
         --surface:var(--panel); --raised:var(--panel-2); --overlay:var(--panel-2);
         --border:var(--line); --border-hi:#3a3e46;
         --text:var(--ink); --text-dim:var(--ink-dim); --text-xs:var(--ink-faint);
@@ -129,33 +129,33 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
         --mono:'JetBrains Mono',Consolas,monospace; --sans:'Lexend',sans-serif;
         --display:'Lexend',sans-serif; --display-tabs:'Oswald';
       }
-      html[data-theme="light"] [data-lane="services"]{
+      html[data-theme="light"] .faces-tokens{
         --border-hi:#bbc3cc;
         --amber:#a06c10; --amber-dim:#7a5010;
         --amber-soft:rgba(160,108,16,0.06); --amber-glow:rgba(160,108,16,0.12);
       }
       /* faces globals the chunk leans on, scoped to the lane */
-      [data-lane="services"] .cc-subpane { display:none; }
-      [data-lane="services"] .cc-subpane.active { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
-      [data-lane="services"] .cc-subpane.active > * { flex:1; min-height:0; }
-      [data-lane="services"] .cc-subtab { font-family:var(--display); font-size:10px; padding:5px 12px; border:1px solid var(--border); border-radius:3px; background:var(--raised); color:var(--text-dim); cursor:pointer; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; }
-      [data-lane="services"] .cc-subtab.active { background:var(--amber); color:#000; border-color:var(--amber); }
-      [data-lane="services"] .cc-subtab:hover:not(.active) { color:var(--amber); border-color:var(--amber); }
-      [data-lane="services"] .cc-stub { background:var(--surface); border:1px dashed var(--border); border-radius:4px; padding:var(--sp-16); color:var(--text-xs); font-size:12px; text-align:center; }
-      [data-lane="services"] .cc-subnav__hint { font-family:var(--mono); font-size:10px; color:var(--text-xs); padding:8px 0; }
-      [data-lane="services"] .cc-card { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:var(--sp-12); transition:border-color 0.12s; position:relative; overflow:hidden; }
-      [data-lane="services"] .cc-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:transparent; }
-      [data-lane="services"] .cc-card.red::before { background:var(--red); }
-      [data-lane="services"] .cc-card__label { font-family:var(--display); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs); margin-bottom:var(--sp-6); }
-      [data-lane="services"] .cc-card__title { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--text); line-height:1.35; margin-bottom:var(--sp-4); word-wrap:break-word; }
-      [data-lane="services"] .cc-card__sub { font-size:12px; color:var(--text-dim); line-height:1.4; }
-      [data-lane="services"] .cc-card__meta { display:flex; align-items:center; gap:var(--sp-8); margin-top:var(--sp-8); padding-top:var(--sp-8); border-top:1px solid var(--border); flex-wrap:wrap; }
-      [data-lane="services"] .cc-card__tag { display:inline-flex; align-items:center; padding:1px 6px; border-radius:3px; font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:0.04em; }
-      [data-lane="services"] .cc-card__tag.amber { background:var(--amber-soft); color:var(--amber); }
-      [data-lane="services"] .cc-card__tag.green { background:var(--green-bg); color:var(--green); }
-      [data-lane="services"] .cc-card__tag.red { background:var(--red-bg); color:var(--red); }
-      [data-lane="services"] .cc-modal__field { font-family:var(--mono); font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:3px; padding:var(--sp-8) var(--sp-10); }
-      [data-lane="services"] .cc-modal__field:focus { outline:none; border-color:var(--amber); }
+      .faces-tokens .cc-subpane { display:none; }
+      .faces-tokens .cc-subpane.active { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+      .faces-tokens .cc-subpane.active > * { flex:1; min-height:0; }
+      .faces-tokens .cc-subtab { font-family:var(--display); font-size:10px; padding:5px 12px; border:1px solid var(--border); border-radius:3px; background:var(--raised); color:var(--text-dim); cursor:pointer; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; }
+      .faces-tokens .cc-subtab.active { background:var(--amber); color:#000; border-color:var(--amber); }
+      .faces-tokens .cc-subtab:hover:not(.active) { color:var(--amber); border-color:var(--amber); }
+      .faces-tokens .cc-stub { background:var(--surface); border:1px dashed var(--border); border-radius:4px; padding:var(--sp-16); color:var(--text-xs); font-size:12px; text-align:center; }
+      .faces-tokens .cc-subnav__hint { font-family:var(--mono); font-size:10px; color:var(--text-xs); padding:8px 0; }
+      .faces-tokens .cc-card { background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:var(--sp-12); transition:border-color 0.12s; position:relative; overflow:hidden; }
+      .faces-tokens .cc-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:transparent; }
+      .faces-tokens .cc-card.red::before { background:var(--red); }
+      .faces-tokens .cc-card__label { font-family:var(--display); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs); margin-bottom:var(--sp-6); }
+      .faces-tokens .cc-card__title { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--text); line-height:1.35; margin-bottom:var(--sp-4); word-wrap:break-word; }
+      .faces-tokens .cc-card__sub { font-size:12px; color:var(--text-dim); line-height:1.4; }
+      .faces-tokens .cc-card__meta { display:flex; align-items:center; gap:var(--sp-8); margin-top:var(--sp-8); padding-top:var(--sp-8); border-top:1px solid var(--border); flex-wrap:wrap; }
+      .faces-tokens .cc-card__tag { display:inline-flex; align-items:center; padding:1px 6px; border-radius:3px; font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:0.04em; }
+      .faces-tokens .cc-card__tag.amber { background:var(--amber-soft); color:var(--amber); }
+      .faces-tokens .cc-card__tag.green { background:var(--green-bg); color:var(--green); }
+      .faces-tokens .cc-card__tag.red { background:var(--red-bg); color:var(--red); }
+      .faces-tokens .cc-modal__field { font-family:var(--mono); font-size:12px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:3px; padding:var(--sp-8) var(--sp-10); }
+      .faces-tokens .cc-modal__field:focus { outline:none; border-color:var(--amber); }
       /* command-adapt: faces caps lane height via a body-flex chain; command's page
          scrolls. The calendar and schedule subtabs get their own viewport height so
          each column scrolls itself — same behaviour the queue/bookings grids already
@@ -1409,13 +1409,184 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     })();
     </script>
   </section>
+  <!-- ════════ KEY PARTNERS lane — ported from azck-faces 2026-08-05 (phase 3, port 2/6).
+       Live source: public.contacts (RLS authenticated). KP_HIDE privacy rule rides inside
+       kpFetchContacts. Sender identity comes from the session — never hardcoded. ════════ -->
+  <section class="lane faces-tokens" id="lane-keypartners" data-lane="keypartners">
+    <div style="padding:4px 2px;height:calc(100vh - 210px);min-height:420px;display:flex;flex-direction:column;">
+      <div id="kp-mount" style="flex:1 1 auto;min-height:0;"><div style="padding:24px;color:var(--ink-dim);font-size:12px;">Loading partners…</div></div>
+    </div>
+    <script>
+window.KP_BUSINESSES = [
+  { id:'azck',     title:'AZCK',     sub:'AZ Custom Knives' },
+  { id:'quadfang', title:'QuadFang', sub:'Broadhead division' }
+];
+// division = topic_area ('azck' | 'quadfang' | 'both') · cat = relationship_type label.
+// LIVE SOURCE (bus #3416, owner order 2026-07-22): public.contacts is the single source
+// of truth — RLS authenticated-read (signed-in board only), writer of record = Forge
+// sessions. The old static KP_PARTNERS array (16 entries) is superseded; git history and
+// archive/keypartners-static-cards_2026-06-24.html keep the fossil. Locked rules enforced
+// at render: the QF-100 prototype machinist is NEVER named (KP_HIDE) — the table carries
+// an anonymized 'local-machine-shop' row instead; Kyran stays minimal, no contact info.
+window.kpFetchContacts = async function(){
+  const { data, error } = await window.supa.from('contacts')
+    .select('slug,display_name,title,organization,relationship_type,topic_area,status,email,phone,intro_via,first_contact_date,last_contact_date,next_action,notes,tags')
+    .order('display_name', { ascending: true });
+  if (error) throw error;
+  const KP_HIDE = /runhart|terra\s*machine/i;   // locked rule, belt + suspenders
+  const LABEL = {
+    referrer: 'Referrers & Connectors', advisor: 'Advisors', gov_program: 'Government & Programs',
+    partner: 'Partners & Applied Research', supplier: 'Manufacturing & Suppliers',
+    media: 'Media', investor: 'Investors', press: 'Press', other: 'Internal & Other'
+  };
+  return (data || [])
+    .filter(r => !KP_HIDE.test(r.display_name || '') && !KP_HIDE.test(r.organization || ''))
+    .map(r => ({
+      slug: r.slug, name: r.display_name, division: r.topic_area || 'both',
+      cat: LABEL[r.relationship_type] || 'Other', role: r.title, org: r.organization,
+      status: r.status, next: r.next_action,
+      contact: [r.email, r.phone].filter(Boolean).join(' · '),
+      intro: r.intro_via, first: r.first_contact_date, last: r.last_contact_date,
+      tags: (r.tags || []).join(', '), extra: r.notes
+    }));
+};
+
+window.renderKeyPartners = function() {
+  const host = document.getElementById('kp-mount');
+  if (!host || !window.CCMasterDetail) return;
+  window.CCMasterDetail.ensureStyles();   // reuse the shop/operator md3 styles
+  if (!document.getElementById('kp-style')) {
+    const st = document.createElement('style'); st.id = 'kp-style';
+    st.textContent = [
+      '#kp-mount .kp-facts { display:flex; flex-direction:column; gap:9px; margin-bottom:12px; }',
+      '#kp-mount .kp-fact__k { font-family:var(--mono,monospace); font-size:9.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-xs); margin-bottom:2px; }',
+      '#kp-mount .kp-fact__v { font-size:12.5px; color:var(--text); line-height:1.5; }',
+      '#kp-mount .kp-blurb { font-size:12.5px; color:var(--text-dim); line-height:1.55; border-left:2px solid var(--border); padding-left:10px; margin:2px 0 0; }'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+
+  if (!window.supa) {
+    host.innerHTML = '<div style="padding:24px;color:var(--text-dim);font-size:12px;">Waiting for sign-in…</div>';
+    (function wait(n){ if (window.supa) { window.renderKeyPartners(); return; } if (n < 80) setTimeout(function(){ wait(n+1); }, 250); })(0);
+    return;
+  }
+  (async () => {   // live contacts read (bus #3416) — render body below unchanged from the static era
+  let P;
+  try { P = await window.kpFetchContacts(); }
+  catch(e) {
+    console.warn('[kp] contacts load failed', e);
+    host.innerHTML = '<div style="padding:24px;font-size:12px;color:#f85149;">Contacts load error. <button type="button" class="cc-subtab" onclick="window.renderKeyPartners()">Retry</button></div>';
+    return;
+  }
+  const B = window.KP_BUSINESSES;
+  const CAT_ORDER = ['Partners & Applied Research','Government & Programs','Manufacturing & Suppliers','Referrers & Connectors','Advisors','Internal & Other'];
+  const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const ago = ts => { if(!ts) return ''; const m = Math.floor((Date.now()-new Date(ts).getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+'m'; if(m<1440) return Math.floor(m/60)+'h'; return Math.floor(m/1440)+'d'; };
+  const inBiz = (p,biz) => p.division===biz || p.division==='both';
+  let curSlug = null;
+
+  const cnt = document.getElementById('kp-count'); if (cnt) cnt.textContent = P.length;
+
+  host.innerHTML = '<div class="md3">'
+    + '<div class="md3-col md3-col--left"><div class="md3-col__head"><span>Business</span><span class="md3-col__count">'+B.length+'</span></div><div class="md3-col__body" data-b="biz"></div></div>'
+    + '<div class="md3-col md3-col--middle"><div class="md3-col__head"><span>Key partners</span><span class="md3-col__count" data-c="ptr">—</span></div><div class="md3-col__body" data-b="ptr"><div class="md3-empty">Pick a business.</div></div></div>'
+    + '<div class="md3-col md3-col--right"><div class="md3-col__head"><span>Detail</span></div><div class="md3-col__body" data-b="dtl"><div class="md3-empty">Pick a partner.</div></div></div>'
+    + '</div>';
+  const $biz = host.querySelector('[data-b="biz"]'), $ptr = host.querySelector('[data-b="ptr"]'),
+        $dtl = host.querySelector('[data-b="dtl"]'), $ptrC = host.querySelector('[data-c="ptr"]');
+
+  $biz.innerHTML = B.map(b => {
+    const n = P.filter(p => inBiz(p,b.id)).length;
+    return '<div class="md3-item" data-id="'+esc(b.id)+'">'+esc(b.title)+'<div class="md3-item__sub">'+esc(b.sub)+' · '+n+'</div></div>';
+  }).join('');
+  $biz.querySelectorAll('.md3-item').forEach(el => el.addEventListener('click', () => pickBiz(el.dataset.id)));
+
+  function pickBiz(biz) {
+    $biz.querySelectorAll('.md3-item').forEach(x => x.classList.toggle('active', x.dataset.id===biz));
+    const list = P.filter(p => inBiz(p,biz));
+    $ptrC.textContent = list.length;
+    const groups = {}, seen = [];
+    list.forEach(p => { const k = p.cat || 'Other'; if(!groups[k]){ groups[k]=[]; seen.push(k); } groups[k].push(p); });
+    const order = CAT_ORDER.filter(k => groups[k]).concat(seen.filter(k => !CAT_ORDER.includes(k)));
+    $ptr.innerHTML = order.map(k =>
+      '<div class="md3-group-head" style="cursor:default;">'+esc(k)+' <span class="md3-group-head__count">('+groups[k].length+')</span></div>'
+      + groups[k].map(p => '<div class="md3-item" data-id="'+esc(p.slug)+'">'+esc(p.name)
+          + (p.status ? ' <span style="font-family:var(--mono,monospace);font-size:9.5px;color:var(--text-xs);">· '+esc(p.status)+'</span>' : '')
+          + '<div class="md3-item__sub">'+esc([p.role,p.org].filter(Boolean).join(' · '))+'</div></div>').join('')
+    ).join('');
+    $ptr.querySelectorAll('.md3-item').forEach(el => el.addEventListener('click', () => pickPartner(el.dataset.id)));
+    if (list.length) pickPartner(list[0].slug);
+    else { $dtl.innerHTML = '<div class="md3-empty">No partners in this business yet.</div>'; }
+  }
+
+  function pickPartner(slug) {
+    curSlug = slug;
+    $ptr.querySelectorAll('.md3-item').forEach(x => x.classList.toggle('active', x.dataset.id===slug));
+    const p = P.find(x => x.slug===slug); if (!p) return;
+    const facts = [];
+    if (p.role) facts.push(['Role', p.role]);
+    if (p.org)  facts.push(['Organization', p.org]);
+    facts.push(['Business', p.division==='both' ? 'AZCK + QuadFang' : (p.division==='azck' ? 'AZCK' : 'QuadFang')]);
+    if (p.status)  facts.push(['Status', p.status]);
+    if (p.next)    facts.push(['Next action', p.next]);
+    if (p.contact) facts.push(['Contact', p.contact]);
+    if (p.intro)   facts.push(['Intro via', p.intro]);
+    if (p.first || p.last) facts.push(['Contact dates', [p.first ? 'first ' + p.first : null, p.last ? 'last ' + p.last : null].filter(Boolean).join(' · ')]);
+    if (p.tags)    facts.push(['Tags', p.tags]);
+    if (p.extra)   facts.push(['Notes', p.extra]);
+    $dtl.innerHTML =
+        '<div class="md3-detail__title">'+esc(p.name)+'</div>'
+      + '<div class="md3-detail__meta">'+esc([p.org, p.status].filter(Boolean).join(' · '))+'</div>'
+      + '<div class="kp-facts">'+facts.map(f => '<div class="kp-fact"><div class="kp-fact__k">'+esc(f[0])+'</div><div class="kp-fact__v">'+esc(f[1])+'</div></div>').join('')+'</div>'
+      + (p.blurb ? '<div class="kp-blurb">'+esc(p.blurb)+'</div>' : '')
+      + '<div class="md3-section-label" style="margin-top:16px;">Bus thread</div>'
+      + '<div class="md3-thread" data-thread><div class="md3-thread__empty">Loading…</div></div>'
+      + '<div class="md3-send-row"><textarea data-send placeholder="Message about '+esc(p.name)+'…"></textarea><button data-sendbtn>Send</button></div>';
+    loadThread(slug);
+    const btn = $dtl.querySelector('[data-sendbtn]'), inp = $dtl.querySelector('[data-send]');
+    if (btn && inp) btn.addEventListener('click', async () => {
+      const body = (inp.value||'').trim(); if (!body) return;
+      if (!window.supa) { btn.textContent = 'Bus offline'; setTimeout(()=>btn.textContent='Send',1500); return; }
+      btn.textContent = '…';
+      try {
+        // project_slug has an FK to forge_projects(slug) — must be a real slug.
+        const proj = p.division==='azck' ? 'azck-shop-office-cowork' : 'quadfang-cowork';
+        await window.supa.from('agent_messages').insert({ from_user:(typeof window.CC_BUS_IDENTITY==='function'?window.CC_BUS_IDENTITY():'alessio'), to_user:'forge-code', channel:'general', body, status:'sent', priority:'normal', thread_id:'contact:'+slug, project_slug:proj });
+        inp.value = ''; loadThread(slug);
+      } catch(e) { console.warn('[kp] send failed', e); btn.textContent = 'Send failed'; setTimeout(()=>btn.textContent='Send',1500); return; }
+      btn.textContent = 'Send';
+    });
+  }
+
+  async function loadThread(slug) {
+    const $th = $dtl.querySelector('[data-thread]'); if (!$th) return;
+    if (!window.supa) { $th.innerHTML = '<div class="md3-thread__empty">Bus offline — sign in to load messages.</div>'; return; }
+    try {
+      const { data } = await window.supa.from('agent_messages')
+        .select('from_user, body, sent_at, created_at, priority')
+        .eq('thread_id', 'contact:'+slug).is('archived_at', null)
+        .order('sent_at', { ascending:true }).limit(100);
+      if (!data || !data.length) { $th.innerHTML = '<div class="md3-thread__empty">No messages yet. Post the first update about this partner.</div>'; return; }
+      $th.innerHTML = data.map(m => '<div class="md3-thread__msg"><div class="md3-thread__meta">'+esc(m.from_user)+' · '+esc(ago(m.sent_at||m.created_at))+(m.priority==='urgent'?' · URGENT':'')+'</div>'+esc(m.body)+'</div>').join('');
+      $th.scrollTop = $th.scrollHeight;
+    } catch(e) { $th.innerHTML = '<div class="md3-thread__empty" style="color:#f85149">Bus load error.</div>'; }
+  }
+
+  pickBiz(B[0].id);
+  if (window.ccRealtimeBind) window.ccRealtimeBind('keypartners', ['agent_messages'], () => { if (curSlug) loadThread(curSlug); });
+  })();   // end live-contacts wrapper (bus #3416)
+};
+    </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
-<script defer src="assets/cc-col-resize.js?v=20260805-svcport"></script><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
+<script defer src="assets/cc-col-resize.js?v=20260805-svcport"></script>
+<script defer src="assets/cc-master-detail.js?v=20260805-kp"></script><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
 <script>
 'use strict';
 /* One Supabase client per tab (fleet law). Same house project as every face. */
@@ -1436,7 +1607,7 @@ const LANES = [
   ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
   ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','Moves in phase 3.'],
-  ['keypartners','KEY PARTNERS','The people the business runs with.','Moves in phase 3.'],
+  ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','Moves in phase 3.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
@@ -1471,6 +1642,9 @@ function switchLane(id){
   if(id==='services'){
     const t=(document.querySelector('#lane-services .cc-subpane.active')||{dataset:{}}).dataset.subtab||'calendar';
     svcRender(t);
+  }
+  if(id==='keypartners'){
+    (function retry(n){ if(window.supa && window.CCMasterDetail){ try{ window.renderKeyPartners(); }catch(e){ console.warn('[keypartners] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   }
 }
 
