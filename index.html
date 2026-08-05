@@ -1862,6 +1862,387 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
   </script>
   </section>
+  <!-- ════════ QUADFANG lane — ported from azck-faces 2026-08-05 (phase 3, port 5/6).
+       Progress + Finances + BMC ride mirrored iframe pages (assets/quadfang/, self-contained).
+       Tracker reads forge_tasks live (quadfang%); R&D bus reads agent_messages live.
+       qfBusSend signs from the session hook — never presigned. ════════ -->
+  <section class="lane faces-tokens" id="lane-quadfang" data-lane="quadfang">
+    <style>
+      [data-lane="quadfang"] .qf-viewer { flex:1 1 0%; min-height:0; background:#FBF8F2; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+      [data-lane="quadfang"] .qf-viewer iframe { width:100%; height:100%; border:0; display:block; background:#FBF8F2; }
+      /* Business Model Canvas — fixed 11x8.5in plate scaled to fit the subtab (bus #2373) */
+      [data-lane="quadfang"] .qf-bmc-viewport { flex:1 1 0%; min-height:0; overflow:auto; background:transparent; border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; align-items:flex-start; justify-content:center; }
+      [data-lane="quadfang"] .qf-bmc-sizer { position:relative; flex:0 0 auto; margin:0 auto; }
+      [data-lane="quadfang"] .qf-bmc-scaler { position:absolute; top:0; left:0; width:1056px; height:816px; transform-origin:top left; }
+      [data-lane="quadfang"] .qf-bmc-scaler iframe { width:1056px; height:816px; border:0; display:block; background:#1A1A1A; }
+      /* Blown-up single-section view (content cloned live from the canvas iframe) */
+      [data-lane="quadfang"] .qf-bmc-section { flex:1 1 0%; min-height:0; overflow:auto; border:1px solid var(--border); border-radius:6px; padding:22px 26px; background:transparent; }
+      [data-lane="quadfang"] .qf-bmc-section .hd { display:flex; align-items:center; gap:12px; margin:0 0 16px; padding-bottom:12px; border-bottom:2px solid var(--amber); }
+      [data-lane="quadfang"] .qf-bmc-section .ic { font-size:26px; line-height:1; background:none; width:auto; height:auto; color:inherit; }
+      [data-lane="quadfang"] .qf-bmc-section h2 { font-family:var(--display); font-size:22px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--text); margin:0; }
+      [data-lane="quadfang"] .qf-bmc-section .lead { font-style:italic; font-size:16px; line-height:1.45; color:var(--text); border-left:3px solid var(--amber); padding-left:12px; margin:0 0 16px; }
+      [data-lane="quadfang"] .qf-bmc-section .pricepill { display:inline-block; background:var(--amber); color:#000; font-family:var(--display); font-weight:700; font-size:15px; letter-spacing:.3px; padding:4px 13px; border-radius:13px; margin:0 0 12px; }
+      [data-lane="quadfang"] .qf-bmc-section ul { list-style:none; margin:0; padding:0; columns:1; }
+      [data-lane="quadfang"] .qf-bmc-section li { position:relative; font-size:15px; line-height:1.6; color:var(--text-dim); padding-left:20px; margin-bottom:11px; }
+      [data-lane="quadfang"] .qf-bmc-section li::before { content:""; position:absolute; left:2px; top:9px; width:6px; height:6px; background:var(--amber); border-radius:50%; }
+      [data-lane="quadfang"] .qf-bmc-section li b { color:var(--text); font-weight:700; }
+      /* BMC operator-style 3-col: Versions | Canvas | Bus at 1.5 / 3 / 2 (bus #2373) */
+      [data-lane="quadfang"] .rnd-3col.bmc3 { grid-template-columns:1.5fr 3fr 2fr; }
+      [data-lane="quadfang"] .bmc3 .qf-bmc-stage { min-height:0; height:100%; display:flex; flex-direction:column; }
+      [data-lane="quadfang"] .qf-bmc-bar { flex-shrink:0; display:flex; justify-content:flex-end; margin-bottom:8px; }
+      [data-lane="quadfang"] .qf-bmc-pdf { background:var(--amber); color:#000; border:0; border-radius:4px; padding:5px 13px; font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; }
+      [data-lane="quadfang"] .qf-bmc-pdf:hover { filter:brightness(1.08); }
+      [data-lane="quadfang"] .qf-bmc-versions { width:100%; box-sizing:border-box; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--sans); font-size:12px; }
+      [data-lane="quadfang"] .bmc-hint { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:8px; padding:8px; border:1px dashed var(--border); border-radius:4px; line-height:1.5; }
+      /* Mobile: enlarge the version dropdown + hint so they're readable on a phone. */
+      @media (max-width:1100px){
+        [data-lane="quadfang"] .qf-bmc-versions { font-size:16px; padding:10px; line-height:1.4; min-height:44px; }
+        [data-lane="quadfang"] .bmc-hint { font-size:13px; padding:10px; }
+      }
+      @media (max-width:1100px){ [data-lane="quadfang"] .rnd-3col.bmc3 { grid-template-columns:minmax(0,1fr); } } /* narrow: stack Versions / Canvas / Bus */
+      /* Mobile: let the canvas expand to the full screen width (edge-to-edge) and grow
+         tall enough to show it, instead of being crammed into a short stacked row. */
+      @media (max-width:1100px){
+        [data-lane="quadfang"] .bmc3 .qf-bmc-stage { height:auto; min-height:0; min-width:0; }
+        [data-lane="quadfang"] .qf-bmc-viewport { height:auto; min-height:0; min-width:0; width:100%; max-width:100%; padding:0; border:0; overflow-x:auto; overflow-y:visible; justify-content:flex-start; -webkit-overflow-scrolling:touch; }
+      }
+      /* Mobile: the desktop CC is a fixed single frame (no page scroll). On a phone the
+         stacked BMC columns (sections + canvas + bus) overflow one screen, so make the
+         QuadFang lane SCROLL while the sticky tab nav above it stays put. The bus, which
+         was trapped off-screen at the bottom, becomes reachable. */
+      @media (max-width:1100px){
+        .cc-lane[data-lane="quadfang"] { overflow-y:auto; -webkit-overflow-scrolling:touch; }
+        .cc-lane[data-lane="keypartners"] { overflow-y:auto; -webkit-overflow-scrolling:touch; }
+        [data-lane="quadfang"] .cc-subpane.active { overflow:visible; height:auto; min-height:0; flex:0 0 auto; }
+        [data-lane="quadfang"] .rnd-3col, [data-lane="quadfang"] .rnd-3col.bmc3 { height:auto; min-height:0; align-items:start; }
+        [data-lane="quadfang"] .rnd-col { overflow:visible; height:auto; min-height:0; }
+        [data-lane="quadfang"] .rnd-col--list { max-height:34vh; overflow-y:auto; }  /* compact section picker so the canvas sits up top, not buried under a long list */
+        [data-lane="quadfang"] .rnd-col--bus { overflow:visible; }
+        [data-lane="quadfang"] .rnd-bus { overflow:visible; height:auto; min-height:0; }
+      }
+      /* Mobile scroll for the OPERATOR lane (Projects, Buses, Tasks): same pattern as
+         QuadFang — the lane scrolls while the sticky tab nav stays put. Plans already
+         scrolls fine (plain cards) and is unaffected by these container overrides. */
+      @media (max-width:1100px){
+        .cc-lane[data-lane="operator"] { overflow-y:auto; -webkit-overflow-scrolling:touch; }
+        [data-lane="operator"] .cc-subpane.active { overflow:visible; height:auto; min-height:0; flex:0 0 auto; }
+        [data-lane="operator"] [data-subtab="projects"] #op-projects-mount { overflow:visible; height:auto; min-height:0; }
+        [data-lane="operator"] [data-subtab="buses-v2"] #bus-v2-mount { overflow:visible; height:auto; min-height:0; }
+        [data-lane="operator"] [data-subtab="tasks"] .ts3 { height:auto; min-height:0; }
+        [data-lane="operator"] [data-subtab="tasks"] .ts3-col { height:auto; min-height:0; max-height:none; }
+      }
+      [data-lane="quadfang"] .rnd-3col { display:grid; grid-template-columns:1.4fr 2.3fr 2.1fr; gap:var(--sp-10); height:100%; min-height:0; align-items:stretch; }
+      @media (max-width:700px){ [data-lane="quadfang"] .rnd-3col { grid-template-columns:1fr; } [data-lane="quadfang"] .rnd-col--bus { grid-column:auto; } [data-lane="quadfang"] .rnd-col--detail { max-height:60vh; overflow-y:auto; } } /* 700 (was 1100) — iPads keep columns + resize, 2026-06-09 */
+      [data-lane="quadfang"] .rnd-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+      [data-lane="quadfang"] .rnd-col--bus { overflow:hidden; }
+      [data-lane="quadfang"] .rnd-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; }
+      [data-lane="quadfang"] .rnd-row { padding:8px 10px; border:1px solid transparent; border-left:2px solid transparent; border-radius:4px; cursor:pointer; margin-bottom:4px; }
+      [data-lane="quadfang"] .rnd-row:hover { background:var(--raised); border-left-color:var(--amber-dim); }
+      [data-lane="quadfang"] .rnd-row.selected { background:var(--amber-soft); border-left-color:var(--amber); }
+      [data-lane="quadfang"] .rnd-row__top { display:flex; align-items:center; gap:8px; }
+      [data-lane="quadfang"] .rnd-row__name { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--text); flex:1; min-width:0; }
+      [data-lane="quadfang"] .rnd-row__sub { font-size:10.5px; color:var(--text-dim); margin-top:3px; line-height:1.4; }
+      [data-lane="quadfang"] .rnd-pill { font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:0.04em; padding:2px 7px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+      [data-lane="quadfang"] .rnd-pill.ok { background:rgba(46,125,84,.18); color:#5cc99a; }
+      [data-lane="quadfang"] .rnd-pill.warn { background:var(--amber-soft); color:var(--amber); }
+      [data-lane="quadfang"] .rnd-pill.bad { background:rgba(180,69,47,.22); color:#f08a6e; }
+      [data-lane="quadfang"] .rnd-pill.neu { background:var(--raised); color:var(--text-dim); border:1px solid var(--border); }
+      [data-lane="quadfang"] .rnd-detail__card { display:none; }
+      [data-lane="quadfang"] .rnd-detail__title { font-family:var(--display); font-size:16px; font-weight:700; color:var(--text); margin-bottom:4px; }
+      [data-lane="quadfang"] .rnd-detail__meta { font-family:var(--mono); font-size:10px; color:var(--text-xs); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px; }
+      [data-lane="quadfang"] .rnd-detail__body { font-size:13px; color:var(--text-dim); line-height:1.55; }
+      [data-lane="quadfang"] .rnd-bus { flex:1 1 0%; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+      [data-lane="quadfang"] .rnd-bus__compose { flex-shrink:0; display:flex; gap:6px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+      [data-lane="quadfang"] .rnd-bus__text { flex:1; min-width:0; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:3px; padding:6px 8px; font-family:var(--sans); font-size:12px; line-height:1.4; resize:vertical; min-height:38px; max-height:160px; box-sizing:border-box; }
+      [data-lane="quadfang"] .rnd-bus__text:focus { outline:none; border-color:var(--amber); }
+      [data-lane="quadfang"] .rnd-bus__send { flex-shrink:0; background:var(--amber); color:#000; border:0; border-radius:3px; padding:0 14px; font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+      [data-lane="quadfang"] .rnd-bus__send:hover { background:var(--amber-hi,#ffb000); }
+      [data-lane="quadfang"] .rnd-bus__send:disabled { opacity:.5; cursor:wait; }
+      [data-lane="quadfang"] .rnd-bus__msg { background:var(--raised); border:1px solid var(--border); border-radius:4px; padding:6px 9px; }
+      [data-lane="quadfang"] .rnd-bus__head { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; }
+      [data-lane="quadfang"] .rnd-bus__from { color:var(--amber); font-weight:700; }
+      [data-lane="quadfang"] .rnd-bus__body { font-size:11.5px; color:var(--text); line-height:1.45; white-space:pre-wrap; word-wrap:break-word; }
+      [data-lane="quadfang"] .rnd-bus__empty { font-family:var(--mono); font-size:10px; color:var(--text-xs); text-align:center; padding:14px; border:1px dashed var(--border); border-radius:4px; }
+    </style>
+
+    <div class="cc-subpane active" data-subtab="progress">
+      <div class="qf-viewer"><iframe src="assets/quadfang/quadfang-progress.html" title="QuadFang Progress Command Center"></iframe></div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="finances">
+      <div class="qf-viewer"><iframe src="assets/quadfang/quadfang-finance.html" title="QuadFang Finance Overview"></iframe></div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="prototype">
+      <div class="rnd-3col">
+        <div class="rnd-col rnd-col--list">
+          <div class="rnd-col__head">Prototype · QF-100</div>
+          <div class="rnd-row selected" data-detail="b1"><div class="rnd-row__top"><span class="rnd-row__name">Batch 1 — 10 units milled</span><span class="rnd-pill warn">SOFT ~34 HRC</span></div><div class="rnd-row__sub">17-4PH · local machine shop · 2 HT + sharpened</div></div>
+          <div class="rnd-row" data-detail="b2"><div class="rnd-row__top"><span class="rnd-row__name">Batch 2 — H900 temper</span><span class="rnd-pill bad">UNCONFIRMED</span></div><div class="rnd-row__sub">Condition A confirmed · temper due 05-29</div></div>
+          <div class="rnd-row" data-detail="b3"><div class="rnd-row__top"><span class="rnd-row__name">6 prototypes</span><span class="rnd-pill neu">PENDING</span></div><div class="rnd-row__sub">Not yet heat-treated</div></div>
+          <div class="rnd-row" data-detail="b4"><div class="rnd-row__top"><span class="rnd-row__name">Target hardness</span><span class="rnd-pill neu">SPEC</span></div><div class="rnd-row__sub">42–47 HRC</div></div>
+        </div>
+        <div class="rnd-col rnd-col--detail">
+          <div class="rnd-col__head">Detail</div>
+          <div class="rnd-detail__card" data-detail="b1" style="display:block"><div class="rnd-detail__title">Batch 1 — 10 units milled</div><div class="rnd-detail__meta">17-4PH · local machine shop</div><div class="rnd-detail__body">10 units milled. 2 heat-treated + sharpened, out field-testing with hunters. Came in soft (~34 HRC) — stock wasn't Condition A, so the field samples are imperfect. Target 42–47 HRC.</div></div>
+          <div class="rnd-detail__card" data-detail="b2"><div class="rnd-detail__title">Batch 2 — H900 temper</div><div class="rnd-detail__meta">solution-treated · Condition A</div><div class="rnd-detail__body">Solution-treated to Condition A (confirmed). H900 temper scheduled 2026-05-29 — result still unconfirmed. This batch proves the hardness spec.</div></div>
+          <div class="rnd-detail__card" data-detail="b3"><div class="rnd-detail__title">6 prototypes</div><div class="rnd-detail__meta">awaiting heat-treat</div><div class="rnd-detail__body">Six prototypes milled, not yet heat-treated. Queue behind the Batch 2 result so the temper recipe is locked first.</div></div>
+          <div class="rnd-detail__card" data-detail="b4"><div class="rnd-detail__title">Target hardness</div><div class="rnd-detail__meta">spec · 42–47 HRC</div><div class="rnd-detail__body">The blade needs 42–47 HRC to hold an edge without going brittle. Batch 1 landed soft because the stock wasn't Condition A.</div></div>
+        </div>
+        <div class="rnd-col rnd-col--bus">
+          <div class="rnd-col__head">QuadFang bus</div>
+          <div data-bus-composer data-project-slug="quadfang-cc" data-on-sent="renderRnd" data-label="New bus message" data-placeholder="Type a message to log on the QuadFang bus…"></div>
+          <div class="rnd-bus" data-rnd-bus><div class="rnd-bus__empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="roadmap">
+      <div class="rnd-3col">
+        <div class="rnd-col rnd-col--list">
+          <div class="rnd-col__head">Roadmap</div>
+          <div class="rnd-row selected" data-detail="r1"><div class="rnd-row__top"><span class="rnd-row__name">1 · Prototype proven</span><span class="rnd-pill warn">IN PROGRESS</span></div><div class="rnd-row__sub">Hardness + field feedback</div></div>
+          <div class="rnd-row" data-detail="r2"><div class="rnd-row__top"><span class="rnd-row__name">2 · Manufacturing route</span><span class="rnd-pill warn">DECIDE</span></div><div class="rnd-row__sub">CNC vs casting vs milling</div></div>
+          <div class="rnd-row" data-detail="r3"><div class="rnd-row__top"><span class="rnd-row__name">3 · Funding secured</span><span class="rnd-pill warn">Q2 ENDS 06-30</span></div><div class="rnd-row__sub">6 tracks · AI in motion</div></div>
+          <div class="rnd-row" data-detail="r4"><div class="rnd-row__top"><span class="rnd-row__name">4 · Field test pass</span><span class="rnd-pill neu">PENDING</span></div><div class="rnd-row__sub">2 hunters carrying heads</div></div>
+          <div class="rnd-row" data-detail="r5"><div class="rnd-row__top"><span class="rnd-row__name">5 · Launch / store</span><span class="rnd-pill bad">PAUSED</span></div><div class="rnd-row__sub">Shopify closed 06-01</div></div>
+        </div>
+        <div class="rnd-col rnd-col--detail">
+          <div class="rnd-col__head">Detail</div>
+          <div class="rnd-detail__card" data-detail="r1" style="display:block"><div class="rnd-detail__title">Prototype proven</div><div class="rnd-detail__meta">milestone 1</div><div class="rnd-detail__body">Heat-treat consistent at 42–47 HRC plus real field feedback from the hunters carrying Batch 1. Unlocks everything downstream.</div></div>
+          <div class="rnd-detail__card" data-detail="r2"><div class="rnd-detail__title">Manufacturing route</div><div class="rnd-detail__meta">milestone 2 · decide</div><div class="rnd-detail__body">First Swiss shop says the 4-blade geometry won't turn. Routes: live-tooling / multi-axis CNC, casting + finish, or keep milling. Pick a lane to quote next.</div></div>
+          <div class="rnd-detail__card" data-detail="r3"><div class="rnd-detail__title">Funding secured</div><div class="rnd-detail__meta">milestone 3 · Q2 ends 06-30</div><div class="rnd-detail__body">6 tracks (SR&amp;ED · IRAP · CDAP · AMPG · AWE BRIDGE · Futurpreneur). Alberta Innovates in motion; SR&amp;ED story strong.</div></div>
+          <div class="rnd-detail__card" data-detail="r4"><div class="rnd-detail__title">Field test pass</div><div class="rnd-detail__meta">milestone 4 · pending</div><div class="rnd-detail__body">Two hunters carry Batch 1 heads. Their feedback decides whether geometry + hardness are right.</div></div>
+          <div class="rnd-detail__card" data-detail="r5"><div class="rnd-detail__title">Launch / store</div><div class="rnd-detail__meta">milestone 5 · paused</div><div class="rnd-detail__body">Shopify store closed 06-01; relaunch once the manufacturing route is locked and stock is real.</div></div>
+        </div>
+        <div class="rnd-col rnd-col--bus">
+          <div class="rnd-col__head">QuadFang bus</div>
+          <div data-bus-composer data-project-slug="quadfang-cc" data-on-sent="renderRnd" data-label="New bus message" data-placeholder="Type a message to log on the QuadFang bus…"></div>
+          <div class="rnd-bus" data-rnd-bus><div class="rnd-bus__empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="planner">
+      <div class="rnd-3col">
+        <div class="rnd-col rnd-col--list">
+          <div class="rnd-col__head">Planner · open</div>
+          <div class="rnd-row selected" data-detail="p1"><div class="rnd-row__top"><span class="rnd-row__name">Decide manufacturing route</span><span class="rnd-pill warn">OPEN</span></div><div class="rnd-row__sub">Pick the lane to test next</div></div>
+          <div class="rnd-row" data-detail="p2"><div class="rnd-row__top"><span class="rnd-row__name">Lock funding ask</span><span class="rnd-pill warn">OPEN</span></div><div class="rnd-row__sub">Amount + use-of-funds for Jane</div></div>
+          <div class="rnd-row" data-detail="p3"><div class="rnd-row__top"><span class="rnd-row__name">Chase Horizon + Gambit</span><span class="rnd-pill warn">WAITING</span></div><div class="rnd-row__sub">Quotes + Aurora live-tooling</div></div>
+          <div class="rnd-row" data-detail="p4"><div class="rnd-row__top"><span class="rnd-row__name">Confirm Batch 2 result</span><span class="rnd-pill bad">OVERDUE</span></div><div class="rnd-row__sub">Was due 05-29</div></div>
+          <div class="rnd-row" data-detail="p5"><div class="rnd-row__top"><span class="rnd-row__name">Reply to grant check-in</span><span class="rnd-pill warn">AWAITING YOU</span></div><div class="rnd-row__sub">bus #1976</div></div>
+        </div>
+        <div class="rnd-col rnd-col--detail">
+          <div class="rnd-col__head">Detail</div>
+          <div class="rnd-detail__card" data-detail="p1" style="display:block"><div class="rnd-detail__title">Decide manufacturing route</div><div class="rnd-detail__meta">open decision</div><div class="rnd-detail__body">Swiss looks unlikely. Pick the next lane to test: live-tooling CNC quote (Aurora offered), casting + finish, or keep milling. Gates the roadmap.</div></div>
+          <div class="rnd-detail__card" data-detail="p2"><div class="rnd-detail__title">Lock funding ask</div><div class="rnd-detail__meta">open decision</div><div class="rnd-detail__body">Lock the amount + use-of-funds you'll name to Jane / Innovate NW. Bring the pitch deck, not the business plan.</div></div>
+          <div class="rnd-detail__card" data-detail="p3"><div class="rnd-detail__title">Chase Horizon + Gambit</div><div class="rnd-detail__meta">waiting on replies</div><div class="rnd-detail__body">Horizon emailed 05-01, no reply. Gambit unclear. Decide on Aurora's live-tooling offer (fixture cost).</div></div>
+          <div class="rnd-detail__card" data-detail="p4"><div class="rnd-detail__title">Confirm Batch 2 H900 result</div><div class="rnd-detail__meta">overdue · was 05-29</div><div class="rnd-detail__body">The temper result is the gap. Chase the local machine shop for the H900 hardness numbers.</div></div>
+          <div class="rnd-detail__card" data-detail="p5"><div class="rnd-detail__title">Reply to grant check-in</div><div class="rnd-detail__meta">awaiting you · bus #1976</div><div class="rnd-detail__body">The grant tracker has status notes but no dates yet. Your reply sets the weekly check-in cadence.</div></div>
+        </div>
+        <div class="rnd-col rnd-col--bus">
+          <div class="rnd-col__head">QuadFang bus</div>
+          <div data-bus-composer data-project-slug="quadfang-cc" data-on-sent="renderRnd" data-label="New bus message" data-placeholder="Type a message to log on the QuadFang bus…"></div>
+          <div class="rnd-bus" data-rnd-bus><div class="rnd-bus__empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="tracker">
+      <div class="rnd-3col">
+        <div class="rnd-col rnd-col--list">
+          <div class="rnd-col__head">QuadFang tasks</div>
+          <div data-qf-tracker-list><div class="rnd-bus__empty">Loading tasks…</div></div>
+        </div>
+        <div class="rnd-col rnd-col--detail">
+          <div class="rnd-col__head">Detail</div>
+          <div data-qf-tracker-detail><div class="rnd-detail__body" style="color:var(--text-xs)">Pick a task on the left to see its detail.</div></div>
+        </div>
+        <div class="rnd-col rnd-col--bus">
+          <div class="rnd-col__head">QuadFang bus</div>
+          <div data-bus-composer data-project-slug="quadfang-cc" data-on-sent="renderRnd" data-label="New bus message" data-placeholder="Type a message to log on the QuadFang bus…"></div>
+          <div class="rnd-bus" data-rnd-bus><div class="rnd-bus__empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-subpane" data-subtab="bmc">
+      <div class="rnd-3col bmc3">
+        <div class="rnd-col rnd-col--list">
+          <div class="rnd-col__head">Sections</div>
+          <select class="qf-bmc-versions" data-bmc-versions aria-label="Canvas version">
+            <option value="assets/quadfang/quadfang-business-model-canvas.html?rev=2026-07-02">Current · rev 2026-07-02</option>
+          </select>
+          <div data-bmc-list><div class="rnd-bus__empty">Loading sections…</div></div>
+          <div class="bmc-hint">Pick a section to blow it up in the middle. "Full Canvas" shows the whole sheet.</div>
+        </div>
+        <div class="qf-bmc-stage">
+          <div class="qf-bmc-bar"><button type="button" class="qf-bmc-pdf" data-bmc-print title="Print the canvas — or pick 'Save as PDF' in the dialog for a clean one-page file">⬇ Save / Print PDF</button></div>
+          <div class="qf-bmc-viewport" data-qf-bmc>
+            <div class="qf-bmc-sizer">
+              <div class="qf-bmc-scaler">
+                <!-- keep ?rev= in step with the canvas rev date — it busts the browser cache
+                     so the Sections column + sheet always show the freshly deployed copy -->
+                <iframe src="assets/quadfang/quadfang-business-model-canvas.html?rev=2026-07-02" title="QuadFang Business Model Canvas" scrolling="no"></iframe>
+              </div>
+            </div>
+          </div>
+          <div class="qf-bmc-section" data-bmc-sectionview style="display:none"></div>
+        </div>
+        <div class="rnd-col rnd-col--bus">
+          <div class="rnd-col__head">QuadFang bus</div>
+          <div data-bus-composer data-project-slug="quadfang-cc" data-on-sent="renderRnd" data-label="New bus message" data-placeholder="Type a message to log on the QuadFang bus…"></div>
+          <div class="rnd-bus" data-rnd-bus><div class="rnd-bus__empty">Loading…</div></div>
+        </div>
+      </div>
+      <script>
+      (function(){
+        var sc = document.currentScript, pane = sc.parentElement;
+        var vp = pane.querySelector('[data-qf-bmc]');
+        if (!vp) return;
+        var sizer = pane.querySelector('.qf-bmc-sizer');
+        var scaler = pane.querySelector('.qf-bmc-scaler');
+        var iframe = pane.querySelector('.qf-bmc-scaler iframe');
+        var sectionView = pane.querySelector('[data-bmc-sectionview]');
+        var list = pane.querySelector('[data-bmc-list]');
+        var sel = pane.querySelector('[data-bmc-versions]');
+        var W = 1056, H = 816; // 11in x 8.5in @ 96dpi
+        function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+        function fit(){
+          if (vp.style.display === 'none') return;
+          // Narrow / mobile: render the canvas BIG and readable — MOBILE_ZOOM x the
+          // fit-to-width size — so there is real room to read + scroll. The lane scrolls
+          // DOWN through it; the canvas viewport scrolls sideways for the full width.
+          var MOBILE_ZOOM = 4;
+          var narrow = window.matchMedia('(max-width:1100px)').matches;
+          var pad = narrow ? 0 : 20;
+          var aw = vp.clientWidth - pad, ah = vp.clientHeight - pad;
+          if (aw <= 0) return;
+          var s = narrow ? (aw / W) * MOBILE_ZOOM : Math.min(aw / W, ah / H);
+          if (!isFinite(s) || s <= 0) s = aw / W;
+          scaler.style.transform = 'scale(' + s + ')';
+          sizer.style.width = (W * s) + 'px';
+          sizer.style.height = (H * s) + 'px';
+        }
+        function showFull(){ sectionView.style.display = 'none'; vp.style.display = 'flex'; fit(); }
+        function showSection(box){ vp.style.display = 'none'; sectionView.style.display = 'block'; sectionView.innerHTML = box.innerHTML; sectionView.scrollTop = 0; }
+        function getDoc(){ try { return iframe.contentDocument || iframe.contentWindow.document; } catch(e){ return null; } }
+        function buildList(){
+          var doc = getDoc(); if (!doc) return;
+          var boxes = doc.querySelectorAll('.grid .box'); if (!boxes.length) return;
+          var html = '<div class="rnd-row selected" data-bmc-full><div class="rnd-row__top"><span class="rnd-row__name">Full Canvas</span><span class="rnd-pill ok">ALL</span></div><div class="rnd-row__sub">the whole one-page canvas</div></div>';
+          Array.prototype.forEach.call(boxes, function(box, i){
+            var h2 = box.querySelector('h2'); var title = h2 ? h2.textContent.trim() : ('Section ' + (i+1));
+            var pts = Array.prototype.map.call(box.querySelectorAll('li'), function(li){ return li.textContent.trim(); });
+            var prev = pts.slice(0,3).join(' · '); if (prev.length > 96) prev = prev.slice(0,94) + '…';
+            html += '<div class="rnd-row" data-bmc-idx="' + i + '"><div class="rnd-row__top"><span class="rnd-row__name">' + esc(title) + '</span></div><div class="rnd-row__sub">' + (esc(prev) || '&nbsp;') + '</div></div>';
+          });
+          list.innerHTML = html;
+          list.querySelectorAll('.rnd-row').forEach(function(row){
+            row.addEventListener('click', function(){
+              list.querySelectorAll('.rnd-row').forEach(function(r){ r.classList.remove('selected'); });
+              row.classList.add('selected');
+              if (row.hasAttribute('data-bmc-full')) { showFull(); return; }
+              var d = getDoc(); if (!d) return;
+              var bx = d.querySelectorAll('.grid .box')[parseInt(row.getAttribute('data-bmc-idx'), 10)];
+              if (bx) showSection(bx);
+            });
+          });
+        }
+        iframe.addEventListener('load', function(){ buildList(); showFull(); });
+        if (getDoc() && getDoc().readyState === 'complete') { buildList(); }
+        if (sel) { sel.addEventListener('change', function(){ iframe.setAttribute('src', sel.value); }); }
+        if (window.ResizeObserver) { new ResizeObserver(fit).observe(vp); }
+        window.addEventListener('resize', fit);
+        showFull();
+        // Save / Print PDF — print the full canvas iframe. The canvas HTML carries
+        // @page{size:11in 8.5in;margin:0} + exact-color printing, so the browser's
+        // Save-as-PDF yields a clean one-page Letter plate (same option as After-Hours).
+        var printBtn = pane.querySelector('[data-bmc-print]');
+        if (printBtn) printBtn.addEventListener('click', function(){
+          var url = sel.value;
+          var mobile = window.matchMedia('(max-width:1100px)').matches || /Mobi|Android|iP(hone|ad|od)/i.test(navigator.userAgent);
+          if (mobile) {
+            // Mobile browsers print the WHOLE page when asked to print an embedded
+            // iframe — open the standalone canvas so Save/Print captures only it.
+            window.open(url, '_blank', 'noopener');
+            return;
+          }
+          showFull();
+          setTimeout(function(){
+            try { iframe.contentWindow.focus(); iframe.contentWindow.print(); }
+            catch(e){ try { window.open(url, '_blank', 'noopener'); } catch(_){} }
+          }, 80);
+        });
+      })();
+      </script>
+    </div>
+    <script>
+/* ═══ R&D lane (Alessio direct 2026-06-04) — Prototype / Roadmap / Planner.
+   Click a list row → show its detail; right column = live QuadFang bus (read-only v1). ═══ */
+(function(){
+  document.addEventListener('click', function(e){
+    var row = e.target.closest('[data-lane="quadfang"] .rnd-row');
+    if (!row) return;
+    var pane = row.closest('.cc-subpane'); if (!pane) return;
+    pane.querySelectorAll('.rnd-row').forEach(function(r){ r.classList.remove('selected'); });
+    row.classList.add('selected');
+    var id = row.getAttribute('data-detail');
+    pane.querySelectorAll('.rnd-detail__card').forEach(function(c){ c.style.display = (c.getAttribute('data-detail') === id) ? 'block' : 'none'; });
+  });
+})();
+window.renderRnd = function(attempt){
+  attempt = attempt || 0;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  if (!window.supa){ if (attempt < 40) setTimeout(function(){ window.renderRnd(attempt+1); }, 150); return; }
+  window.supa.from('agent_messages')
+    .select('from_user,to_user,channel,body,created_at')
+    .like('project_slug','quadfang%')
+    .order('created_at',{ascending:false}).limit(14)
+    .then(function(res){
+      var rows = (res && res.data) || [];
+      var html = rows.length ? rows.map(function(m){
+        var when = ''; try { when = new Date(m.created_at).toLocaleString(); } catch(e){}
+        return '<div class="rnd-bus__msg"><div class="rnd-bus__head"><span class="rnd-bus__from">'+esc(m.from_user)+'</span> &rarr; '+esc(m.to_user)+' &middot; '+esc(when)+'</div><div class="rnd-bus__body">'+esc((m.body||'').slice(0,400))+'</div></div>';
+      }).join('') : '<div class="rnd-bus__empty">No QuadFang bus messages yet.</div>';
+      document.querySelectorAll('[data-lane="quadfang"] [data-rnd-bus]').forEach(function(b){ b.innerHTML = html; });
+    })
+    .catch(function(){ document.querySelectorAll('[data-lane="quadfang"] [data-rnd-bus]').forEach(function(b){ b.innerHTML = '<div class="rnd-bus__empty">Bus unavailable right now.</div>'; }); });
+};
+/* QuadFang bus compose — post to agent_messages (project quadfang-cc) then refresh. */
+window.qfBusSend = function(btn){
+  var compose = btn.closest('.rnd-bus__compose'); if (!compose) return;
+  var ta = compose.querySelector('.rnd-bus__text'); if (!ta) return;
+  var body = (ta.value || '').trim(); if (!body) return;
+  if (!window.supa) return;
+  btn.disabled = true;
+  window.supa.from('agent_messages').insert({ from_user:(typeof window.CC_BUS_IDENTITY==='function'?window.CC_BUS_IDENTITY():'alessio'), to_user:'forge-cowork', channel:'general', priority:'normal', status:'sent', project_slug:'quadfang-cc', body: body })
+    .then(function(){ ta.value=''; btn.disabled=false; if (window.renderRnd) window.renderRnd(); })
+    .catch(function(){ btn.disabled=false; });
+};
+/* QuadFang Tracker — live forge_tasks (project_slug like quadfang%). */
+window.renderQfTracker = function(attempt){
+  attempt = attempt || 0;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  if (!window.supa){ if (attempt < 40) setTimeout(function(){ window.renderQfTracker(attempt+1); }, 150); return; }
+  window.supa.from('forge_tasks').select('id,title,status,body').like('project_slug','quadfang%').order('updated_at',{ascending:false}).limit(25)
+    .then(function(res){
+      var rows = (res && res.data) || [];
+      var pillFor = function(s){ if (s==='done'||s==='deployed') return 'ok'; if (s==='in_progress'||s==='pending_deploy'||s==='pending_audit') return 'warn'; if (s==='parked'||s==='waiting_guidance'||s==='reverted') return 'bad'; return 'neu'; };
+      var list = rows.length ? rows.map(function(tk){
+        return '<div class="rnd-row" data-detail="tk-'+esc(tk.id)+'"><div class="rnd-row__top"><span class="rnd-row__name">'+esc(tk.title)+'</span><span class="rnd-pill '+pillFor(tk.status)+'">'+esc(String(tk.status||'').replace(/_/g,' '))+'</span></div></div>';
+      }).join('') : '<div class="rnd-bus__empty">No QuadFang tasks yet.</div>';
+      var detail = rows.length ? rows.map(function(tk,i){
+        return '<div class="rnd-detail__card" data-detail="tk-'+esc(tk.id)+'"'+(i===0?' style="display:block"':'')+'><div class="rnd-detail__title">'+esc(tk.title)+'</div><div class="rnd-detail__meta">'+esc(String(tk.status||'').replace(/_/g,' '))+'</div><div class="rnd-detail__body">'+esc(tk.body||'No detail.')+'</div></div>';
+      }).join('') : '<div class="rnd-detail__body" style="color:var(--text-xs)">No tasks.</div>';
+      document.querySelectorAll('[data-lane="quadfang"] [data-qf-tracker-list]').forEach(function(el){ el.innerHTML = list; });
+      document.querySelectorAll('[data-lane="quadfang"] [data-qf-tracker-detail]').forEach(function(el){ el.innerHTML = detail; });
+    })
+    .catch(function(){ document.querySelectorAll('[data-lane="quadfang"] [data-qf-tracker-list]').forEach(function(el){ el.innerHTML='<div class="rnd-bus__empty">Tasks unavailable right now.</div>'; }); });
+};
+    </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
@@ -1888,7 +2269,7 @@ const LANES = [
   ['dashboard','DASHBOARD','The business at a glance.','Phase 3 builds this last, from real lanes.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','Moves in phase 3.'],
-  ['quadfang','QUADFANG','The broadheads division.','Moves in phase 3.'],
+  ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
@@ -1932,11 +2313,23 @@ function switchLane(id){
   if(id==='comms'){
     (function retry(n){ if(window.supa && window.renderBusRecent){ try{ window.renderBusRecent(); }catch(e){ console.warn('[comms] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   }
+  if(id==='quadfang'){
+    setTimeout(()=>{ try{ window.renderRnd && window.renderRnd(); window.renderQfTracker && window.renderQfTracker(); }catch(e){ console.warn('[qf] render failed',e); } }, 50);
+  }
 }
 
 /* ── subnav: per-lane subtabs. Services first; later phase-3 lanes add rows here.
    Order inside a row is his — new subtabs go LAST (the faces reshuffle lesson). ── */
 const SUBNAV = {
+  quadfang: [
+    { id:'progress',  label:'Progress'  },
+    { id:'prototype', label:'Prototype' },
+    { id:'roadmap',   label:'Roadmap'   },
+    { id:'planner',   label:'Planner'   },
+    { id:'tracker',   label:'Tracker'   },
+    { id:'bmc',       label:'Business Model Canvas' },
+    { id:'finances',  label:'Finances'  },
+  ],
   comms: [
     { id:'bus',  label:'Bus'  },
     { id:'chat', label:'Chat' },

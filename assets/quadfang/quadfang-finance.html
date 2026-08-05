@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuadFang Finances</title><style>
+:root{--orange:#E85D2C;--charcoal:#2B2B2B;--ink:#33373B;--cream:#FBF8F2;--card:#fff;--steel:#5C666E;--line:#E3DDD2;--green:#2E7D54;--red:#B4452F;--steel-soft:#EEF1F3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--cream);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 18px 50px}
+header{display:flex;align-items:flex-end;gap:14px;border-bottom:3px solid var(--orange);padding-bottom:12px;margin-bottom:16px}
+h1{font-size:20px;font-weight:800;letter-spacing:.5px;color:var(--charcoal);text-transform:uppercase}
+h1 span{color:var(--orange)}
+.asof{margin-left:auto;text-align:right;font-size:11px;color:var(--steel)}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--orange);border-radius:10px;padding:11px 12px}
+.kpi .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--steel);font-weight:700}
+.kpi .v{font-size:18px;font-weight:800;color:var(--charcoal);margin-top:3px}
+.kpi .v.neg{color:var(--red)} .kpi .v.pos{color:var(--green)}
+h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--charcoal);margin:18px 0 7px;display:flex;align-items:center;gap:7px}
+h2::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--orange)}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:12.5px}
+th,td{text-align:left;padding:7px 10px;border-top:1px solid var(--line)}
+thead th{background:var(--charcoal);color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;border:none}
+td.amt,th.amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.tot td{font-weight:800;color:var(--charcoal);background:var(--steel-soft)}
+.yescell{color:var(--green);font-weight:700}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.note{margin-top:8px;font-size:11px;color:var(--steel)}
+.callout{background:#FBE9E0;border:1px solid var(--orange);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--charcoal);margin-top:8px}
+footer{margin-top:22px;padding-top:10px;border-top:1px solid var(--line);font-size:10.5px;color:var(--steel);text-align:center}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.asof{display:none}}
+</style></head><body><div class="wrap">
+<header><div><h1><span>QUADFANG</span> Financial Overview</h1>
+<div style="font-size:11px;color:var(--steel);margin-top:3px">Premium Broadheads - a division of AZCK</div></div>
+<div class="asof">Single source:<br><b>QuadFang_Budget_Financials.xlsx</b><br>generated 2026-06-08</div></header>
+<div class="kpis"><div class="kpi"><div class="l">Total Money In</div><div class="v">$3,111.90</div></div><div class="kpi"><div class="l">Total Money Out</div><div class="v">$3,254.13</div></div><div class="kpi"><div class="l">Net Cash Position</div><div class="v neg">-$142.23</div></div><div class="kpi"><div class="l">R&D-eligible spend to date</div><div class="v">$2,708.15</div></div><div class="kpi"><div class="l">Est. SR&ED refund (35%)</div><div class="v">$947.85</div></div></div>
+<div class="callout">Billing model: standing retainer + pass-through costs absorbed; Alessio time tracked at $100/hr (deferred). Credit running back to Kyran: <b>$147.00</b> (March over-charge + surplus).</div>
+<h2>By month (timeline)</h2>
+<table><thead><tr><th>Month</th><th class="amt">Money In</th><th class="amt">Money Out</th><th class="amt">Net</th></tr></thead><tbody><tr class=''><td>Apr 2026</td><td class='amt'>$500.00</td><td class='amt'>$614.24</td><td class='amt'>-$114.24</td></tr><tr class=''><td>May 2026</td><td class='amt'>$0.00</td><td class='amt'>$2,639.89</td><td class='amt'>-$2,639.89</td></tr><tr class=''><td>Jun 2026</td><td class='amt'>$2,611.90</td><td class='amt'>$0.00</td><td class='amt'>$2,611.90</td></tr><tr class='tot'><td>Total</td><td class='amt'>$3,111.90</td><td class='amt'>$3,254.13</td><td class='amt'>-$142.23</td></tr></tbody></table>
+<div class="cols">
+<div><h2>Money In - from Kyran</h2>
+<table><thead><tr><th>Date</th><th>Source</th><th>Type</th><th class="amt">Amount</th></tr></thead><tbody><tr><td>2026-04-30</td><td>Kyran</td><td>Owner funding</td><td class='amt'>$500.00</td></tr><tr><td>2026-06-04</td><td>Kyran</td><td>Owner funding</td><td class='amt'>$525.00</td></tr><tr><td>2026-06-04</td><td>Kyran</td><td>Other</td><td class='amt'>$2,086.90</td></tr><tr class='tot'><td colspan='3'>Total Money In</td><td class='amt'>$3,111.90</td></tr></tbody></table></div>
+<div><h2>Money Out - logged spend</h2>
+<table><thead><tr><th>Date</th><th>Category</th><th>Payee</th><th class="amt">Amount</th><th>R&amp;D</th></tr></thead><tbody><tr><td>2026-05-20</td><td>Prototyping & R&D</td><td>local machine shop</td><td class='amt'>$2,086.90</td><td><span class='yescell'>Y</span></td></tr><tr><td>2026-04-01</td><td>Software</td><td>UseAI</td><td class='amt'>$64.99</td><td></td></tr><tr><td>2026-04-01</td><td>Software</td><td>Shopify</td><td class='amt'>$1.00</td><td></td></tr><tr><td>2026-04-01</td><td>Utilities</td><td>Internet (Telus/Shaw at 9602 115 St)</td><td class='amt'>$60.00</td><td></td></tr><tr><td>2026-05-01</td><td>Software</td><td>UseAI</td><td class='amt'>$64.99</td><td></td></tr><tr><td>2026-05-01</td><td>Software</td><td>Shopify</td><td class='amt'>$1.00</td><td></td></tr><tr><td>2026-05-01</td><td>Utilities</td><td>Internet (Telus/Shaw at 9602 115 St)</td><td class='amt'>$60.00</td><td></td></tr><tr><td>2026-04-27</td><td>Software</td><td>Anthropic (Claude Max plan - QF 50% share)</td><td class='amt'>$147.00</td><td></td></tr><tr><td>2026-05-27</td><td>Software</td><td>Anthropic (Claude Max plan - QF 50% share)</td><td class='amt'>$147.00</td><td></td></tr><tr><td>2026-04-28</td><td>Prototyping & R&D - Design</td><td>local machine shop</td><td class='amt'>$341.25</td><td><span class='yescell'>Y</span></td></tr><tr><td>2026-05-20</td><td>Internal Service - AZCK to QF</td><td>AZCK shop (heat-treat services)</td><td class='amt'>$100.00</td><td><span class='yescell'>Y</span></td></tr><tr><td>2026-05-20</td><td>Internal Service - AZCK to QF</td><td>AZCK shop (hand-sharpening services)</td><td class='amt'>$40.00</td><td><span class='yescell'>Y</span></td></tr><tr><td>2026-05-29</td><td>Internal Service - AZCK to QF</td><td>AZCK shop (heat-treat services)</td><td class='amt'>$100.00</td><td><span class='yescell'>Y</span></td></tr><tr><td>2026-05-29</td><td>Internal Service - AZCK to QF</td><td>AZCK shop (hand-sharpening services)</td><td class='amt'>$40.00</td><td><span class='yescell'>Y</span></td></tr><tr class='tot'><td colspan='3'>Total Money Out</td><td class='amt'>$3,254.13</td><td></td></tr></tbody></table></div>
+</div>
+<footer>QuadFang only - brand isolation respected. Auto-generated from the budget Excel by build_finance_overview.py - do NOT hand-edit; edit the Excel and re-run. Machinist anonymous.</footer>
+</div></body></html>

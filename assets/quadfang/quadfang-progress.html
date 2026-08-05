@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuadFang - Progress Command Center</title>
+<style>
+:root{
+  color-scheme: light;
+  --orange:#E85D2C; --orange-soft:#FBE9E0;
+  --charcoal:#2B2B2B; --ink:#33373B;
+  --cream:#FBF8F2; --card:#FFFFFF;
+  --steel:#5C666E; --steel-soft:#E7EBEE;
+  --line:#E3DDD2;
+  --green:#2E7D54; --amber:#B6781E; --red:#B4452F;
+  --green-bg:#E6F2EC; --amber-bg:#FBF1DD; --red-bg:#F8E6E1;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+.wrap{max-width:1080px;margin:0 auto;padding:22px 20px 60px;}
+header{display:flex;align-items:center;gap:16px;border-bottom:3px solid var(--orange);padding-bottom:16px;margin-bottom:8px;}
+.emblem{flex:0 0 auto}
+h1{font-size:23px;margin:0;letter-spacing:.5px;color:var(--charcoal);font-weight:800;text-transform:uppercase}
+h1 .qf{color:var(--orange)}
+.sub{margin:3px 0 0;color:var(--steel);font-size:13px;font-weight:600}
+.stage{display:inline-block;margin-top:9px;background:var(--charcoal);color:#fff;border-radius:20px;
+  padding:5px 14px;font-size:12px;font-weight:700;letter-spacing:.4px}
+.stage b{color:var(--orange)}
+.asof{margin-left:auto;text-align:right;color:var(--steel);font-size:11.5px;line-height:1.4}
+
+.meet{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:18px 0;}
+.meet .m{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--orange);
+  border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.m .t{font-size:12px;font-weight:800;color:var(--orange);letter-spacing:.6px}
+.m h3{margin:4px 0 6px;font-size:17px;color:var(--charcoal)}
+.m .meta{font-size:12.5px;color:var(--steel);margin-bottom:8px}
+.m ul{margin:6px 0 0;padding-left:18px}
+.m li{margin:3px 0;font-size:13px}
+.flag{background:var(--amber-bg);color:var(--amber);border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;display:inline-block}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.c h2{margin:0 0 10px;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:var(--charcoal);
+  display:flex;align-items:center;gap:8px}
+.c h2 .dot{width:9px;height:9px;border-radius:50%;background:var(--orange);flex:0 0 auto}
+.row{display:flex;gap:9px;padding:7px 0;border-top:1px dashed var(--line);align-items:flex-start}
+.row:first-of-type{border-top:none}
+.row .lab{flex:1}
+.row .lab b{color:var(--charcoal)}
+.row .lab span{display:block;color:var(--steel);font-size:12.5px;margin-top:1px}
+.pill{flex:0 0 auto;font-size:10.5px;font-weight:800;border-radius:20px;padding:3px 9px;letter-spacing:.3px;white-space:nowrap;align-self:center}
+.ok{background:var(--green-bg);color:var(--green)}
+.warn{background:var(--amber-bg);color:var(--amber)}
+.bad{background:var(--red-bg);color:var(--red)}
+.neu{background:var(--steel-soft);color:var(--steel)}
+.full{grid-column:1/-1}
+ul.clean{margin:2px 0 0;padding-left:18px}
+ul.clean li{margin:5px 0}
+ul.clean li b{color:var(--charcoal)}
+.money{display:flex;justify-content:space-between;padding:6px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.money:first-child{border-top:none}
+.money .v{font-weight:800;color:var(--charcoal)}
+.contacts{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:13px}
+.contacts div{padding:4px 0;border-bottom:1px solid var(--line)}
+.contacts b{color:var(--charcoal)}
+.contacts span{color:var(--steel);font-size:12px}
+footer{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);color:var(--steel);font-size:11.5px;text-align:center}
+.legend{display:flex;gap:14px;justify-content:center;margin:14px 0 0;flex-wrap:wrap;font-size:11px;color:var(--steel)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:10px;height:10px;border-radius:50%}
+@media(max-width:720px){.meet,.grid,.contacts{grid-template-columns:1fr}.asof{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="emblem" aria-label="QuadFang emblem">
+    <svg width="46" height="46" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="48" fill="#2B2B2B"/>
+      <g fill="#E85D2C">
+        <path d="M50 8 L60 40 L50 32 L40 40 Z"/>
+        <path d="M92 50 L60 60 L68 50 L60 40 Z"/>
+        <path d="M50 92 L40 60 L50 68 L60 60 Z"/>
+        <path d="M8 50 L40 40 L32 50 L40 60 Z"/>
+      </g>
+      <circle cx="50" cy="50" r="9" fill="none" stroke="#E85D2C" stroke-width="3"/>
+    </svg>
+  </div>
+  <div>
+    <h1><span class="qf">QUADFANG</span> · Progress Command Center</h1>
+    <p class="sub">Premium Broadheads - a division of AZCK</p>
+    <span class="stage">STAGE: <b>PROTOTYPE</b> · Phantom QF-100 · 4-blade fixed broadhead</span>
+  </div>
+  <div class="asof">
+    Snapshot<br><b>2026-06-04 PM</b><br>Prep for 06-05 meetings
+  </div>
+</header>
+
+<!-- MEETINGS -->
+<div class="meet">
+  <div class="m">
+    <div class="t">TOMORROW · 9:00 AM</div>
+    <h3>Kyran - Partner Sync</h3>
+    <div class="meta">Kyran Iwaskow · Rock Star Control Ltd. · founding partner + customer &nbsp;<span class="flag">not on calendar - confirm</span></div>
+    <ul>
+      <li>Retainer running: <b>$525.00</b> recurring invoice sent (Square #001087-R-0002, due May 31).</li>
+      <li>To bill: pass-through <b>$2,086.90</b> (prototypes, inv #05805) - Reanna.</li>
+      <li>Owed back: <b>$147</b> March over-charge → credit on next.</li>
+      <li>Share: prototype + manufacturing reality (Aurora reply), funding push.</li>
+    </ul>
+  </div>
+  <div class="m">
+    <div class="t">TOMORROW · 10:00 AM · ZOOM</div>
+    <h3>Jane Hunter-Uhryn - Innovate NW</h3>
+    <div class="meta">+ Barry Yaehne (CF Grande Prairie) + Reanna · "Quad Fang &amp; INW" &nbsp;<span class="flag">Zoom, not Google Meet</span></div>
+    <ul>
+      <li>Jane = <b>Wayfinder</b> (intros to grant officers, doesn't fund) → bring the <b>pitch deck</b>, not the business plan.</li>
+      <li>She'll likely ask how the <b>Matt + Kerrie (Alberta Innovates)</b> meeting went - it was productive.</li>
+      <li>R&amp;D story: <b>4-blade geometry + heat-treat + finishing</b> (not "SLM material science").</li>
+    </ul>
+  </div>
+</div>
+
+<!-- STATUS GRID -->
+<div class="grid">
+
+  <div class="c">
+    <h2><span class="dot"></span>Prototype &amp; Heat-Treat</h2>
+    <div class="row"><div class="lab"><b>Batch 1 - 10 units milled</b><span>17-4PH, local machine shop. 2 heat-treated + sharpened → field-testing with hunters.</span></div><span class="pill warn">SOFT ~34 HRC</span></div>
+    <div class="row"><div class="lab"><b>Batch 2 - H900 temper</b><span>Solution-treated to Condition A (confirmed). Temper was scheduled 2026-05-29.</span></div><span class="pill bad">RESULT UNCONFIRMED</span></div>
+    <div class="row"><div class="lab"><b>6 prototypes</b><span>Not yet heat-treated.</span></div><span class="pill neu">PENDING</span></div>
+    <div class="row"><div class="lab"><b>Target hardness</b><span>42-47 HRC. Batch 1 came in soft (stock wasn't Condition A) → imperfect field samples.</span></div><span class="pill neu">SPEC</span></div>
+  </div>
+
+  <div class="c">
+    <h2><span class="dot"></span>Manufacturing / Sourcing</h2>
+    <div class="row"><div class="lab"><b>Aurora Machine</b><span>Replied 06-04: Swiss <b>can't</b> run it (spindle bore + thin wings). Offered live-tooling route as a tooled-up project (fixture cost); suggested casting + finish-to-spec.</span></div><span class="pill bad">SWISS: NO</span></div>
+    <div class="row"><div class="lab"><b>Horizon Machine</b><span>Emailed 2026-05-01. No reply on file.</span></div><span class="pill warn">NO REPLY</span></div>
+    <div class="row"><div class="lab"><b>Gambit</b><span>On outreach list - no thread found / status unclear.</span></div><span class="pill warn">UNCLEAR</span></div>
+    <div class="row"><div class="lab"><b>Open question</b><span>Is the 4-blade geometry even Swiss-turnable? Routes on table: multi-axis / live-tooling CNC, investment casting + finish, or keep milling.</span></div><span class="pill neu">DECIDE</span></div>
+  </div>
+
+  <div class="c">
+    <h2><span class="dot"></span>Funding &amp; Grants</h2>
+    <div class="row"><div class="lab"><b>6 tracks - all Not Started</b><span>SR&amp;ED · NRC IRAP · CDAP · AMPG · AWE BRIDGE · Futurpreneur.</span></div><span class="pill warn">Q2 ENDS 06-30</span></div>
+    <div class="row"><div class="lab"><b>Alberta Innovates</b><span>Met Matt Cornall + Kerrie Taylor (TDA) 05-25. "Connect With Us" intake done (CRM:0129288). Supplier NDA drafted for machine shops.</span></div><span class="pill ok">IN MOTION</span></div>
+    <div class="row"><div class="lab"><b>SR&amp;ED angle</b><span>Jane sent SR&amp;ED info 05-20. R&amp;D = geometry + heat-treat + finishing development.</span></div><span class="pill ok">STRONG</span></div>
+    <div class="row"><div class="lab"><b>Weekly check-in (bus #1976)</b><span>Grant tracker has status notes, no calendar dates yet.</span></div><span class="pill warn">AWAITING YOU</span></div>
+  </div>
+
+  <div class="c">
+    <h2><span class="dot"></span>Financials (snapshot)</h2>
+    <div class="money"><span>Prototypes - inv #05805 (pass-through)</span><span class="v">$2,086.90</span></div>
+    <div class="money"><span>Design - inv #05751</span><span class="v">$341.25</span></div>
+    <div class="money"><span>Batch 1 HT + sharpen</span><span class="v">$140.00</span></div>
+    <div class="money"><span>Kyran retainer - current invoice</span><span class="v">$525.00</span></div>
+    <div class="money"><span>Credit owed back to Kyran (Mar)</span><span class="v">$147.00</span></div>
+    <div class="row" style="margin-top:8px"><div class="lab"><span>Canonical source of truth: <b>QuadFang_Budget_Financials.xlsx</b> (Money In / Money Out / Summary). Figures above are headline items, not the reconciled total.</span></div></div>
+  </div>
+
+  <div class="c">
+    <h2><span class="dot"></span>⏳ Waiting On</h2>
+    <ul class="clean">
+      <li><b>Batch 2 H900 temper result</b> - was due 05-29 (the gap).</li>
+      <li><b>Horizon + Gambit</b> quote replies (and decide on Aurora's live-tooling offer).</li>
+      <li><b>Field-test feedback</b> from the 2 hunters carrying Batch 1 heads.</li>
+      <li><b>Your reply to grant check-in</b> (bus #1976).</li>
+    </ul>
+  </div>
+
+  <div class="c">
+    <h2><span class="dot"></span>⚠️ Concerns / Risks</h2>
+    <ul class="clean">
+      <li><b>Heat-treat consistency</b> - Batch 1 soft; Batch 2 unproven. Field data is on imperfect samples.</li>
+      <li><b>Manufacturability</b> - first Swiss shop says the geometry won't turn; sourcing route still open.</li>
+      <li><b>Email deliverability</b> - Aurora's May 1 email never arrived (resent, replied). Kerrie's thread is fine (she replied).</li>
+      <li><b>Grant clock</b> - Q2 ends 06-30, all 6 tracks Not Started.</li>
+      <li><b>Web/store</b> - QuadFang Shopify store closed 06-01; QuadFang Supabase project paused.</li>
+    </ul>
+  </div>
+
+  <div class="c full">
+    <h2><span class="dot"></span>🔑 Key Contacts</h2>
+    <div class="contacts">
+      <div><b>Jane Hunter-Uhryn</b> <span>- Mgr, Innovate Northwest / CF · Wayfinder · jane@albertacf.com</span></div>
+      <div><b>Barry Yaehne</b> <span>- Community Futures Grande Prairie · on tomorrow's call</span></div>
+      <div><b>Kerrie Taylor</b> <span>- Alberta Innovates · TDA, NW region</span></div>
+      <div><b>Matt Cornall</b> <span>- Alberta Innovates · TDA, Entrepreneurship</span></div>
+      <div><b>Holly Sorgen</b> <span>- Community Futures · made the Jane intro</span></div>
+      <div><b>Kyran Iwaskow</b> <span>- Rock Star Control Ltd. · founding partner + customer</span></div>
+    </div>
+  </div>
+
+  <div class="c full">
+    <h2><span class="dot"></span>🧭 Open Decisions</h2>
+    <ul class="clean">
+      <li><b>Manufacturing route</b> - Swiss is looking unlikely; pick a lane to test next (live-tooling CNC quote from Aurora vs casting+finish vs keep milling).</li>
+      <li><b>Funding ask</b> - lock the amount + use-of-funds you'll name to Jane/INW.</li>
+      <li><b>Trademark</b> - advisor referral vs direct Parlee (parked pending advisor talks).</li>
+      <li><b>QF-100 viability vs rebrand</b> - pending counsel on Muzzy common-law PHANTOM risk.</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="legend">
+  <span><span class="sw" style="background:#2E7D54"></span>On track</span>
+  <span><span class="sw" style="background:#B6781E"></span>Watch / waiting</span>
+  <span><span class="sw" style="background:#B4452F"></span>Blocked / risk</span>
+  <span><span class="sw" style="background:#5C666E"></span>Info / pending</span>
+</div>
+
+<footer>
+  QuadFang surface - QF emblem + QuadFang voice; AZCK appears only as the lineage line ("a division of AZCK"), no AZCK logo or colors.<br>
+  Sources: Passoffs/LATEST.md · brain (mem0) · bus (agent_messages) · Gmail · Calendar · QuadFang_Budget_Financials.xlsx · Snapshot 2026-06-04.
+</footer>
+
+</div>
+</body>
+</html>
