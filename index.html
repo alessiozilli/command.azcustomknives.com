@@ -406,12 +406,14 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
           <div class="svq-col__body">
             <div class="svq-form" id="svq-form">
               <div class="svq-f"><label>What kind of job</label>
-                <select id="svq-type">
+                <!-- Repair removed 2026-08-06, Alessio: "repair is not a thing."
+                     Scissor/knife repairs ride as sharpening extras; restoration
+                     covers regrinds + shop labour. -->
+                <select id="svq-type" onchange="window.svqTypeChanged&&window.svqTypeChanged()">
                   <option value="sharpening">Sharpening</option>
                   <option value="engraving">Engraving</option>
                   <option value="sheath">Sheath</option>
                   <option value="custom_knife">Custom knife</option>
-                  <option value="repair">Repair</option>
                   <option value="restoration">Restoration</option>
                   <option value="class">Class</option>
                   <option value="other">Other</option>
@@ -419,21 +421,37 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
               <!-- ONE customer field, not two. The first cut had a search box AND a
                    name box stacked together and it was not obvious which to use. -->
               <div class="svq-f"><label>Customer — tap to see past customers, or just type a new name</label>
-                <input id="svq-name" type="text" autocomplete="off" placeholder="Who dropped it off">
+                <input id="svq-name" type="text" autocomplete="off" placeholder="Customer name">
                 <div class="svq-hits" id="svq-cust-hits" hidden></div>
               </div>
               <div class="svq-f"><label>Phone</label><input id="svq-phone" type="tel" autocomplete="off" inputmode="tel" placeholder="So we can call when it is ready"></div>
               <div class="svq-f"><label>Email</label><input id="svq-email" type="email" autocomplete="off" placeholder="optional"></div>
 
-              <!-- WHAT CAME IN — click, never write. Every price is Square's own. -->
-              <div class="svq-f"><label>What came in</label><div class="svq-chips" id="svq-kind"></div></div>
+              <!-- WHAT CAME IN — click, never write. Sharpening prices are Square's
+                   own; engraving and classes are the live website's own table
+                   (Alessio 2026-08-06: "base that off of the website"). Kinds the
+                   site does not price (sheath, custom, repair) take a typed quote
+                   below — a blank box beats an invented number. -->
+              <div class="svq-f" id="svq-kind-wrap"><label id="svq-kind-lbl">What came in</label><div class="svq-chips" id="svq-kind"></div></div>
               <div class="svq-f" id="svq-variant-wrap"><label id="svq-variant-lbl">Type</label><div class="svq-chips" id="svq-variant"></div></div>
               <div class="svq-f" id="svq-size-wrap"><label>Size</label><div class="svq-chips" id="svq-size"></div></div>
-              <div class="svq-f" id="svq-qty-wrap"><label>How many</label><div class="svq-chips" id="svq-qty"></div></div>
+              <!-- Add-ons: Square's modifier lists for the chosen model. Renders
+                   only when the selected variant declares them. -->
+              <div class="svq-f" id="svq-addons-wrap" hidden>
+                <label>Add-ons — Square's own options for this model</label>
+                <div id="svq-addons"></div>
+              </div>
+              <div class="svq-f" id="svq-manual-wrap" hidden>
+                <label>What is it + the quoted price</label>
+                <div id="svq-man-note" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:6px;"></div>
+                <input id="svq-man-label" type="text" autocomplete="off" placeholder="e.g. leather sheath for 8&quot; chef knife">
+                <input id="svq-man-price" type="number" step="0.01" inputmode="decimal" placeholder="$ quoted" style="margin-top:6px;">
+              </div>
+              <div class="svq-f" id="svq-qty-wrap"><label id="svq-qty-lbl">How many</label><div class="svq-chips" id="svq-qty"></div></div>
               <button type="button" class="svq-add" id="svq-add-line">+ Add to this job</button>
               <div class="svq-lines" id="svq-lines"></div>
 
-              <div class="svq-f"><label>Extras — tap once per one you need</label><div class="svq-chips" id="svq-extras"></div></div>
+              <div class="svq-f" id="svq-extras-wrap"><label>Extras — tap once per one you need</label><div class="svq-chips" id="svq-extras"></div></div>
               <div class="svq-total" id="svq-total">Total <b>$0.00</b></div>
 
               <div class="svq-f"><label>Promised for</label><input id="svq-date" type="date"></div>
@@ -693,10 +711,63 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
           { key:'thinning', label:'Thinning', base:60 },
           { key:'curvthin', label:'Curved thinning', base:80 }  // 5" = $85 … 10" = $90
         ],
-        sizes: Array.from({length:6}, (_,i) => ({ key:String(i+5), label:(i+5)+'"', inch:i+5 })) }
+        sizes: Array.from({length:6}, (_,i) => ({ key:String(i+5), label:(i+5)+'"', inch:i+5 })) },
+      // Two kinds Square sells that the first cut missed entirely (found in the
+      // 2026-08-06 APPOINTMENTS_SERVICE pull): folders and chisels & gouges.
+      // Explicit prices, no formula — SHARPENING: Folders and SHARPENING:
+      // Chisels & Gouges variation lists, verbatim.
+      folders: { label:'Folders', variantLabel:'Size',
+        variants: [
+          { key:'f2', label:'2"', cad:24 }, { key:'f3', label:'3"', cad:26 },
+          { key:'f4', label:'4"', cad:28 }, { key:'f5', label:'5"', cad:30 }
+        ],
+        sizes: null },
+      // Square's "SHARPENING: Specialty" — 42 variations, none of which the
+      // builder offered until 2026-08-06. The $5–$100 open-amount ladder in the
+      // same Square item is NOT chips here: that ladder is Square's type-any-
+      // number escape hatch, and the typed-quote box below does it better.
+      // TWO variations are both named "Ice Auger Blade" ($35 / $45) — Square
+      // records no difference between them, so the labels below are a guess at
+      // size. Ask Alessio before trusting them.
+      specialty: { label:'Specialty', variantLabel:'What is it',
+        variants: [
+          { key:'guthook',   label:'Gut hook',                cad:40 },
+          { key:'gutting',   label:'Gutting blade',           cad:40 },
+          { key:'auger',     label:'Ice auger blade',         cad:35 },
+          { key:'augerlg',   label:'Ice auger blade (large)', cad:45 },
+          { key:'mower',     label:'Lawnmower blade',         cad:35 },
+          { key:'grinder',   label:'Meat grinder blade',      cad:40 },
+          { key:'slicersm',  label:'Small round meat slicer', cad:30 },
+          { key:'slicerlg',  label:'6–8" round meat slicer',  cad:50 },
+          { key:'masontouch',label:'Masonry chisel touch-up', cad:10 },
+          { key:'masonsm',   label:'Masonry chisel < 1"',     cad:20 },
+          { key:'masonlg',   label:'Masonry chisel > 1"',     cad:30 },
+          { key:'masonxl',   label:'Masonry chisel XL',       cad:50 },
+          { key:'razor',     label:'Straight razor',          cad:75 },
+          { key:'chipbasic', label:'Wood chipper — basic',    cad:30 },
+          { key:'chipext',   label:'Wood chipper — extensive',cad:40 },
+          { key:'scrap6',    label:'Scraper blade up to 6"',  cad:20 },
+          { key:'scrap8',    label:'Scraper blade 6–8"',      cad:22.5 },
+          { key:'scrap10',   label:'Scraper blade 8–10"',     cad:25 },
+          { key:'scrap12',   label:'Scraper blade 10–12"',    cad:27.5 },
+          { key:'scrap14',   label:'Scraper blade 12–14"',    cad:30 },
+          { key:'scrap16',   label:'Scraper blade 14–16"',    cad:32.5 }
+        ],
+        sizes: null },
+      chisels: { label:'Chisels & gouges', variantLabel:'Which',
+        variants: [
+          { key:'c15', label:'1.5" chisel', cad:15 }, { key:'c2',  label:'2" chisel',  cad:20 },
+          { key:'c25', label:'2.5" chisel', cad:25 }, { key:'c3',  label:'3" chisel',  cad:30 },
+          { key:'c35', label:'3.5" chisel', cad:35 }, { key:'c4',  label:'4" chisel',  cad:40 },
+          { key:'c45', label:'4.5" chisel', cad:45 }, { key:'c5',  label:'5" chisel',  cad:50 },
+          { key:'gs',  label:'Small gouge', cad:30 }, { key:'gm',  label:'Medium gouge', cad:35 },
+          { key:'gl',  label:'Large gouge', cad:40 }
+        ],
+        sizes: null }
     };
-    // Extras. Each tap adds one. Rush is Alessio's number, NOT in the Square
-    // catalog — everything else is a real Square variation.
+    // Extras. Each tap adds one. Every one is a real Square variation.
+    // (An older comment here claimed Rush $20 was "Alessio's number, not in
+    // Square". That was wrong — Square's Labour > Rush Order is exactly $20.)
     // CLEANING IS NOT ONE THING (Alessio, bus #4035) — the first cut had a single
     // "Cleaning $10" chip, so he typed the real breakdown into the location box
     // because there was nowhere else to put it. These are Square's own variations.
@@ -710,23 +781,307 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       { key:'disclean',  label:'Disassembly + clean',cad:30 },
       { key:'nano',      label:'Nano oil',           cad:5  },
       { key:'mirror',    label:'Mirror finish',      cad:20 },
-      { key:'repair',    label:'Scissor repair',     cad:10 }
+      { key:'repair',    label:'Scissor repair',     cad:10 },
+      // Added 2026-08-06 after a full Square audit found these unbillable.
+      // The 15-minute Cleaning Charge is a SEPARATE Square variation from the
+      // 10-minute one; only this tier is added, because the $10 tier is already
+      // covered at the same price by the itemised chips above (his 07-30 ruling
+      // against one generic "Cleaning $10" chip still stands).
+      { key:'clean15',   label:'Cleaning charge (15 min)', cad:15 },
+      { key:'repair20',  label:'Scissor repair (heavy)',   cad:20 },
+      { key:'spare',     label:'Spare part',               cad:5  },
+      { key:'giftwrap',  label:'Gift wrapping',            cad:5  }
     ];
     const SVQ_LOCS = ['Service Division', 'Blue Building', 'Front shelf', 'Bench'];
     const SVQ_QTYS = [1,2,3,4,5,6,7,8,9,10];
 
-    window._svqState = { rows:null, sel:null, filter:'open', busy:false,
-                         kind:'knives', variant:null, size:null, qty:1,
+    /* ── THE OTHER JOB KINDS (Alessio, 2026-08-06: the type dropdown was "not
+       really accurate" — only sharpening had a real builder; "base that off of
+       the website of what we're offering"). Every number below was read from
+       the LIVE booking page the same day. Nothing is invented:
+       kinds the site does not price take a typed quote instead. ─────────── */
+    // Engraving — the site's own table: $35 setup + $15 per piece. The five
+    // entry kinds fold setup + artwork fee into the FIRST piece exactly as the
+    // site quotes them ("$50 first piece" …); every piece after is $15.
+    // Every tier is Square's own arithmetic: Setup $35 + Per-item $15 + the
+    // artwork add-on for that tier. `piece` = each piece after the first.
+    //   Artwork Fee $10 -> $60 · Pre-Made Digital Art $25 -> $75 ·
+    //   Logo Redesign $50 -> $100 · Custom Artwork $65 -> $115.
+    // The old 'artfee' chip charged $75 while calling itself Artwork Fee — that
+    // is the Pre-Made Digital Art tier's price, so it overcharged the real
+    // artwork-fee job by $15 AND left the $75 tier unnamed. Both exist now.
+    // 'manual' is HAND engraving: Square Manual Setup $15 + Manual 1 Item $25,
+    // then $25 each after — it had no path at any price before.
+    const SVQ_ENGRAVING = [
+      { key:'text',       label:'Text only',            first:50,  piece:15 },
+      { key:'yourart',    label:'Your artwork',         first:50,  piece:15 },
+      { key:'artfee',     label:'Artwork fee',          first:60,  piece:15 },
+      { key:'predigital', label:'Pre-made digital art', first:75,  piece:15 },
+      { key:'logofix',    label:'Logo redesign',        first:100, piece:15 },
+      { key:'customart',  label:'Custom artwork',       first:115, piece:15 },
+      { key:'manual',     label:'Hand engraved (manual)', first:40, piece:25 }
+    ];
+    const SVQ_ENG_PIECE  = 15;   // machine default; each entry carries its own `piece`
+    // Square's own rush is $25 (Engraving > Rush Order AND Manual: Rush Order).
+    // The old $35 came from the website and overcharged every rush job by $10.
+    // The sibling SVQ_EXTRAS rush $20 is correct — it is Labour > Rush Order.
+    const SVQ_ENG_EXTRAS = [ { key:'engrush', label:'Rush order', cad:25, flag:true } ];
+    // Totals and saves count EVERY tapped extra, whichever mode is showing —
+    // a mixed job (sharpening lines + engraving lines) must never silently
+    // drop an extra just because the form sits on the other builder.
+    const SVQ_ALL_EXTRAS = SVQ_EXTRAS.concat(SVQ_ENG_EXTRAS);
+    /* ── SQUARE IS THE SOURCE (Alessio, 2026-08-06: "This queue is not solely
+       based on our website. It needs to represent square… Everything pulled off
+       from square. Correct? in the sharpening section.") Every catalog below
+       was read from the LIVE Square catalog the same day — AZCK: Sheathes,
+       AZCK: Build Your Custom Knife, the Course: * service items, Regrinds and
+       Labour. Same shape as SVQ_PRICES so ONE builder serves them all. To
+       refresh a catalog or wire the next kind, follow the Drive skill
+       azck-queue-square-import — the sharpening recipe, generalized. ────── */
+    const SVQ_SHEATHS = {
+      kydex:     { label:'Custom Kydex', variantLabel:'Option', variants: [
+        { key:'kydex', label:'Kydex sheath', cad:120 }, { key:'ministeel', label:'Mini-steel leather holder', cad:60 } ], sizes:null },
+      sleeve:    { label:'Leather sleeve', variantLabel:'Leather', variants: [
+        { key:'nt', label:'Natural tanned', cad:120 }, { key:'nd', label:'Natural dyed', cad:150 }, { key:'prem', label:'Premium', cad:180 } ], sizes:null },
+      smallloop: { label:'Small loop', variantLabel:'Leather', variants: [
+        { key:'nt', label:'Natural tanned', cad:160 }, { key:'nd', label:'Natural dyed', cad:190 }, { key:'prem', label:'Premium', cad:220 } ], sizes:null },
+      longloop:  { label:'Long loop', variantLabel:'Leather', variants: [
+        { key:'nt', label:'Natural tanned', cad:170 }, { key:'nd', label:'Natural dyed', cad:200 }, { key:'prem', label:'Premium', cad:230 } ], sizes:null },
+      ranger:    { label:'Ranger carry (kydex-backed)', variantLabel:'Leather', variants: [
+        { key:'nt', label:'Natural tanned', cad:300 }, { key:'nd', label:'Natural dyed', cad:330 }, { key:'prem', label:'Premium', cad:370 } ], sizes:null }
+    };
+    /* ── THE ADD-ON LAYER (Alessio, 2026-08-06: "under each model, there should
+       be a add on just like it is in square"). These are Square's MODIFIER
+       LISTS, read live the same day. `single:true` mirrors selection_type
+       SINGLE (one choice, radio); false = MULTIPLE (tap several). $0 options
+       are Square's own defaults and are kept so the sheet records the choice
+       even when it costs nothing. ─────────────────────────────────────────── */
+    const SVQ_MODLISTS = {
+      steel_cul:  { label:'Steel', single:true, mods:[
+        { key:'vg10', label:'VG10', cad:0 }, { key:'cruwear', label:'CPM CRU-WEAR', cad:180 }, { key:'magnacut', label:'CPM MagnaCut', cad:280 } ] },
+      steel_out:  { label:'Steel', single:true, mods:[
+        { key:'80crv2', label:'80CRV2', cad:0 }, { key:'vg10', label:'VG10', cad:120 },
+        { key:'cruwear', label:'CPM CRU-WEAR', cad:180 }, { key:'magnacut', label:'CPM MagnaCut', cad:280 } ] },
+      finish:     { label:'Finish', single:true, mods:[
+        { key:'swlight', label:'Stonewash, light', cad:0 }, { key:'natural', label:'Natural', cad:20 },
+        { key:'brushed', label:'Brushed', cad:100 }, { key:'swdark', label:'Stonewash, dark', cad:100 },
+        { key:'handrub', label:'Hand-rubbed', cad:120 } ] },
+      feature:    { label:'Features', single:false, mods:[
+        { key:'polishtang', label:'Polished tang', cad:80 }, { key:'blackouttang', label:'Blackout tang', cad:80 },
+        { key:'roundspine', label:'Rounded spine', cad:80 }, { key:'smallswedge', label:'Small swedge', cad:160 },
+        { key:'swedge', label:'Swedge', cad:180 }, { key:'protrudetang', label:'Protruding tang', cad:200 },
+        { key:'fuller', label:'Fuller', cad:220 } ] },
+      bolster:    { label:'Bolster', single:true, mods:[
+        { key:'none', label:'None', cad:0 }, { key:'g10', label:'G10', cad:120 }, { key:'stainless', label:'Stainless', cad:180 },
+        { key:'brass', label:'Brass', cad:200 }, { key:'copper', label:'Copper', cad:220 } ] },
+      handlemat:  { label:'Handle material', single:true, mods:[
+        { key:'g10', label:'G10', cad:0 }, { key:'custom', label:'Custom request', cad:0 },
+        { key:'specg10', label:'Specialty G10', cad:40 }, { key:'stabwood', label:'Stabilized wood', cad:80 },
+        { key:'micarta', label:'Micarta', cad:100 } ] },
+      handlefin:  { label:'Handle finish', single:false, mods:[
+        { key:'roundover', label:'1/4" roundover', cad:0 }, { key:'dbltaper', label:'Double taper', cad:40 },
+        { key:'scalloped', label:'Scalloped', cad:200 } ] },
+      liner:      { label:'Liner', single:true, mods:[
+        { key:'none', label:'None', cad:0 }, { key:'paper', label:'Paper', cad:40 },
+        { key:'g10', label:'G10', cad:50 }, { key:'metal', label:'Metal', cad:80 } ] },
+      pins_cul:   { label:'Pins', single:false, mods:[
+        { key:'g10', label:'G10', cad:0 }, { key:'p2st', label:'2 pins stainless 1/8"', cad:5 },
+        { key:'p2br', label:'2 pins brass 1/8"', cad:10 }, { key:'p2cu', label:'2 pins copper 1/8"', cad:15 },
+        { key:'p2mo', label:'2 pins mosaic 1/8"', cad:20 }, { key:'p3st', label:'3 pins stainless 3/16"', cad:7.5 },
+        { key:'p3br', label:'3 pins brass 3/16"', cad:15 }, { key:'p3cu', label:'3 pins copper 3/16"', cad:22.5 },
+        { key:'p3mo', label:'3 pins mosaic 3/16"', cad:37.5 }, { key:'p1mo', label:'1 pin mosaic 1/4"', cad:15 },
+        { key:'p1sig', label:'1 pin AZCK signature 1/4"', cad:25 } ] },
+      pins_out:   { label:'Pins', single:true, mods:[
+        { key:'g10', label:'G10', cad:0 }, { key:'st', label:'2 pins stainless 3/16"', cad:5 },
+        { key:'br', label:'2 pins brass 3/16"', cad:10 }, { key:'cu', label:'2 pins copper 3/16"', cad:15 },
+        { key:'mo', label:'2 pins mosaic 3/16"', cad:25 } ] },
+      thong:      { label:'Thong tube', single:true, mods:[
+        { key:'none', label:'None', cad:0 }, { key:'g10', label:'1/4" G10', cad:40 },
+        { key:'stainless', label:'1/4" stainless', cad:45 }, { key:'brass', label:'1/4" brass', cad:50 },
+        { key:'copper', label:'1/4" copper', cad:55 } ] },
+      engrave:    { label:'Engraving', single:false, mods:[
+        { key:'spine', label:'Spine (manual)', cad:45 }, { key:'blade', label:'Blade (laser)', cad:50 } ] },
+      special:    { label:'Special request', single:false, mods:[
+        { key:'s100', label:'+$100', cad:100 }, { key:'s200', label:'+$200', cad:200 },
+        { key:'s300', label:'+$300', cad:300 }, { key:'s400', label:'+$400', cad:400 } ] }
+    };
+    // Which groups hang off which model — Square's own modifier_list_info, per
+    // item. Culinary models carry Steel-Culinary + Pins-Culinary; outdoor models
+    // carry Steel-Outdoor + Pins-Outdoor + Thong tube. Only the 6.5" Raptor has
+    // a Bolster. The Defender is the one outdoor model with NO thong tube.
+    const A_CUL = ['steel_cul','finish','feature','handlefin','handlemat','liner','pins_cul','special','engrave'];
+    const A_OUT = ['steel_out','finish','feature','handlefin','handlemat','liner','thong','pins_out','special','engrave'];
+
+    /* ── WHAT ACTUALLY FITS (Alessio, 2026-08-06) ────────────────────────────
+       CHECKED FIRST, and worth knowing: Square does NOT hold these rules. Every
+       `modifier_list_info` on every knife carries min/max_selected_modifiers -1
+       (= no rule) and NO `modifier_overrides` block, which is the only field
+       that could hide one option on one item. Square gates whole LISTS per
+       knife — that is why the Raptor has no outdoor pins and the Defender no
+       thong tube — but it has nothing at the option level. These live here.
+
+       His words: "The Raptor is a big kitchen knife… there's no fuller in
+       kitchen knives. The Raptor Expert Slim is a small kitchen knife. Again,
+       there is no fuller in kitchen knives." The split is KITCHEN vs OUTDOOR:
+         fuller, scalloped -> outdoor only
+         double taper      -> kitchen only ("specific to the Raptor handle")
+         bolster           -> 6.5" Raptor only (Square already has this right)
+         bolster fitted    -> only the 1/4" pin clears it
+       NOT extended to swedge: he named the fuller and only the fuller. ────── */
+    const SVQ_DROP_CUL = { feature:['fuller'], handlefin:['scalloped'] };
+    const SVQ_DROP_OUT = { handlefin:['dbltaper'] };
+
+    // The options a given knife may actually be built with, after the rules.
+    window.svqMods = function(variant, gkey){
+      const G = SVQ_MODLISTS[gkey]; if(!G) return [];
+      let mods = G.mods;
+      const drop = (variant && variant.drop || {})[gkey];
+      if(drop) mods = mods.filter(m => drop.indexOf(m.key) === -1);
+      if(gkey === 'pins_cul' && variant && variant.bolsterPinRule){
+        const b = (window._svqState.addons.bolster || [])[0];
+        if(b && b !== 'none') mods = mods.filter(m => m.key === 'p1mo' || m.key === 'p1sig');
+      }
+      return mods;
+    };
+    // After any add-on tap, drop selections the rules no longer allow — fitting
+    // a bolster must not leave a 3-pin set silently priced into the job.
+    window.svqPruneAddons = function(variant){
+      if(!variant || !variant.addons) return;
+      const S = window._svqState;
+      variant.addons.forEach(g => {
+        const ok = window.svqMods(variant, g).map(m => m.key);
+        if(S.addons[g]) S.addons[g] = S.addons[g].filter(k => ok.indexOf(k) !== -1);
+      });
+    };
+    const SVQ_CUSTOM = {
+      model: { label:'Model', variantLabel:'Which knife', variants: [
+        { key:'bulldog',  label:'Bulldog',      cad:750,  addons:A_OUT, drop:SVQ_DROP_OUT },
+        { key:'badger',   label:'Badger',       cad:730,  addons:A_OUT, drop:SVQ_DROP_OUT },
+        { key:'falcon',   label:'Falcon',       cad:810,  addons:A_OUT, drop:SVQ_DROP_OUT },
+        { key:'reaper',   label:'Reaper',       cad:830,  addons:A_OUT, drop:SVQ_DROP_OUT },
+        { key:'defender', label:'Defender',     cad:950,  addons:A_OUT.filter(g => g !== 'thong'), drop:SVQ_DROP_OUT },
+        // Kitchen knives. REP / RES = Raptor Expert (Slim); the 6.5" Raptor is
+        // the big one and the only knife that takes a bolster.
+        { key:'rep35',    label:'3.5" REP (Raptor Expert)',      cad:660,  addons:A_CUL, drop:SVQ_DROP_CUL },
+        { key:'res50',    label:'5.0" RES (Raptor Expert Slim)', cad:810,  addons:A_CUL, drop:SVQ_DROP_CUL },
+        { key:'raptor65', label:'6.5" Raptor',  cad:1350, drop:SVQ_DROP_CUL, bolsterPinRule:true,
+          addons:['steel_cul','finish','feature','bolster','handlemat','handlefin','liner','pins_cul','engrave','special'] } ], sizes:null },
+      // NOT knife add-ons — his correction: "that's the whole custom project
+      // development. That's not just a custom knife." Project-level charges,
+      // added as their own line.
+      project: { label:'Project charges', variantLabel:'Which', variants: [
+        { key:'dev', label:'Development charge (10 alterations)', cad:500 },
+        { key:'prop', label:'Proprietary custom design', cad:2000 } ], sizes:null }
+    };
+    const SVQ_COURSES = {
+      p1: { label:'1 person', variantLabel:'Option', variants: [
+        { key:'hdbs', label:'½ day blacksmithing', cad:450 }, { key:'hdkm', label:'½ day knife making', cad:450 },
+        { key:'hdproj', label:'½ day project class', cad:450 }, { key:'fdbs', label:'Full day blacksmithing', cad:700 },
+        { key:'fdkm', label:'Full day knife making', cad:850 }, { key:'ka', label:'Knife assembly', cad:450 },
+        { key:'d_hd', label:'50% deposit — ½ day', cad:225 }, { key:'d_ka', label:'50% deposit — assembly', cad:225 },
+        { key:'d_fdbs', label:'50% deposit — full BS', cad:350 }, { key:'d_fdkm', label:'50% deposit — full KM', cad:425 } ], sizes:null },
+      p2: { label:'2 people', variantLabel:'Option', variants: [
+        { key:'fdbs', label:'Full day blacksmithing', cad:1200 }, { key:'fdkm', label:'Full day knife making', cad:1500 },
+        { key:'s_hdbs', label:'1 spot — ½ day BS', cad:350 }, { key:'s_hdkm', label:'1 spot — ½ day KM', cad:350 },
+        { key:'s_fdbs', label:'1 spot — full BS', cad:600 }, { key:'s_fdkm', label:'1 spot — full KM', cad:750 },
+        { key:'d_hd', label:'50% deposit — ½ day', cad:350 }, { key:'d_fdbs', label:'50% deposit — full BS', cad:600 },
+        { key:'d_fdkm', label:'50% deposit — full KM', cad:750 } ], sizes:null },
+      p3: { label:'3 people', variantLabel:'Option', variants: [
+        { key:'fdkm', label:'Full day knife making', cad:1950 },
+        { key:'s_hdproj', label:'1 spot — ½ day project', cad:250 }, { key:'s_hdbs', label:'1 spot — ½ day BS', cad:250 },
+        { key:'s_hdkm', label:'1 spot — ½ day KM', cad:250 }, { key:'s_fdbs', label:'1 spot — full BS', cad:500 },
+        { key:'s_fdkm', label:'1 spot — full KM', cad:650 },
+        { key:'d_hd', label:'50% deposit — ½ day', cad:375 }, { key:'d_fdbs', label:'50% deposit — full BS', cad:750 },
+        { key:'d_fdkm', label:'50% deposit — full KM', cad:975 } ], sizes:null },
+      teambuilding: { label:'Team building', variantLabel:'Option', variants: [
+        { key:'sharp', label:'Sharpening workshop', cad:260 }, { key:'bs', label:'Blacksmithing', cad:350 },
+        { key:'ka', label:'Knife assembly', cad:450 }, { key:'km', label:'Knife making class', cad:650 },
+        { key:'d_sharp', label:'50% deposit — sharpening', cad:130 }, { key:'d_bs', label:'50% deposit — BS', cad:175 },
+        { key:'d_ka', label:'50% deposit — assembly', cad:225 }, { key:'d_km', label:'50% deposit — KM', cad:325 } ], sizes:null },
+      sharpclass: { label:'Sharpening classes', variantLabel:'Option', variants: [
+        { key:'group', label:'Group (with kit)', cad:260 }, { key:'nokit', label:'Group (no kit)', cad:160 },
+        { key:'private', label:'Private class', cad:340 }, { key:'gcup', label:'Upgrade from GC', cad:80 } ], sizes:null },
+      afterhours: { label:'After-Hours program', variantLabel:'Option', variants: [
+        { key:'program', label:'Knife making program', cad:799 }, { key:'makeup', label:'Make-up class', cad:150 } ], sizes:null },
+      continuation: { label:'Continuation', variantLabel:'Option', variants: [
+        { key:'session', label:'Session', cad:400 } ], sizes:null }
+    };
+    // "Restorations are tricky because they're just kind of quoted" — the
+    // quoting UNITS live in Square: Regrinds + the shop Labour rates. Chips
+    // build the quote; the typed line below catches anything odder.
+    const SVQ_RESTO = {
+      regrind: { label:'Regrind', variantLabel:'Which', variants: [
+        { key:'reprofile', label:'Reprofile', cad:20 }, { key:'basic', label:'Regrind — basic', cad:250 },
+        { key:'adv', label:'Regrind — advanced', cad:400 } ], sizes:null },
+      labour: { label:'Shop labour', variantLabel:'Rate', variants: [
+        { key:'min', label:'Shop minimum', cad:50 }, { key:'m45', label:'45 minutes', cad:75 },
+        { key:'hour', label:'Per hour', cad:100 } ], sizes:null }
+    };
+    const SVQ_CATALOGS = { sharpening:SVQ_PRICES, sheath:SVQ_SHEATHS, custom_knife:SVQ_CUSTOM, class:SVQ_COURSES, restoration:SVQ_RESTO };
+    const SVQ_KIND_LBL = { sharpening:'What came in', sheath:'Which sheath', custom_knife:'Which knife', class:'Which course', restoration:'What kind of work' };
+    // Kinds that ALSO show the typed-quote inputs alongside their chips:
+    const SVQ_MANUAL_TOO = { custom_knife:true, restoration:true, sharpening:true };
+    const SVQ_MANUAL_NOTE = {
+      // Do NOT put "type the upgrades here" back in this note. Steel, handle,
+      // pins and the rest are priced chips now; a staffer who types them AND
+      // taps them bills MagnaCut twice ($560 instead of $280).
+      custom_knife: 'Special Request Custom Knife is variable-priced in Square — type that quote here. Upgrades are the add-on chips above; do not type those.',
+      restoration:  'Odd restoration? Build it from the chips, or type the quote.',
+      // Square's Specialty item carries an open $5–$100 ladder and Shipping &
+      // Handling carries $10–$100. Both are "type a number" by design, so they
+      // are this box rather than 40 more chips.
+      sharpening:   'Anything odd, or shipping & handling? Type it and the amount — this is Square’s open-amount ladder.',
+      other:        'Say what it is and the price you quoted.'
+    };
+    const svqType = () => (document.getElementById('svq-type')||{}).value || 'sharpening';
+    const svqMode = () => SVQ_CATALOGS[svqType()] ? 'items' : (svqType() === 'engraving' ? 'engraving' : 'manual');
+    const svqCat  = () => SVQ_CATALOGS[svqType()] || SVQ_PRICES;
+    // Bench-work extras (chip fix, rush…) belong to sharpening + restoration.
+    const svqActiveExtras = () => {
+      const t = svqType();
+      return (t === 'sharpening' || t === 'restoration') ? SVQ_EXTRAS
+           : t === 'engraving' ? SVQ_ENG_EXTRAS : [];
+    };
+
+    window._svqState = { rows:null, sel:null, filter:'open', busy:false, editing:null,
+                         kind:'knives', variant:null, size:null, qty:1, ekind:null, addons:{},
                          lines:[], extras:{}, loc:null, customers:null };
-    const SVQ_TYPES = { sharpening:'Sharpening', engraving:'Engraving', sheath:'Sheath', custom_knife:'Custom knife', repair:'Repair', restoration:'Restoration', class:'Class', other:'Other' };
-    const SVQ_OPEN  = ['new','in_progress'];
+    // repair removed 2026-08-06 (Alessio: "repair is not a thing") — old rows
+    // with job_type='repair' still render via the ||r.job_type fallback.
+    const SVQ_TYPES = { sharpening:'Sharpening', engraving:'Engraving', sheath:'Sheath', custom_knife:'Custom knife', restoration:'Restoration', class:'Class', other:'Other' };
+    /* OPEN MEANS "STILL OURS" — Alessio, 2026-08-06: "the queue needs to still
+       house everything that has not been picked up. It's open until it's picked
+       up. It's not open until it's done. Otherwise I'll lose oversight of what
+       is picked up and what is not picked up."
+       A finished job used to fall out of Open the moment it was marked done,
+       which is exactly how Shaun Fugleberg's $46 job went invisible while it sat
+       on the shelf. A job leaves the queue when the customer takes it away.
+       svqIsWorking is the narrower test — bench work not yet finished — and is
+       the ONLY thing that can be "Past due". A job that is done is not late.
+
+       Defined as a DENY list on purpose. The first cut listed the open statuses
+       ('new','in_progress') and anything else fell through the floor — the live
+       table also carries 'in_shop', so two real jobs showed up under no chip but
+       "All". Name what LEAVES the queue; everything else is still ours, and a
+       status added later stays visible instead of disappearing silently. */
+    const SVQ_CLOSED   = ['picked_up','cancelled','archived'];
+    const svqIsOpen    = s => SVQ_CLOSED.indexOf(s) === -1;   // still ours
+    const svqIsWorking = s => svqIsOpen(s) && s !== 'done';   // bench work outstanding
     const SVQ_FILTERS = [
-      { key:'open',   label:'Open',       test: r => SVQ_OPEN.indexOf(r.status) !== -1 },
-      { key:'appt',   label:'Appointments', test: r => svqIsAppt(r) && SVQ_OPEN.indexOf(r.status) !== -1 },
-      { key:'jobs',   label:'Jobs',         test: r => !svqIsAppt(r) && SVQ_OPEN.indexOf(r.status) !== -1 },
-      { key:'rush',   label:'Rush',       test: r => r.rush && SVQ_OPEN.indexOf(r.status) !== -1 },
-      { key:'done',   label:'Done',       test: r => r.status === 'done' },
+      { key:'open',   label:'Open',       test: r => svqIsOpen(r.status) },
+      { key:'appt',   label:'Appointments', test: r => svqIsAppt(r) && svqIsOpen(r.status) },
+      { key:'jobs',   label:'Jobs',         test: r => !svqIsAppt(r) && svqIsOpen(r.status) },
+      // The old BOOKINGS subtab, as a chip (fold, 2026-08-06): everything the
+      // website sent, dated or not. Wider than Appointments on purpose — an
+      // undated web enquiry is a Job by the 07-30 ruling but still web intake.
+      { key:'web',    label:'Web requests', test: r => r.intake_by === 'website' && svqIsOpen(r.status) },
+      { key:'rush',   label:'Rush',       test: r => r.rush && svqIsOpen(r.status) },
+      // Was "Done". Renamed because done is not the end of the job — these are
+      // finished and still sitting on our shelf, and this chip is the one that
+      // tells him who to call.
+      { key:'ready',  label:'Ready for pickup', test: r => r.status === 'done' },
       { key:'closed', label:'Picked up',  test: r => r.status === 'picked_up' || r.status === 'cancelled' },
+      { key:'arch',   label:'Archived',   test: r => r.status === 'archived' },
       { key:'all',    label:'All',        test: () => true }
     ];
     const svqDay = s => s ? String(s).slice(0,10) : '';
@@ -742,19 +1097,47 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     //   APPOINTMENT = came through the booking form AND carries a real date. Immediate.
     //   JOB         = no committed date (engraving ten knives, walk-in). Month of leeway.
     // A row with no promised_date is a JOB no matter where it entered the system.
-    const svqIsAppt = r => (!!r.source_booking_id || r.intake_by === 'website') && !!r.promised_date;
+    //
+    // DO NOT add source_booking_id back into this test. az_shop_queue became an
+    // updatable VIEW over az_service_bookings (2026-08-05, forge-overwatch), so
+    // EVERY row now carries a source_booking_id — all 15 of them. Reading it here
+    // would relabel every dated walk-in as an Appointment and hang "Past due" on
+    // shop jobs that were never promised a date. intake_by is the only honest
+    // discriminator left.
+    const svqIsAppt = r => r.intake_by === 'website' && !!r.promised_date;
 
     window.renderQueue = async function(){
       const host = document.getElementById('svq-list'); if(!host) return;
       if(!window.supa){ host.innerHTML='<div class="svq-empty">Sign in to see the queue.</div>'; return; }
       try{
-        const { data, error } = await window.supa.from('az_shop_queue')
-          .select('id,job_type,customer_name,customer_phone,item_summary,quantity,promised_date,rush,status,item_location,notes,line_items,price_cad,received_at,started_at,done_at,picked_up_at,intake_by')
-          .order('received_at', { ascending:false });
-        if(error) throw error;
-        window._svqState.rows = data || [];
+        // Two reads since the fold: the view hides archived rows by definition
+        // (WHERE status <> 'archived'), so the Archived chip reads the base
+        // table and maps those rows into the view's shape. The view read is the
+        // critical one; a failed archived read just leaves that chip at 0.
+        const [q, arch] = await Promise.all([
+          window.supa.from('az_shop_queue')
+            .select('id,job_type,customer_name,customer_phone,customer_email,item_summary,quantity,promised_date,promised_time,rush,status,item_location,notes,price_cad,line_items,received_at,started_at,done_at,picked_up_at,intake_by')
+            .order('received_at', { ascending:false }),
+          window.supa.from('az_service_bookings')
+            .select('id,created_at,category,service,blade_detail,preferred_date,preferred_time,quantity,customer_name,customer_phone,customer_email,notes,status,rush,intake_by,item_location,total_cad,line_items,started_at,done_at,picked_up_at')
+            .eq('status','archived').order('created_at',{ ascending:false }).limit(200)
+        ]);
+        if(q.error) throw q.error;
+        if(arch.error) console.warn('[queue] archived read failed', arch.error);
+        const mapArch = b => ({ id:b.id,
+          job_type: /sharp/i.test(b.category||'') ? 'sharpening' : /sheath/i.test(b.category||'') ? 'sheath' : /class/i.test(b.category||'') ? 'class' : 'other',
+          customer_name:b.customer_name, customer_phone:b.customer_phone, customer_email:b.customer_email,
+          item_summary:b.blade_detail||b.service||'booking', quantity:b.quantity,
+          promised_date:b.preferred_date, promised_time:b.preferred_time, rush:b.rush, status:b.status,
+          item_location:b.item_location, notes:b.notes, price_cad:b.total_cad, line_items:b.line_items,
+          received_at:b.created_at, started_at:b.started_at, done_at:b.done_at, picked_up_at:b.picked_up_at,
+          intake_by:b.intake_by });
+        window._svqState.rows = (q.data || []).concat(arch.error ? [] : (arch.data || []).map(mapArch));
       }catch(e){
         console.warn('[queue] load failed', e);
+        // svqEsc, not esc — the page-level esc() is in another script block and
+        // is NOT in this closure (same trap as the list renderer, caught live:
+        // the error painter itself threw and the pane hung on "Loading…").
         host.innerHTML='<div class="svq-empty">Could not load the queue: '+svqEsc(e.message||String(e))+'</div>';
         return;
       }
@@ -767,8 +1150,12 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       const f = SVQ_FILTERS.find(x => x.key === window._svqState.filter) || SVQ_FILTERS[0];
       // Rush first, then soonest promised date (nulls last), then oldest intake.
       const shown = rows.filter(f.test).sort((a,b) => {
-        const ao = SVQ_OPEN.indexOf(a.status) !== -1, bo = SVQ_OPEN.indexOf(b.status) !== -1;
-        if(ao !== bo) return ao ? -1 : 1;                       // open jobs above closed
+        const ao = svqIsOpen(a.status), bo = svqIsOpen(b.status);
+        if(ao !== bo) return ao ? -1 : 1;                       // still ours above collected
+        // Bench work above finished-awaiting-pickup: the top of the list is what
+        // to work on, the bottom is who to phone. Both stay in Open.
+        const aw = svqIsWorking(a.status), bw = svqIsWorking(b.status);
+        if(ao && bo && aw !== bw) return aw ? -1 : 1;
         if(!!a.rush !== !!b.rush) return a.rush ? -1 : 1;        // rush to the top
         const ad = a.promised_date || '9999-12-31', bd = b.promised_date || '9999-12-31';
         if(ad !== bd) return ad < bd ? -1 : 1;                   // soonest promised, nulls last
@@ -786,14 +1173,23 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       else{
         const today = svqToday();
         host.innerHTML = shown.map(r => {
-          const open = SVQ_OPEN.indexOf(r.status) !== -1;
+          const open = svqIsOpen(r.status);
           const web  = svqIsAppt(r);
-          // Only a BOOKED appointment can be "past due" — a shop job with a month of
-          // leeway must never wear a late flag just because its date slipped by.
-          const late = open && web && r.promised_date && r.promised_date < today;
+          // Only a BOOKED appointment whose WORK is unfinished can be "past due" —
+          // a shop job with a month of leeway must never wear a late flag just
+          // because its date slipped, and a job already done is not late at all.
+          const late = svqIsWorking(r.status) && web && r.promised_date && r.promised_date < today;
+          // Finished and still on our shelf: say how long it has been sitting.
+          // Shaun's job sat done-and-unnotified and nothing on screen said so.
+          let waiting = '';
+          if(r.status === 'done'){
+            const d = r.done_at ? Math.floor((Date.now() - new Date(r.done_at).getTime())/86400000) : null;
+            waiting = '<span class="svq-tag late">Ready' + (d !== null && d >= 0 ? ' · waiting ' + d + 'd' : '') + '</span>';
+          }
           const tags = '<span class="svq-tag '+(web?'web':'shop')+'">'+(web?'Appointment':'Job')+'</span>'
                      + (r.rush ? '<span class="svq-tag rush">Rush</span>' : '')
                      + (late ? '<span class="svq-tag late">Past due</span>' : '')
+                     + waiting
                      + '<span class="svq-tag">'+svqEsc((r.status||'').replace('_',' '))+'</span>';
           return '<div class="svq-card'+(open?'':' closed')+(r.rush?' rush':'')+(web?' web':'')+(window._svqState.sel===r.id?' active':'')+'" data-svqid="'+r.id+'">'
             + '<div class="svq-card__t">'+svqEsc(r.customer_name||'—')+' · '+svqEsc(SVQ_TYPES[r.job_type]||r.job_type)+'</div>'
@@ -809,6 +1205,9 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     window.svqPaintDetail = function(id){
       const r = (window._svqState.rows||[]).find(x => x.id === id);
       const host = document.getElementById('svq-detail'); if(!host) return;
+      // A repaint must never eat what is half-typed in the edit form.
+      if(window._svqState.editing === id){ window.svqPaintEdit(id); return; }
+      delete host.dataset.svqEditing;
       if(!r){ host.innerHTML = '<div class="svq-empty">Pick a job on the left, or tap + New job.</div>'; return; }
       const row = (k,v) => v ? '<div class="svb-row"><div class="svb-row__k">'+k+'</div><div class="svb-row__v">'+svqEsc(String(v))+'</div></div>' : '';
       const web = svqIsAppt(r);
@@ -823,21 +1222,130 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
                 '<div class="svq-line"><span>'+svqEsc(l.label)+'</span><span class="svq-line__c">$'
                 + Number(l.line_cad||0).toFixed(2)+'</span></div>').join('') + '</div>'
             : '')
-        + row('Phone', r.customer_phone) + row(web ? 'Booked for' : 'Wanted by', r.promised_date)
+        + row('Phone', r.customer_phone) + row('Email', r.customer_email)
+        + (!r.customer_phone && !r.customer_email
+            ? '<div class="svb-row"><div class="svb-row__k">Phone</div><div class="svb-row__v" style="color:#cc1f1f">'
+              + 'none on file — tap Edit to add one, or you cannot tell them it is ready</div></div>' : '')
+        + row(web ? 'Booked for' : 'Wanted by', r.promised_date ? (r.promised_date + (r.promised_time ? ' · ' + r.promised_time : '')) : '')
         + row('Rush', r.rush ? 'YES' : '') + row('Where', r.item_location)
         + row('Status', (r.status||'').replace('_',' ')) + row('Price', r.price_cad ? '$'+r.price_cad : '')
         + row('Taken in', svqDay(r.received_at)) + row('By', r.intake_by)
         + row('Started', svqDay(r.started_at)) + row('Done', svqDay(r.done_at))
         + row('Picked up', svqDay(r.picked_up_at)) + row('Notes', r.notes)
         + '<div class="svq-acts">'
-        + '<button type="button" class="svq-act'+(r.started_at?' on':'')+'" data-svqact="started" data-svqrow="'+r.id+'">Started</button>'
-        + '<button type="button" class="svq-act'+(r.done_at?' on':'')+'" data-svqact="done" data-svqrow="'+r.id+'">Done</button>'
-        + '<button type="button" class="svq-act'+(r.picked_up_at?' on':'')+'" data-svqact="picked_up" data-svqrow="'+r.id+'">Picked up</button>'
+        // Archived rows exist only in the base table — the view cannot see them,
+        // so Edit (which writes the view) would silently match nothing. One door
+        // out: Unarchive, then work the row like any other.
+        + (r.status === 'archived'
+          ? '<button type="button" class="svq-act" data-svqact="unarchive" data-svqrow="'+r.id+'">Unarchive</button>'
+          : '<button type="button" class="svq-act'+(r.started_at?' on':'')+'" data-svqact="started" data-svqrow="'+r.id+'">Started</button>'
+          + '<button type="button" class="svq-act'+(r.done_at?' on':'')+'" data-svqact="done" data-svqrow="'+r.id+'">Done</button>'
+          + '<button type="button" class="svq-act'+(r.picked_up_at?' on':'')+'" data-svqact="picked_up" data-svqrow="'+r.id+'">Picked up</button>'
+          + '<button type="button" class="svq-act" data-svqedit="'+r.id+'">Edit</button>'
+          + '<button type="button" class="svq-act" data-svqact="archive" data-svqrow="'+r.id+'">Archive</button>')
         + '</div>';
+    };
+
+    /* ── EDIT ─────────────────────────────────────────────────────────────
+       Bus #4167, hit live: Shaun Fugleberg walked in, his job was finished,
+       and there was no phone number on the record and NO WAY to add one from
+       this card. A finished job that cannot be texted is a job that is not
+       actually done. Alessio's constraint: customer phone numbers must not
+       travel through AI chat — this field is the private path, and that is
+       the whole reason it exists.
+
+       az_shop_queue is an updatable VIEW over az_service_bookings with an
+       INSTEAD OF trigger (trg_az_shop_queue_write), so a plain .update() on
+       the view lands on the one record. No second table, no new endpoint. */
+    const SVQ_EDIT_FIELDS = [
+      { k:'customer_phone', lbl:'Phone',           type:'tel',    ph:'so you can text them when it is ready' },
+      { k:'customer_email', lbl:'Email',           type:'email',  ph:'optional' },
+      { k:'customer_name',  lbl:'Customer',        type:'text'   },
+      { k:'quantity',       lbl:'How many',        type:'number', step:'1' },
+      { k:'item_summary',   lbl:'What came in',    type:'text'   },
+      { k:'promised_date',  lbl:'Wanted by',       type:'date'   },
+      { k:'price_cad',      lbl:'Price $',         type:'number', step:'0.01' },
+      { k:'item_location',  lbl:'Where it is',     type:'text', list:'svq-ed-locs' },
+      { k:'notes',          lbl:'Notes',           area:true     }
+    ];
+
+    window.svqPaintEdit = function(id){
+      const r = (window._svqState.rows||[]).find(x => x.id === id);
+      const host = document.getElementById('svq-detail'); if(!host) return;
+      // Already open on this row — leave it completely alone. Re-rendering from
+      // the stored row would overwrite whatever is half-typed, and the value
+      // most likely to be half-typed here is the phone number this whole thing
+      // exists to capture. Caught in preview: svqPaint() wiped it.
+      if(host.dataset.svqEditing === id) return;
+      if(!r){ window._svqState.editing = null; window.svqPaintDetail(id); return; }
+      const val = k => { const v = r[k]; return v == null ? '' : String(v); };
+      host.innerHTML = '<h3 style="font-family:var(--display);font-size:15px;color:var(--amber);margin:0 0 8px;">'
+          + 'Edit · ' + svqEsc(r.customer_name || '—') + '</h3>'
+        + '<datalist id="svq-ed-locs">' + SVQ_LOCS.map(l => '<option value="'+svqEsc(l)+'">').join('') + '</datalist>'
+        + SVQ_EDIT_FIELDS.map(f =>
+            '<div class="svq-f"><label for="svq-ed-'+f.k+'">'+svqEsc(f.lbl)+'</label>'
+            + (f.area
+                ? '<textarea id="svq-ed-'+f.k+'">'+svqEsc(val(f.k))+'</textarea>'
+                : '<input id="svq-ed-'+f.k+'" type="'+f.type+'" autocomplete="off"'
+                  + (f.step ? ' step="'+f.step+'"' : '')
+                  + (f.list ? ' list="'+f.list+'"' : '')
+                  + (f.ph   ? ' placeholder="'+svqEsc(f.ph)+'"' : '')
+                  + ' value="'+svqEsc(val(f.k))+'">')
+            + '</div>').join('')
+        + '<div class="svq-acts">'
+        + '<button type="button" class="svq-act on" id="svq-edit-save" data-svqrow="'+r.id+'">Save</button>'
+        + '<button type="button" class="svq-act" id="svq-edit-cancel">Cancel</button>'
+        + '</div>';
+      host.dataset.svqEditing = id;
+    };
+
+    window.svqSaveEdit = async function(id){
+      if(!window.supa || window._svqState.busy) return;
+      const g = k => { const el = document.getElementById('svq-ed-'+k); return el ? String(el.value||'').trim() : ''; };
+      const name = g('customer_name');
+      if(!name){ alert('Customer name is needed.'); return; }
+      const qty = g('quantity'), price = g('price_cad');
+      if(qty   !== '' && !Number.isFinite(Number(qty)))   { alert('How many must be a number.'); return; }
+      if(price !== '' && !Number.isFinite(Number(price))) { alert('Price must be a number.'); return; }
+      const patch = {
+        customer_name : name,
+        customer_phone: g('customer_phone') || null,
+        customer_email: g('customer_email') || null,
+        item_summary  : g('item_summary')   || null,
+        quantity      : qty   === '' ? null : Number(qty),
+        promised_date : g('promised_date')  || null,
+        price_cad     : price === '' ? null : Number(price),
+        item_location : g('item_location')  || null,
+        notes         : g('notes')          || null
+      };
+      const btn = document.getElementById('svq-edit-save');
+      if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+      window._svqState.busy = true;
+      let err = null;
+      try { const { error } = await window.supa.from('az_shop_queue').update(patch).eq('id', id); err = error; }
+      catch(e){ err = e; }
+      window._svqState.busy = false;
+      // The form stays open on failure — nothing typed is ever thrown away.
+      if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+      if(err){ alert('Could not save that: '+(err && err.message || err)); return; }
+      window._svqState.editing = null;
+      window.renderQueue();
     };
 
     window.svqAct = async function(id, act){
       if(!window.supa || window._svqState.busy) return;
+      // Archive / Unarchive write the BASE table, not the view: the view filters
+      // archived out, so it can neither show them nor match them for the update.
+      // Same column, same rows the old Bookings Archive button wrote.
+      if(act === 'archive' || act === 'unarchive'){
+        window._svqState.busy = true;
+        const { error } = await window.supa.from('az_service_bookings')
+          .update({ status: act === 'archive' ? 'archived' : 'new' }).eq('id', id);
+        window._svqState.busy = false;
+        if(error){ alert('Could not save that: '+error.message); return; }
+        window.renderQueue();
+        return;
+      }
       const now = new Date().toISOString();
       const patch = act === 'started'   ? { started_at:now,   status:'in_progress' }
                   : act === 'done'      ? { done_at:now,      status:'done' }
@@ -916,8 +1424,9 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       const unlock = () => { if(btn){ btn.disabled = false; btn.textContent = 'Add to the queue'; } };
 
       // Extras ride as their own priced lines so the job reads back honestly.
+      // Active list only: sharpening's Square extras or engraving's site rush.
       const lines = S.lines.slice();
-      SVQ_EXTRAS.forEach(x => { if(S.extras[x.key]) lines.push(
+      SVQ_ALL_EXTRAS.forEach(x => { if(S.extras[x.key]) lines.push(
         { kind:'extra', label:S.extras[x.key]+' × '+x.label, qty:S.extras[x.key], unit_cad:x.cad, line_cad:x.cad*S.extras[x.key] }); });
 
       const rec = {
@@ -928,7 +1437,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
         promised_date: g('svq-date')||null,
         item_location: g('svq-loc') || S.loc || null,
         notes: g('svq-notes') || null,
-        rush: !!S.extras.rush, line_items: lines, price_cad: window.svqTotal(),
+        rush: SVQ_ALL_EXTRAS.some(x => x.flag && S.extras[x.key]), line_items: lines, price_cad: window.svqTotal(),
         status:'new', intake_by:'counter'
       };
       // The button must ALWAYS come back, whatever happens below — a stuck
@@ -954,7 +1463,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
 
     // What one line costs. Knives and the shear ladders are base + inch.
     window.svqUnitPrice = function(kind, variantKey, size){
-      const k = SVQ_PRICES[kind]; if(!k) return 0;
+      const k = svqCat()[kind]; if(!k) return 0;
       if(kind === 'knives'){
         const s = (k.sizes.concat(k.extraSizes)).find(x => x.key === size);
         return s ? s.cad : 0;
@@ -967,31 +1476,87 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     };
 
     window.svqPaintBuilder = function(){
-      const S = window._svqState, k = SVQ_PRICES[S.kind];
-      document.getElementById('svq-kind').innerHTML =
-        Object.keys(SVQ_PRICES).map(id => svqChip('kind:'+id, SVQ_PRICES[id].label, S.kind===id)).join('');
-
+      const S = window._svqState, mode = svqMode();
+      const kw = document.getElementById('svq-kind-wrap'), kl = document.getElementById('svq-kind-lbl');
       const vw = document.getElementById('svq-variant-wrap');
-      if(k.variants){
-        vw.hidden = false;
-        document.getElementById('svq-variant-lbl').textContent = k.variantLabel;
-        document.getElementById('svq-variant').innerHTML = k.variants.map(v =>
-          svqChip('var:'+v.key, v.label, S.variant===v.key, v.cad!=null?v.cad:null)).join('');
-      } else { vw.hidden = true; }
-
       const sw = document.getElementById('svq-size-wrap');
-      const sizes = k.sizes ? k.sizes.concat(k.extraSizes||[]) : null;
-      if(sizes){
-        sw.hidden = false;
-        document.getElementById('svq-size').innerHTML = sizes.map(s =>
-          svqChip('size:'+s.key, s.label, S.size===s.key,
-                  window.svqUnitPrice(S.kind, S.variant, s.key) || null)).join('');
-      } else { sw.hidden = true; }
+      const mw = document.getElementById('svq-manual-wrap');
+      const aw = document.getElementById('svq-addons-wrap');
+      const ql = document.getElementById('svq-qty-lbl');
+      if(aw) aw.hidden = true;   // only the items builder ever shows add-ons
+
+      if(mw) mw.hidden = !(mode === 'manual' || SVQ_MANUAL_TOO[svqType()]);
+      if(kw) kw.hidden = mode === 'manual';
+      if(mw && !mw.hidden){
+        const note = document.getElementById('svq-man-note');
+        if(note) note.textContent = SVQ_MANUAL_NOTE[svqType()] || SVQ_MANUAL_NOTE.other;
+      }
+
+      if(mode === 'items'){
+        const cat = svqCat();
+        // A stale kind (the type just switched) must not blank the panel.
+        if(!cat[S.kind]) S.kind = Object.keys(cat)[0];
+        const k = cat[S.kind];
+        kl.textContent = SVQ_KIND_LBL[svqType()] || 'What came in';
+        ql.textContent = 'How many';
+        document.getElementById('svq-kind').innerHTML =
+          Object.keys(cat).map(id => svqChip('kind:'+id, cat[id].label, S.kind===id)).join('');
+        if(k.variants){
+          vw.hidden = false;
+          document.getElementById('svq-variant-lbl').textContent = k.variantLabel;
+          document.getElementById('svq-variant').innerHTML = k.variants.map(v =>
+            svqChip('var:'+v.key, v.label, S.variant===v.key, v.cad!=null?v.cad:null)).join('');
+        } else { vw.hidden = true; }
+        const sizes = k.sizes ? k.sizes.concat(k.extraSizes||[]) : null;
+        if(sizes){
+          sw.hidden = false;
+          document.getElementById('svq-size').innerHTML = sizes.map(s =>
+            svqChip('size:'+s.key, s.label, S.size===s.key,
+                    window.svqUnitPrice(S.kind, S.variant, s.key) || null)).join('');
+        } else { sw.hidden = true; }
+
+        // ADD-ONS — the chosen variant's Square modifier lists, one block per
+        // list. Nothing renders until a model is picked, because the groups
+        // differ per model (only the Raptor has a bolster; the Defender has no
+        // thong tube).
+        const picked = k.variants ? k.variants.find(v => v.key === S.variant) : null;
+        const groups = picked && picked.addons ? picked.addons : null;
+        if(aw){
+          aw.hidden = !groups;
+          if(groups) document.getElementById('svq-addons').innerHTML = groups.map(g => {
+            const G = SVQ_MODLISTS[g]; if(!G) return '';
+            const on = S.addons[g] || [];
+            const mods = window.svqMods(picked, g);       // rules applied
+            const hid = G.mods.length - mods.length;
+            return '<div style="margin:7px 0 3px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);">'
+              + svqEsc(G.label) + (G.single ? '' : ' · tap any')
+              + (hid ? ' <span style="color:var(--text-xs);text-transform:none;letter-spacing:0;">· '+hid+' hidden, will not fit this knife</span>' : '')
+              + '</div>'
+              + '<div class="svq-chips">'
+              + mods.map(m => svqChip('ad:'+g+':'+m.key, m.label, on.indexOf(m.key) !== -1, m.cad || null)).join('')
+              + '</div>';
+          }).join('');
+        }
+      } else if(mode === 'engraving'){
+        kl.textContent = 'What kind of engraving — price shown is the first piece';
+        const eg = SVQ_ENGRAVING.find(x => x.key === S.ekind);
+        ql.textContent = eg ? ('How many pieces — each after the first is $' + (eg.piece || SVQ_ENG_PIECE))
+                            : 'How many pieces';
+        document.getElementById('svq-kind').innerHTML =
+          SVQ_ENGRAVING.map(g => svqChip('ekind:'+g.key, g.label, S.ekind===g.key, g.first)).join('');
+        vw.hidden = true; sw.hidden = true;
+      } else { // manual: "other" only — everything Square prices has chips now
+        ql.textContent = 'How many';
+        vw.hidden = true; sw.hidden = true;
+      }
 
       document.getElementById('svq-qty').innerHTML =
         SVQ_QTYS.map(n => svqChip('qty:'+n, String(n), S.qty===n)).join('');
+      const activeExtras = svqActiveExtras();
+      const xw = document.getElementById('svq-extras-wrap');
+      if(xw) xw.hidden = !activeExtras.length;
       document.getElementById('svq-extras').innerHTML =
-        SVQ_EXTRAS.map(x => '<span class="svq-chip'+(S.extras[x.key]?' on':'')+'" data-svqc="ex:'+x.key+'">'
+        activeExtras.map(x => '<span class="svq-chip'+(S.extras[x.key]?' on':'')+'" data-svqc="ex:'+x.key+'">'
           + svqEsc(x.label) + '<span class="svq-chip__p">$'+x.cad+'</span>'
           + (S.extras[x.key] ? '<span class="svq-chip__n">'+S.extras[x.key]+'</span>' : '') + '</span>').join('');
       document.getElementById('svq-loc-chips').innerHTML =
@@ -1008,14 +1573,71 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     window.svqTotal = function(){
       const S = window._svqState;
       let t = S.lines.reduce((a,l) => a + l.line_cad, 0);
-      SVQ_EXTRAS.forEach(x => { if(S.extras[x.key]) t += x.cad * S.extras[x.key]; });
+      SVQ_ALL_EXTRAS.forEach(x => { if(S.extras[x.key]) t += x.cad * S.extras[x.key]; });
       return t;
     };
 
+    // The type dropdown drives which builder shows. Lines already added SURVIVE
+    // a type switch on purpose — one drop-off can mix sharpening + engraving,
+    // and every line carries its own honest price already.
+    window.svqTypeChanged = function(){
+      const S = window._svqState;
+      S.variant = null; S.size = null; S.ekind = null; S.qty = 1;
+      const cat = SVQ_CATALOGS[svqType()];
+      if(cat) S.kind = Object.keys(cat)[0];
+      window.svqPaintBuilder();
+    };
+
     window.svqAddLine = function(){
-      const S = window._svqState, k = SVQ_PRICES[S.kind];
+      const S = window._svqState, mode = svqMode();
+      if(mode === 'engraving'){
+        if(!S.ekind){ alert('Pick what kind of engraving first.'); return; }
+        const g = SVQ_ENGRAVING.find(x => x.key === S.ekind);
+        // Square's ladder: first piece at the tier price, each after at that
+        // tier's own per-piece rate (machine $15, hand $25). unit × qty would
+        // overcharge every extra piece.
+        const cad = g.first + (S.qty - 1) * (g.piece || SVQ_ENG_PIECE);
+        S.lines.push({ kind:'engraving', label: S.qty+' × '+g.label.toLowerCase()+' engraving',
+                       qty:S.qty, unit_cad:g.first, line_cad:cad });
+        S.ekind = null; S.qty = 1; window.svqPaintBuilder(); return;
+      }
+      if(mode === 'manual' || (SVQ_MANUAL_TOO[svqType()] && document.getElementById('svq-man-label') && document.getElementById('svq-man-label').value.trim())){
+        const lblEl = document.getElementById('svq-man-label'), prEl = document.getElementById('svq-man-price');
+        const lbl = ((lblEl && lblEl.value) || '').trim();
+        const pr  = Number((prEl && prEl.value) || '');
+        if(!lbl){ alert('Say what it is first.'); return; }
+        if(!Number.isFinite(pr) || pr < 0){ alert('Type the quoted price — a number.'); return; }
+        S.lines.push({ kind:'manual', label: S.qty+' × '+lbl, qty:S.qty, unit_cad:pr, line_cad:pr*S.qty });
+        if(lblEl) lblEl.value = ''; if(prEl) prEl.value = '';
+        S.qty = 1; window.svqPaintBuilder(); return;
+      }
+      const cat = svqCat();
+      if(!cat[S.kind]) S.kind = Object.keys(cat)[0];
+      const k = cat[S.kind];
       if(k.variants && !S.variant){ alert('Pick a '+k.variantLabel.toLowerCase()+' first.'); return; }
       if(k.sizes && !S.size){ alert('Pick a size first.'); return; }
+
+      // A model with add-on groups records the WHOLE build: the model as one
+      // line, then every chosen option as its own line — $0 choices included,
+      // because this line list IS the build sheet the shop works from. "Steel:
+      // 80CRV2 · $0" still has to reach the bench.
+      const picked = k.variants ? k.variants.find(v => v.key === S.variant) : null;
+      if(picked && picked.addons){
+        S.lines.push({ kind:S.kind, label:S.qty+' × '+picked.label, qty:S.qty,
+                       unit_cad:picked.cad, line_cad:picked.cad*S.qty });
+        picked.addons.forEach(g => {
+          const G = SVQ_MODLISTS[g]; if(!G) return;
+          const allowed = window.svqMods(picked, g);   // never price an option the knife cannot take
+          (S.addons[g] || []).forEach(mk => {
+            const m = allowed.find(x => x.key === mk); if(!m) return;
+            S.lines.push({ kind:'addon', label:S.qty+' × '+G.label+': '+m.label,
+                           qty:S.qty, unit_cad:m.cad, line_cad:m.cad*S.qty });
+          });
+        });
+        S.addons = {}; S.variant = null; S.qty = 1;
+        window.svqPaintBuilder(); return;
+      }
+
       const unit = window.svqUnitPrice(S.kind, S.variant, S.size);
       const vlbl = k.variants ? (k.variants.find(v=>v.key===S.variant)||{}).label+' ' : '';
       const sObj = (k.sizes||[]).concat(k.extraSizes||[]).find(x => x.key === S.size);
@@ -1030,6 +1652,7 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     window.svqToggleForm = function(on){
       const f = document.getElementById('svq-form'), b = document.getElementById('svq-new-btn'), d = document.getElementById('svq-detail');
       const show = (on === undefined) ? !f.classList.contains('on') : on;
+      if(show) window._svqState.editing = null;     // the new-job form replaces the detail pane
       f.classList.toggle('on', show);
       b.classList.toggle('open', show);
       b.textContent = show ? '× Cancel' : '+ New job';
@@ -1075,7 +1698,13 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       if(!e.target || !e.target.closest) return;       // clicks can land on non-elements
       const p = e.target.closest('[data-svqf]');       if(p){ window._svqState.filter = p.dataset.svqf; window.svqPaint(); return; }
       const a = e.target.closest('[data-svqact]');     if(a){ window.svqAct(a.dataset.svqrow, a.dataset.svqact); return; }
-      const c = e.target.closest('[data-svqid]');      if(c){ window._svqState.sel = c.dataset.svqid; window.svqToggleForm(false); window.svqPaint(); return; }
+      const ed = e.target.closest('[data-svqedit]');
+      if(ed){ window._svqState.editing = ed.dataset.svqedit; window.svqPaintEdit(ed.dataset.svqedit); return; }
+      if(e.target.closest('#svq-edit-save')){ window.svqSaveEdit(document.getElementById('svq-edit-save').dataset.svqrow); return; }
+      if(e.target.closest('#svq-edit-cancel')){
+        const was = window._svqState.editing; window._svqState.editing = null; window.svqPaintDetail(was); return; }
+      // Switching jobs drops the edit form — its fields belong to the old row.
+      const c = e.target.closest('[data-svqid]');      if(c){ window._svqState.editing = null; window._svqState.sel = c.dataset.svqid; window.svqToggleForm(false); window.svqPaint(); return; }
       if(e.target.closest('#svq-new-btn')){ window.svqToggleForm(); return; }
       if(e.target.closest('#svq-save')){ window.svqSave(); return; }
       if(e.target.closest('#svq-add-line')){ window.svqAddLine(); return; }
@@ -1083,8 +1712,25 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       const ch = e.target.closest('[data-svqc]');
       if(ch){
         const S = window._svqState, v = ch.dataset.svqc, k = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':')+1);
-        if(k==='kind'){ S.kind = val; S.variant = null; S.size = null; }
-        else if(k==='var'){ S.variant = (S.variant===val ? null : val); }
+        // Changing kind or model clears the add-ons: the groups themselves
+        // differ per model, so keeping them would carry a bolster onto a knife
+        // that has none.
+        if(k==='kind'){ S.kind = val; S.variant = null; S.size = null; S.addons = {}; }
+        else if(k==='ekind'){ S.ekind = (S.ekind===val ? null : val); }
+        else if(k==='var'){ S.variant = (S.variant===val ? null : val); S.addons = {}; }
+        else if(k==='ad'){
+          const gi = val.indexOf(':'), g = val.slice(0, gi), mk = val.slice(gi+1);
+          const G = SVQ_MODLISTS[g];
+          if(G){
+            const cur = (S.addons[g] || []).slice();
+            if(G.single){ S.addons[g] = (cur[0] === mk) ? [] : [mk]; }   // radio
+            else { const i = cur.indexOf(mk); if(i === -1) cur.push(mk); else cur.splice(i,1); S.addons[g] = cur; }
+            // Fitting a bolster narrows the pins — drop anything that no
+            // longer fits rather than pricing a part that cannot be built.
+            const cat0 = svqCat()[S.kind];
+            window.svqPruneAddons(cat0 && cat0.variants ? cat0.variants.find(v => v.key === S.variant) : null);
+          }
+        }
         else if(k==='size'){ S.size = (S.size===val ? null : val); }
         else if(k==='qty'){ S.qty = Number(val); }
         else if(k==='loc'){ S.loc = (S.loc===val ? null : val); }
@@ -5247,7 +5893,11 @@ const SUBNAV = {
   ],
   services: [
     { id:'calendar', label:'Calendar' },
-    { id:'bookings', label:'Bookings' },
+    // BOOKINGS folded into QUEUE 2026-08-06 (faces PR #340) — az_shop_queue is a
+    // VIEW over az_service_bookings, so the two subtabs were one table wearing
+    // two status vocabularies. Queue owns the lifecycle; its "Web requests" and
+    // "Archived" chips carry what Bookings used to. DOM + JS left in place so
+    // old deep-links fall back cleanly.
     { id:'schedule', label:'Schedule' },
     { id:'queue',    label:'Queue'    },
   ],
