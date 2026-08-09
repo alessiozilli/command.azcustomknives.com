@@ -410,7 +410,11 @@
   .scx-tab:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
   .scx-tab.on{background:var(--amber,#c8922a);color:#000;border-color:var(--amber,#c8922a);font-weight:700;}
   .scx-tab b{margin-left:5px;font-weight:700;}
-  .scx-3col{display:grid;grid-template-columns:1.25fr 2.3fr 1.45fr;gap:10px;height:calc(100vh - 240px);min-height:420px;align-items:stretch;position:relative;}
+  .scx-3col{display:grid;grid-template-columns:1.25fr 2.3fr 1.45fr;gap:10px;height:calc(100vh - 205px);min-height:420px;align-items:stretch;position:relative;}
+  .scx ::-webkit-scrollbar{width:4px;height:4px;}
+  .scx ::-webkit-scrollbar-track{background:transparent;}
+  .scx ::-webkit-scrollbar-thumb{background:var(--border,#252c33);border-radius:2px;}
+  .scx-col__body{scrollbar-width:thin;scrollbar-color:var(--border,#252c33) transparent;}
   .scx-col{background:var(--surface,#0f1316);border:1px solid var(--border,#252c33);border-radius:6px;padding:10px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;}
   .scx-col__head{font-family:var(--display,sans-serif);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding-bottom:8px;border-bottom:1px solid var(--border,#252c33);margin-bottom:8px;flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .scx-col__body{flex:1 1 0%;min-height:0;overflow-y:auto;}
@@ -624,10 +628,8 @@
     if(left) left.innerHTML = h;
     const cnt = document.getElementById('scx-count');
     if(cnt) cnt.textContent = bench.length + basket.length + chaseDue.length;
-    if(!S.sel){
-      const first = bench[0] || basket[0] || chaseDue[0];
-      if(first) S.sel = first.id;
-    }
+    /* NOTHING auto-selects (Alessio, 2026-08-09): the centre shows only what HE
+       tapped — otherwise it just offers + New job. */
   }
 
   function benchSort(a,b){
@@ -709,7 +711,8 @@
 
   function paintListTab(left){
     const list = tabRows(), t = todayStr();
-    if(!list.some(r => r.id === S.sel)) S.sel = list.length ? list[0].id : null;
+    /* keep the selection only if it survived the filter — NEVER auto-pick */
+    if(S.sel && !list.some(r => r.id === S.sel)) S.sel = null;
     const cards = list.map(r => {
       const tags = '<span class="scx-tag">'+wtLabel(r)+'</span>'
         + (r.rush ? '<span class="scx-tag red">Rush</span>' : '')

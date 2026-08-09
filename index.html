@@ -367,11 +367,14 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     <div class="cc-subpane" data-subtab="queue">
       <div id="cc-scheduling-host" data-default-tab="board"></div>
     </div>
-    </div>
 
     <!-- ═══ SCHEDULE subpane — weekly template + blocked time ═══ -->
     <div class="cc-subpane" data-subtab="schedule">
-    <div class="sv3" style="grid-template-columns:1fr 1fr;gap:var(--sp-10);">
+    <style>
+      [data-lane="services"] .svsc-3col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; height:calc(100vh - 205px); min-height:420px; align-items:stretch; position:relative; margin:var(--sp-12) var(--sp-16); }
+      @media (max-width:700px){ [data-lane="services"] .svsc-3col { grid-template-columns:1fr; height:auto; min-height:0; } }
+    </style>
+    <div class="svsc-3col">
       <div class="sv3-col" id="sv3-sched">
         <div class="sv3-col__head">Schedule — what customers can book</div>
         <div class="cc-subnav__hint" style="margin-bottom:var(--sp-8);">The website reads this live. Blocked time (right) wins over this template.</div>
@@ -399,9 +402,14 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
         <input id="svc-bl-reason" class="cc-modal__field" style="width:100%;margin-top:var(--sp-8);" placeholder="Why (stays private — customers never see this)">
         <button type="button" class="cc-subtab" style="margin:var(--sp-8) 0 0;" onclick="svcAddBlock()">+ Block it</button>
       </div>
+      <div class="sv3-col" style="display:flex;flex-direction:column;">
+        <div class="sv3-col__head">Project Bus <span style="font-family:var(--mono);font-size:9px;color:var(--text-xs);margin-left:auto;" id="svc-sched-bus-count">…</span></div>
+        <div id="svc-sched-bus-composer"></div>
+        <div id="svc-sched-bus-list" style="flex:1;min-height:0;overflow-y:auto;"><div class="svq-empty">—</div></div>
+      </div>
     </div>
     </div>
-    <script defer src="assets/cc-scheduling.js?v=20260809-boxes"></script><!-- the scheduling surface (blueprint step 5): ONE module, three windows - same file as the Alessio face; the inline Bookings+Queue copies are retired -->
+    <script defer src="assets/cc-scheduling.js?v=20260809-audit1"></script><!-- the scheduling surface (blueprint step 5): ONE module, three windows - same file as the Alessio face; the inline Bookings+Queue copies are retired -->
     <script>
     /* SERVICES schedule control (2026-07-12) — writes az_open_hours + az_time_blocks.
        The SAME tables drive pages/booking.html on azcustomknives.com and the copy in
@@ -491,8 +499,28 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
         window.renderSvcSchedule();
       };
 
+      function schedBus(n){
+        var host=document.getElementById('svc-sched-bus-composer'); if(!host) return;
+        if(host.dataset.ccbcMounted){ schedBusLoad(); return; }
+        if(!window.CCBusComposer){ if((n||0)<60) setTimeout(function(){ schedBus((n||0)+1); },100); return; }
+        window.CCBusComposer.mount(host,{ projectSlug:'azck-operations-cowork', label:'New bus message',
+          placeholder:'Type a message about the schedule…', onSent: schedBusLoad });
+        schedBusLoad();
+      }
+      async function schedBusLoad(){
+        var list=document.getElementById('svc-sched-bus-list'); if(!list||!window.supa) return;
+        var r=await window.supa.from('agent_messages').select('id,from_user,to_user,body,created_at')
+          .eq('project_slug','azck-operations-cowork').is('archived_at',null)
+          .order('created_at',{ascending:false}).limit(30);
+        var c=document.getElementById('svc-sched-bus-count'); if(c) c.textContent=r.error?'—':(r.data||[]).length;
+        if(r.error){ list.innerHTML='<div class="svq-empty">Bus unavailable.</div>'; return; }
+        list.innerHTML=(r.data||[]).length? r.data.map(function(m){
+          return '<div class="svb-msg"><div class="svb-msg__head">#'+m.id+' · '+esc(m.from_user)+' → '+esc(m.to_user)+'</div>'
+            + '<div class="svb-msg__body">'+esc((m.body||'').slice(0,300))+'</div></div>'; }).join('')
+          : '<div class="svq-empty">No messages yet.</div>';
+      }
       var prevRS=window.renderServices;
-      window.renderServices=function(){ if(prevRS) prevRS(); window.renderSvcSchedule(); };
+      window.renderServices=function(){ if(prevRS) prevRS(); window.renderSvcSchedule(); schedBus(); };
     })();
     </script>
     <script>
@@ -4387,7 +4415,7 @@ window.openActiveRun = function() {
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
-<script defer src="assets/cc-col-resize.js?v=20260809-scx"></script>
+<script defer src="assets/cc-col-resize.js?v=20260809-svsched"></script>
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
 <script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
 <script>
