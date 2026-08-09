@@ -410,7 +410,7 @@
   .scx-tab:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
   .scx-tab.on{background:var(--amber,#c8922a);color:#000;border-color:var(--amber,#c8922a);font-weight:700;}
   .scx-tab b{margin-left:5px;font-weight:700;}
-  .scx-3col{display:grid;grid-template-columns:1.25fr 2.3fr 1.45fr;gap:10px;height:calc(100vh - 205px);min-height:420px;align-items:stretch;position:relative;}
+  .scx-3col{display:grid;grid-template-columns:1.25fr 2.3fr 1.45fr;gap:10px;height:calc(100vh - var(--scx-top,248px));min-height:420px;align-items:stretch;position:relative;}
   .scx ::-webkit-scrollbar{width:4px;height:4px;}
   .scx ::-webkit-scrollbar-track{background:transparent;}
   .scx ::-webkit-scrollbar-thumb{background:var(--border,#252c33);border-radius:2px;}
@@ -507,6 +507,7 @@
     host.addEventListener('focusin', function(e){
       if(e.target && e.target.id === 'scx-name') paintCustomers(e.target.value);
     });
+    window.addEventListener('resize', fitCols);
     paint();
     load();
   }
@@ -566,6 +567,17 @@
     if(S.formOpen) paintComposer();
     else paintDetail();
     mountBus();
+    fitCols();
+  }
+
+  /* the bottom of the boxes lines up with the browser on EVERY face — measured,
+     not guessed (the After-Hours standard Alessio pointed at, 2026-08-09) */
+  function fitCols(){
+    if(!S.host) return;
+    const g = S.host.querySelector('.scx-3col');
+    if(!g) return;
+    const top = g.getBoundingClientRect().top;
+    if(top > 0) S.host.style.setProperty('--scx-top', Math.round(top + 12) + 'px');
   }
 
   /* ── BOARD — the one-glance surface. Everything open that needs a hand,
@@ -583,8 +595,13 @@
 
     const rowHtml = (r, taps) => {
       const late = r.status === 'at_risk';
+      /* the tag states WHERE IT IS; the buttons are ACTIONS ("Mark …") — the two
+         must never read alike (Alessio caught the buttons reading as states) */
+      const state = isPickup(r) ? 'done · not collected'
+        : r.started_at ? 'started' : (r.status||'').replace('_',' ');
       return '<div class="scx-card'+(S.sel===r.id?' on':'')+'" data-scxid="'+r.id+'">'
         + '<div class="scx-card__t">'+esc(r.customer_name||'—')+' · '+esc(typeLabel(r))
+        + ' <span class="scx-tag'+(isPickup(r)?' amber':'')+'">'+esc(state)+'</span>'
         + (r.rush ? ' <span class="scx-tag red">Rush</span>' : '')
         + (late ? ' <span class="scx-tag red">Late</span>' : '') + '</div>'
         + '<div class="scx-card__s">'+esc(r.blade_detail||r.service||'')
@@ -602,14 +619,14 @@
     let h = '';
     h += '<div class="scx-sec">On the bench — '+bench.length+'</div>';
     h += bench.length ? bench.map(r => rowHtml(r, [
-        !r.started_at ? { a:'started', l:'Started' } : null,
-        { a:'done', l:'Done', go:true }
+        !r.started_at ? { a:'started', l:'Mark started' } : null,
+        { a:'done', l:'Mark done', go:true }
       ].filter(Boolean))).join('') : '<div class="scx-empty">Bench clear.</div>';
 
     h += '<div class="scx-sec">In the basket — done, waiting for pickup — '+basket.length+'</div>';
     h += basket.length ? basket.map(r => rowHtml(r, [
-        !r.notified_at ? { a:'notified', l:'Told them' } : null,
-        { a:'picked_up', l:'Picked up', go:true }
+        !r.notified_at ? { a:'notified', l:'Mark told them' } : null,
+        { a:'picked_up', l:'Mark picked up', go:true }
       ].filter(Boolean))).join('') : '<div class="scx-empty">Basket empty.</div>';
 
     h += '<div class="scx-sec">Next 7 days</div>';
@@ -793,11 +810,11 @@
       ? '<button type="button" class="scx-act" data-scxact="unarchive" data-scxrow="'+r.id+'">Unarchive</button>'
       : (isOpen(r)
           ? (isJob(r)
-              ? '<button type="button" class="scx-act'+(r.started_at?' on':'')+'" data-scxact="started" data-scxrow="'+r.id+'">Started</button>'
+              ? '<button type="button" class="scx-act'+(r.started_at?' on':'')+'" data-scxact="started" data-scxrow="'+r.id+'">Mark started</button>'
               : '')
             + '<button type="button" class="scx-act'+(r.done_at?' on':'')+'" data-scxact="done" data-scxrow="'+r.id+'">'
-            + (isSession(r) ? 'Delivered' : 'Done') + '</button>'
-            + '<button type="button" class="scx-act" data-scxact="picked_up" data-scxrow="'+r.id+'">Picked up</button>'
+            + (isSession(r) ? 'Mark delivered' : 'Mark done') + '</button>'
+            + '<button type="button" class="scx-act" data-scxact="picked_up" data-scxrow="'+r.id+'">Mark picked up</button>'
             + (isSession(r) ? '<button type="button" class="scx-act" data-scxact="cancel" data-scxrow="'+r.id+'">Cancel</button>' : '')
           : '<button type="button" class="scx-act" data-scxact="reopen" data-scxrow="'+r.id+'">Reopen</button>')
         + '<button type="button" class="scx-act" data-scxedit="'+r.id+'">Edit</button>'
@@ -1221,6 +1238,7 @@
          a request with no chase date becomes furniture */
       next_action_date: committedNow ? null : plusDays(7),
       item_location: S.loc || (work === 'job' ? 'Shop' : null),
+      /* 'with customer' means NOTHING was left with us — no drop-off stamp */
       notes: g('scx-notes') || null,
       rush: SVQ_ALL_EXTRAS.some(x => x.flag && S.extras[x.key]),
       line_items: lines,
@@ -1228,8 +1246,9 @@
       intake_by: 'counter',
       source: 'shop-intake',
       /* a counter JOB is physically here — that is what dropped_off_at means.
-         A session or request has nothing dropped off. */
-      dropped_off_at: work === 'job' ? new Date().toISOString() : null
+         A session, a request, or property still with the customer: nothing
+         was dropped off. */
+      dropped_off_at: (work === 'job' && S.loc !== 'with customer') ? new Date().toISOString() : null
     };
     try {
       const { error } = await window.supa.from('az_service_bookings').insert(rec);
