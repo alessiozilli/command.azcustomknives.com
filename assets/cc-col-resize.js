@@ -34,8 +34,6 @@
     { sel: '.in-3col',             key: 'cc.interns.cols' }, // Interns (list | detail | bus)
     { sel: '.p3d-3col',            key: 'cc.p3d.cols'     }, // 3D Printing (nav | doc | bus) — layout standard 2026-07-27
     { sel: '.dash-3col',           key: 'cc.dash.cols'    }, // Dashboard (areas | overview | bus)
-    { sel: '.svb-3col',            key: 'cc.svb.cols'     }, // Services > Bookings (requests | booking | bus) — layout standard 2026-07-27
-    { sel: '.svq-3col',            key: 'cc.svq.cols'     }, // Services > Queue (jobs | job + intake | bus) — bus #3883, 2026-07-30
     { sel: '.ht4',                 key: 'cc.ht.cols',   stack: 1100 }, // Shop > Heat Treat (steel | procs | phases | detail+bus)
     { sel: '.ah4',                 key: 'cc.ah.cols',   stack: 1100 }, // Shop > After-Hours (days | steps | viewer | bus)
     { sel: '.scx-3col',            key: 'cc.scx.cols'   }, // Services > Queue scheduling module (nav | job | bus) — 2026-08-08

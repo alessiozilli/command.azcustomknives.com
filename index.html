@@ -213,129 +213,15 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       [data-lane="services"] .svcal-dhead { font-family:var(--display); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--amber); padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:8px; }
       [data-lane="services"] .svcal-dsec { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin:10px 0 4px; }
       @media (max-width:960px){ [data-lane="services"] .svcal-body { grid-template-columns:1fr; } [data-lane="services"] .svcal-grid { max-height:50vh; } }
-      /* ── BOOKINGS subtab — the CC layout standard (Alessio ruling 2026-07-27):
-         nav | product | bus. It used to be ONE full-width column: 8 cards
-         stretched across 1500px, no detail pane, no bus. Mirrors .p3d-3col. ── */
-      [data-lane="services"] .svb-3col { display:grid; grid-template-columns:1.15fr 2.4fr 1.5fr; gap:10px; height:calc(100vh - 205px); min-height:420px; align-items:stretch; position:relative; }
-      [data-lane="services"] .svb-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
-      [data-lane="services"] .svb-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-      [data-lane="services"] .svb-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
-      [data-lane="services"] .svb-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
-      /* Pill row = the subtabbing-within-the-subtab for this collection. */
-      [data-lane="services"] .svb-pills { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; flex-shrink:0; }
-      [data-lane="services"] .svb-pill { font-family:var(--mono); font-size:9px; padding:3px 8px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; text-transform:uppercase; letter-spacing:.08em; cursor:pointer; user-select:none; }
-      [data-lane="services"] .svb-pill:hover { color:var(--amber); border-color:var(--amber); }
-      [data-lane="services"] .svb-pill.active { background:var(--amber); color:#000; border-color:var(--amber); }
-      /* Fold-out card. The WHOLE header row is the fold control — never a caret-only
-         target (PR #301 shipped an 11px caret and the open card could not be shut). */
-      [data-lane="services"] .svb-card { padding:8px 10px; border:1px solid transparent; border-radius:3px; cursor:pointer; display:flex; align-items:flex-start; gap:7px; }
-      [data-lane="services"] .svb-card:hover { background:var(--raised); border-color:var(--border); }
-      [data-lane="services"] .svb-card.active { background:var(--amber-soft); border-color:var(--amber); }
-      [data-lane="services"] .svb-card__t { flex:1 1 auto; min-width:0; font-size:12.5px; color:var(--text); line-height:1.4; }
-      [data-lane="services"] .svb-card.active .svb-card__t { color:var(--amber); }
-      [data-lane="services"] .svb-card__sub { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:3px; }
-      [data-lane="services"] .svb-caret { flex:0 0 auto; width:14px; text-align:center; font-size:9px; line-height:1.9; color:var(--text-dim); user-select:none; }
-      [data-lane="services"] .svb-card:hover .svb-caret, [data-lane="services"] .svb-card.active .svb-caret { color:var(--amber); }
-      [data-lane="services"] .svb-facts { margin:2px 0 8px; }
-      [data-lane="services"] .svb-facts[hidden] { display:none; }
-      [data-lane="services"] .svb-fact { display:block; padding:4px 10px 4px 18px; font-size:11.5px; color:var(--text-dim); border-radius:3px; word-break:break-word; }
-      [data-lane="services"] .svb-fact b { color:var(--text-xs); font-weight:400; font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; margin-right:6px; }
-      [data-lane="services"] .svb-group { font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-xs); margin:10px 0 4px; padding-left:2px; }
-      [data-lane="services"] .svb-group:first-child { margin-top:0; }
-      /* CENTRE = the product. */
-      [data-lane="services"] .svb-meta { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); display:flex; gap:10px; flex-wrap:wrap; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:10px; }
-      [data-lane="services"] .svb-meta b { color:var(--text-dim); font-weight:400; }
-      [data-lane="services"] .svb-detail h3 { font-family:var(--display); font-size:15px; color:var(--amber); margin:0 0 6px; letter-spacing:.04em; }
-      [data-lane="services"] .svb-row { display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; align-items:baseline; }
-      [data-lane="services"] .svb-row__k { font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-xs); flex:0 0 92px; }
-      [data-lane="services"] .svb-row__v { color:var(--text); flex:1 1 auto; min-width:0; word-break:break-word; }
-      [data-lane="services"] .svb-acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
-      [data-lane="services"] .svb-empty { font-family:var(--mono); font-size:11px; color:var(--text-xs); padding:16px; text-align:center; }
+      /* ── Bus-rail message cards + empty state — the SCHEDULE pane's Project Bus
+         rail (svc-sched-bus-list) renders these. Sole survivors of the retired
+         Bookings/Queue svb-*/svq-* surfaces: the panes died 2026-08-08
+         (cc-scheduling.js owns the queue surface now) and their dead CSS was
+         swept 2026-08-09. ── */
       [data-lane="services"] .svb-msg { background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:6px 10px; font-size:11.5px; line-height:1.45; color:var(--text); margin-bottom:6px; }
       [data-lane="services"] .svb-msg__head { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; }
-      /* ── QUEUE subtab (bus #3883, 2026-07-30) — the shop's intake surface.
-         Layout standard: nav (jobs) | product (detail + intake) | Project Bus.
-         Resizes via .svq-3col in cc-col-resize.js SURFACES. ── */
-      [data-lane="services"] .svq-3col { display:grid; grid-template-columns:1.25fr 2.3fr 1.45fr; gap:10px; height:calc(100vh - 205px); min-height:420px; align-items:stretch; position:relative; }
-      [data-lane="services"] .svq-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
-      [data-lane="services"] .svq-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-      [data-lane="services"] .svq-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
-      [data-lane="services"] .svq-count { font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-left:auto; }
-      /* THE button. Everything else on this tab is secondary. */
-      [data-lane="services"] .svq-new { width:100%; padding:13px 12px; background:var(--amber); color:#000; border:0; border-radius:5px; font-family:var(--display); font-size:14px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; flex-shrink:0; margin-bottom:10px; }
-      [data-lane="services"] .svq-new:hover { filter:brightness(1.08); }
-      [data-lane="services"] .svq-new.open { background:var(--raised); color:var(--text-dim); border:1px solid var(--border); }
-      [data-lane="services"] .svq-form { display:none; }
-      [data-lane="services"] .svq-form.on { display:block; }
-      [data-lane="services"] .svq-f { margin-bottom:9px; }
-      [data-lane="services"] .svq-f label { display:block; font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-xs); margin-bottom:3px; }
-      [data-lane="services"] .svq-f input, [data-lane="services"] .svq-f select { width:100%; box-sizing:border-box; background:var(--raised); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--sans,inherit); font-size:14px; padding:9px 10px; }
-      [data-lane="services"] .svq-f input:focus, [data-lane="services"] .svq-f select:focus { outline:0; border-color:var(--amber); }
-      [data-lane="services"] .svq-rush { display:flex; align-items:center; gap:9px; padding:9px 10px; background:var(--raised); border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:13px; color:var(--text); }
-      [data-lane="services"] .svq-rush input { width:18px; height:18px; accent-color:#cc1f1f; }
-      [data-lane="services"] .svq-save { width:100%; padding:12px; background:var(--amber); color:#000; border:0; border-radius:5px; font-family:var(--display); font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; margin-top:4px; }
-      [data-lane="services"] .svq-save:disabled { opacity:.5; cursor:default; }
-      /* Job rows in the nav column. */
-      [data-lane="services"] .svq-card { padding:9px 10px; border:1px solid transparent; border-left:3px solid transparent; border-radius:3px; cursor:pointer; margin-bottom:3px; }
-      [data-lane="services"] .svq-card:hover { background:var(--raised); border-color:var(--border); }
-      [data-lane="services"] .svq-card.active { background:var(--amber-soft); border-color:var(--amber); }
-      [data-lane="services"] .svq-card.rush { border-left-color:#cc1f1f; }
-      [data-lane="services"] .svq-card.closed { opacity:.55; }
-      [data-lane="services"] .svq-card__t { font-size:13px; color:var(--text); line-height:1.35; }
-      [data-lane="services"] .svq-card.active .svq-card__t { color:var(--amber); }
-      [data-lane="services"] .svq-card__sub { font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:3px; display:flex; gap:7px; flex-wrap:wrap; }
-      [data-lane="services"] .svq-tag { font-family:var(--mono); font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; padding:1px 5px; border-radius:2px; border:1px solid var(--border); color:var(--text-dim); }
-      [data-lane="services"] .svq-tag.rush { background:rgba(204,31,31,.18); color:#ff7a7a; border-color:rgba(204,31,31,.5); }
-      [data-lane="services"] .svq-tag.late { background:rgba(255,176,0,.15); color:var(--amber); border-color:rgba(255,176,0,.45); }
-      /* Where it came from: a booked appointment reads blue, a shop job reads plain. */
-      [data-lane="services"] .svq-tag.web { background:rgba(88,166,255,.14); color:#58a6ff; border-color:rgba(88,166,255,.45); }
-      [data-lane="services"] .svq-tag.shop { background:var(--raised); color:var(--text-dim); }
-      [data-lane="services"] .svq-card.web { border-left-color:rgba(88,166,255,.55); }
-      [data-lane="services"] .svq-card.web.rush { border-left-color:#cc1f1f; }
-      [data-lane="services"] .svq-group { font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-xs); margin:11px 0 4px; padding-left:2px; }
-      [data-lane="services"] .svq-group:first-child { margin-top:0; }
-      [data-lane="services"] .svq-acts { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; }
-      [data-lane="services"] .svq-act { font-family:var(--display); font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:8px 14px; background:var(--raised); border:1px solid var(--border); border-radius:4px; color:var(--text-dim); cursor:pointer; }
-      [data-lane="services"] .svq-act:hover { border-color:var(--amber); color:var(--amber); }
-      [data-lane="services"] .svq-act.on { background:var(--amber); color:#000; border-color:var(--amber); }
-      [data-lane="services"] .svq-empty { font-family:var(--mono); font-size:11px; color:var(--text-xs); padding:16px; text-align:center; }
-      /* CLICK-NOT-TYPE intake (Alessio 2026-07-31). Twenty knives is nine taps,
-         not a paragraph. Prices come from the live Square catalog. */
-      [data-lane="services"] .svq-chips { display:flex; gap:5px; flex-wrap:wrap; }
-      [data-lane="services"] .svq-chip { font-family:var(--mono); font-size:11px; padding:7px 11px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer; user-select:none; }
-      [data-lane="services"] .svq-chip:hover { border-color:var(--amber); color:var(--amber); }
-      [data-lane="services"] .svq-chip.on { background:var(--amber); color:#000; border-color:var(--amber); font-weight:700; }
-      [data-lane="services"] .svq-chip__p { opacity:.6; margin-left:4px; }
-      [data-lane="services"] .svq-chip.on .svq-chip__p { opacity:.8; }
-      [data-lane="services"] .svq-chip__n { display:inline-block; min-width:15px; margin-left:5px; padding:0 4px; background:var(--amber); color:#000; border-radius:8px; font-weight:700; }
-      [data-lane="services"] .svq-add { width:100%; padding:10px; margin:2px 0 10px; background:var(--raised); color:var(--amber); border:1px solid var(--amber); border-radius:5px; font-family:var(--display); font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; cursor:pointer; }
-      [data-lane="services"] .svq-add:hover { background:var(--amber); color:#000; }
-      [data-lane="services"] .svq-lines { margin-bottom:10px; }
-      [data-lane="services"] .svq-line { display:flex; align-items:center; gap:8px; padding:6px 9px; background:var(--raised); border:1px solid var(--border); border-radius:4px; margin-bottom:4px; font-size:12.5px; color:var(--text); }
-      [data-lane="services"] .svq-line__x { margin-left:auto; background:none; border:0; color:var(--text-xs); cursor:pointer; font-size:14px; padding:0 2px; }
-      [data-lane="services"] .svq-line__x:hover { color:#ff7a7a; }
-      [data-lane="services"] .svq-line__c { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
-      [data-lane="services"] .svq-total { padding:9px 11px; background:var(--raised); border:1px solid var(--amber); border-radius:5px; margin-bottom:11px; font-family:var(--display); font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); display:flex; justify-content:space-between; }
-      [data-lane="services"] .svq-total b { color:var(--amber); font-size:16px; }
-      [data-lane="services"] .svq-hits { border:1px solid var(--border); border-radius:4px; margin-top:4px; max-height:190px; overflow-y:auto; }
-      [data-lane="services"] .svq-hits[hidden] { display:none; }
-      [data-lane="services"] .svq-hit { padding:7px 10px; cursor:pointer; font-size:12.5px; color:var(--text); border-bottom:1px solid var(--border); }
-      [data-lane="services"] .svq-hit:last-child { border-bottom:0; }
-      [data-lane="services"] .svq-hit:hover { background:var(--amber-soft); color:var(--amber); }
-      [data-lane="services"] .svq-hit small { display:block; font-family:var(--mono); font-size:9.5px; color:var(--text-xs); margin-top:2px; }
-      @media (max-width:700px) {
-        [data-lane="services"] .svq-3col { grid-template-columns:1fr; height:auto; min-height:0; }
-        [data-lane="services"] .svq-col { max-height:none; overflow:visible; }
-        [data-lane="services"] .svq-col__body { overflow:visible; }
-      }
-      [data-lane="services"] .svb-msg__from { color:var(--amber); font-weight:700; }
       [data-lane="services"] .svb-msg__body { white-space:pre-wrap; word-break:break-word; max-height:180px; overflow-y:auto; }
-      /* ≤700px: stack like .in-3col — page scrolls, columns flow naturally. */
-      @media (max-width:700px){
-        [data-lane="services"] .svb-3col { grid-template-columns:1fr; height:auto; min-height:0; }
-        [data-lane="services"] .svb-col { overflow:visible; }
-        [data-lane="services"] .svb-col__body { overflow-y:visible; }
-      }
+      [data-lane="services"] .svq-empty { font-family:var(--mono); font-size:11px; color:var(--text-xs); padding:16px; text-align:center; }
     </style>
     <!-- ═══ CALENDAR subpane (default) — week/month/year booking overview.
          Bookings (amber) + blocked time (red) + Google Calendar via the synced
@@ -4415,9 +4301,9 @@ window.openActiveRun = function() {
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
-<script defer src="assets/cc-col-resize.js?v=20260809-svsched"></script>
+<script defer src="assets/cc-col-resize.js?v=20260809-svqsweep"></script>
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
-<script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .svb-3col + .svq-3col are registered SURFACES -->
+<script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .scx-3col + .svsc-3col are registered SURFACES -->
 <script>
 'use strict';
 /* One Supabase client per tab (fleet law). Same house project as every face. */
