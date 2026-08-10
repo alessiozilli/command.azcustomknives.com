@@ -189,13 +189,15 @@
     try { localStorage.setItem(k, v == null ? '' : String(v)); } catch (e) {}
   }
   var STATE = {
-    lane:     lsGet(STATE_KEYS.lane,     'az'),        // CHANNEL: both | az | forge | machines | log. COMMAND face defaults AZ - the business side; infrastructure chatter does not clog it (his call, 2026-08-10). One switch away if wanted.
+    lane:     lsGet(STATE_KEYS.lane,     'az'),        // CHANNEL: both | az | forge | machines. COMMAND face defaults AZ - the business side; infrastructure chatter does not clog it (his call, 2026-08-10).
     sender:   lsGet(STATE_KEYS.sender,   'all'),       // all | <instance>
     channel:  lsGet(STATE_KEYS.channel,  'all'),       // all | general | task | build | reply | … (agent_messages.channel CHECK list)
     status:   lsGet(STATE_KEYS.status,   'all'),       // all | unread | awaiting | archived
     priority: lsGet(STATE_KEYS.priority, 'all'),       // all | urgent | normal | low (matches agent_messages.priority enum)
     search:   lsGet(STATE_KEYS.search,   '')
   };
+  // Legacy stored picks and the retired Log button all collapse to the face default.
+  if (['log', 'all', 'human', 'ai', 'local'].indexOf(STATE.lane) !== -1) STATE.lane = 'az';
 
   // ─── Bus #1800 — honor ?priority=urgent in the URL hash ───────────────
   // Diag-urgent pill in the header navigates to #operator/buses-v2?priority=urgent.
@@ -1034,7 +1036,9 @@
     // header rebuilds every paintAll, so active state re-derives from STATE.
     // THE CHANNEL SWITCH (his call 2026-08-10: "one switch and the whole bus
     // changes" — the old five filter chips didn't do the clean cut justice).
-    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'Machines'], ['log', 'Log']].map(function (t) {
+    // No Log button: the system log already lives in its own right-hand column
+    // on every face (his catch, 2026-08-10 late).
+    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'Machines']].map(function (t) {
       var active = STATE.lane === t[0] ? ' active' : '';
       return '<button type="button" class="cc-bus-v2__lane-tab cc-bus-v2__channel-btn' + active + '" data-filter-group="lane" data-filter-value="' + t[0] + '">' + t[1] + '</button>';
     }).join('');
