@@ -1038,7 +1038,7 @@
     // changes" — the old five filter chips didn't do the clean cut justice).
     // No Log button: the system log already lives in its own right-hand column
     // on every face (his catch, 2026-08-10 late).
-    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'Machines']].map(function (t) {
+    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'System']].map(function (t) {
       var active = STATE.lane === t[0] ? ' active' : '';
       return '<button type="button" class="cc-bus-v2__lane-tab cc-bus-v2__channel-btn' + active + '" data-filter-group="lane" data-filter-value="' + t[0] + '">' + t[1] + '</button>';
     }).join('');
