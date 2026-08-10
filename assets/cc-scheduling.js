@@ -294,14 +294,31 @@
   const wtLabel   = r => r.work_type === 'appointment' ? 'Appointment' : r.work_type === 'event' ? 'Event' : 'Job';
   const typeLabel = r => SVQ_TYPES[r.category] || (r.category ? r.category : 'Job');
 
+  /* ══════════════ WHOSE WORK IS IT (Alessio, 2026-08-10) ══════════════
+     "We are two people running this show. We both need the things WE need
+     visible. We literally have two locations."
+
+     Every row belongs to ONE of them. `owner` on the row is the truth when it
+     is set; when it is not, the PROPERTY'S LOCATION decides — anything sitting
+     at the Blue Building is hers, everything else is his. One tap on a card
+     writes the explicit owner and that outranks location from then on.
+     Each face opens on its own person; the switch is always there to see both. */
+  const ownerOf = r => r.owner
+    || (String(r.item_location || '').toLowerCase().indexOf('blue') !== -1 ? 'reanna' : 'alessio');
+  const OWNER_LABEL = { alessio: 'Mine', reanna: 'Reanna', both: 'Both' };
+
   /* ══════════════ STATE ══════════════ */
   const S = {
-    tab: 'board', rows: null, claims: [], attendees: [], hours: [], gcal: [],
+    tab: 'board', who: 'alessio',
+    rows: null, claims: [], attendees: [], hours: [], gcal: [],
     sel: null, editing: null, busy: false, err: null, host: null, opts: {},
     // composer
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null
   };
+
+  /* the split itself: nothing downstream sees the other person's work */
+  const mine = rows => (rows || []).filter(r => S.who === 'both' || ownerOf(r) === S.who);
 
   const TABS = [
     { key:'board',    label:'Board' },
@@ -317,7 +334,7 @@
   const BK_COLS = 'id,created_at,category,service,blade_detail,preferred_date,preferred_time,quantity,'
     + 'customer_name,customer_phone,customer_email,notes,status,source,rush,intake_by,item_location,'
     + 'total_cad,line_items,dropped_off_at,scheduled_at,started_at,done_at,notified_at,picked_up_at,'
-    + 'work_type,duration_minutes,next_action_date';
+    + 'work_type,duration_minutes,next_action_date,owner';
 
   async function load(){
     if(!window.supa){ S.err = 'signin'; paint(); return; }
@@ -404,6 +421,12 @@
   .scx *{box-sizing:border-box;}
   .scx-topline{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
   .scx-tabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .scx-who{display:flex;gap:0;border:1px solid var(--border,#252c33);border-radius:5px;overflow:hidden;flex:0 0 auto;}
+  .scx-who__btn{cursor:pointer;padding:6px 13px;font-family:var(--display,sans-serif);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim,#8a9aa8);background:var(--raised,#161b20);user-select:none;border-right:1px solid var(--border,#252c33);}
+  .scx-who__btn:last-child{border-right:0;}
+  .scx-who__btn:hover{color:var(--amber,#c8922a);}
+  .scx-who__btn.on{background:var(--amber,#c8922a);color:#000;}
+  .scx-who__btn b{margin-left:5px;font-weight:700;opacity:.75;}
   .scx-tab{cursor:pointer;padding:6px 12px;border:1px solid var(--border,#252c33);border-radius:4px;
     font-family:var(--mono,monospace);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
     color:var(--text-dim,#8a9aa8);background:var(--raised,#161b20);user-select:none;}
@@ -490,12 +513,15 @@
     if(!host) return;
     S.host = host; S.opts = opts || {};
     S.tab = (opts && opts.defaultTab) || 'board';
+    /* each face opens on ITS OWN person — his board, her board, command sees both */
+    S.who = (opts && opts.who) || host.dataset.who || 'alessio';
     if(!document.getElementById('scx-style')){
       const st = document.createElement('style'); st.id = 'scx-style'; st.textContent = CSS;
       document.head.appendChild(st);
     }
     host.classList.add('scx');
     host.innerHTML = '<div class="scx-topline">'
+      + '<div class="scx-who" id="scx-who"></div>'
       + '<div class="scx-tabs" id="scx-tabs"></div>'
       + '<button type="button" class="scx-reload" id="scx-reload" title="Reload">↻</button>'
       + '</div>'
@@ -514,7 +540,7 @@
 
   /* ══════════════ PAINT ══════════════ */
   function counts(){
-    const rows = S.rows || [];
+    const rows = mine(S.rows);
     return {
       board: rows.filter(r => (onBench(r) && committed(r)) || isPickup(r)).length
            + rows.filter(r => isRequest(r) && r.next_action_date && r.next_action_date <= todayStr()).length,
@@ -535,6 +561,16 @@
       tabs.innerHTML = TABS.map(t =>
         '<span class="scx-tab'+(S.tab===t.key?' on':'')+'" data-scxtab="'+t.key+'">'+t.label
         + (c[t.key] != null ? ' <b>'+c[t.key]+'</b>' : '') + '</span>').join('');
+    }
+    /* WHOSE work — the split switch. Mine / Reanna / Both, and the count is
+       the other person's open work so neither of us has to guess. */
+    const whoWrap = document.getElementById('scx-who');
+    if(whoWrap){
+      const all = S.rows || [];
+      const openCount = w => all.filter(r => isOpen(r) && (w === 'both' || ownerOf(r) === w)).length;
+      whoWrap.innerHTML = ['alessio','reanna','both'].map(w =>
+        '<span class="scx-who__btn'+(S.who===w?' on':'')+'" data-scxwho="'+w+'">'
+        + OWNER_LABEL[w] + ' <b>'+openCount(w)+'</b></span>').join('');
     }
     const body = document.getElementById('scx-body');
     if(!body) return;
@@ -584,7 +620,7 @@
      one tap to move it. Alessio, 2026-08-08: "What is all on my bench right
      now? What is all in the basket right now? … my job is just click done." ── */
   function paintBoard(left){
-    const rows = S.rows || [], t = todayStr();
+    const rows = mine(S.rows), t = todayStr();
     const bench = rows.filter(r => onBench(r) && committed(r)).sort(benchSort);
     const basket = rows.filter(isPickup).sort((a,b) => (a.done_at||'') < (b.done_at||'') ? -1 : 1);
     const chase = rows.filter(r => isRequest(r))
@@ -658,7 +694,7 @@
 
   /* the day-by-day feed shared by BOARD (7 days) and SCHEDULE (14 days) */
   function upcoming(nDays){
-    const rows = S.rows || [], byId = {};
+    const rows = mine(S.rows), byId = {};
     rows.forEach(r => byId[r.id] = r);
     const days = [];
     for(let i = 0; i < nDays; i++){
@@ -713,7 +749,7 @@
 
   /* ── the list tabs: BENCH · REQUESTS · CLASSES · PICKUPS · HISTORY ── */
   function tabRows(){
-    const rows = S.rows || [];
+    const rows = mine(S.rows);
     if(S.tab === 'bench')    return rows.filter(r => onBench(r) && !!r.preferred_date).sort(benchSort);
     if(S.tab === 'requests') return rows.filter(isRequest)
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
@@ -819,7 +855,18 @@
           : '<button type="button" class="scx-act" data-scxact="reopen" data-scxrow="'+r.id+'">Reopen</button>')
         + '<button type="button" class="scx-act" data-scxedit="'+r.id+'">Edit</button>'
         + (r.status !== 'archived' ? '<button type="button" class="scx-act" data-scxact="archive" data-scxrow="'+r.id+'">Archive</button>' : '');
+    /* whose it is — and one tap to hand it over */
+    const own = ownerOf(r);
+    const ownRow = '<div class="scx-row"><div class="scx-row__k">Whose</div><div class="scx-row__v">'
+      + '<div class="scx-chips">'
+      + ['alessio','reanna'].map(w =>
+          '<span class="scx-chip'+(own===w?' on':'')+'" data-scxsetowner="'+w+'" data-scxrow="'+r.id+'">'
+          + (w==='alessio'?'Mine':'Reanna') + '</span>').join('')
+      + '</div>'
+      + (r.owner ? '' : '<div class="scx-count">following the location — tap to fix it for good</div>')
+      + '</div></div>';
     det.innerHTML = '<h3>'+esc(r.customer_name||'—')+' · '+esc(typeLabel(r))+'</h3>'
+      + ownRow
       + row('Kind', wtLabel(r) + (isRequest(r) ? ' — REQUEST: no committed date yet' : ''))
       + row('What', esc(r.blade_detail||r.service||''))
       + row('How many', r.quantity ? esc('×'+r.quantity) : '')
@@ -1244,6 +1291,8 @@
       line_items: lines,
       total_cad: total(),
       intake_by: 'counter',
+      /* a job logged on MY board is mine unless the location says otherwise */
+      owner: S.who === 'both' ? null : S.who,
       source: 'shop-intake',
       /* a counter JOB is physically here — that is what dropped_off_at means.
          A session, a request, or property still with the customer: nothing
@@ -1314,6 +1363,8 @@
     const T = sel => e.target.closest(sel);
     let el;
     if(el = T('[data-scxtab]')){ S.tab = el.dataset.scxtab; S.formOpen = false; S.editing = null; paint(); return; }
+    if(el = T('[data-scxwho]')){ S.who = el.dataset.scxwho; S.sel = null; S.editing = null; S.formOpen = false; paint(); return; }
+    if(el = T('[data-scxsetowner]')){ return write(el.dataset.scxrow, { owner: el.dataset.scxsetowner }); }
     if(T('#scx-reload')){ load(); return; }
     if(T('#scx-new')){ S.formOpen = !S.formOpen; S.editing = null; paint(); return; }
     if(T('#scx-form-cancel')){ S.formOpen = false; paint(); return; }
@@ -1420,7 +1471,8 @@
   window.CCScheduling = {
     mount: mount,
     refresh: load,
-    setTab: function(t){ S.tab = t; paint(); }
+    setTab: function(t){ S.tab = t; paint(); },
+    setWho: function(w){ S.who = w; S.sel = null; paint(); }
   };
   // every face's existing lane-enter hook keeps working:
   window.renderQueue = function(){ if(S.host) load(); };
