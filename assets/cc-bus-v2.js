@@ -430,11 +430,16 @@
   }
 
   // ─── Filtering ─────────────────────────────────────────────────────────
-  // Lane bucketing (2026-07-19): agent_messages.lane is trigger-filed
-  // ('human'|'ai'|'log'). Zero nulls today, but any null/unknown value
-  // buckets with 'ai' so rows can never vanish from every tab except All.
+  // Lane bucketing (2026-07-19; three-lane split ratified 2026-08-10):
+  // agent_messages.lane is trigger-filed as 'human' (both parties human),
+  // 'cross' (one human, one AI), 'ai', 'log', 'local'. This face is a human
+  // viewer, so 'cross' buckets under the Human tab — machine-only chatter
+  // stays off the first glance (Alessio's call: AI↔AI is first-glance on
+  // HIS face only, not here, not Reanna's). Null/unknown buckets with 'ai'
+  // so rows can never vanish from every tab except All.
   function laneOf(r) {
     var l = String((r && r.lane) || '').toLowerCase();
+    if (l === 'cross') return 'human';
     return (l === 'human' || l === 'ai' || l === 'log' || l === 'local') ? l : 'ai';
   }
 
