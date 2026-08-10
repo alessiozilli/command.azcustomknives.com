@@ -101,6 +101,43 @@
     });
     return map;
   }
+  // ─── Thread folding (Alessio ratified 2026-08-10) ──────────────────────
+  // A reply never stands alone: the whole exchange stacks as a chat on its
+  // ROOT card. root_id is trigger-stamped in the DB (bus_auto_thread) and a
+  // reply inherits the root's project/task/plan. THREAD_MAP.replies[rootId]
+  // holds every reply ASC; THREAD_MAP.roots holds root rows older than the
+  // fetch window so a fresh reply can still summon its original card.
+  var THREAD_MAP = { replies: {}, roots: {} };
+  async function loadThreads(client, rows) {
+    var map = { replies: {}, roots: {} };
+    var rootIds = {};
+    var visible = {};
+    rows.forEach(function (r) {
+      visible[String(r.id)] = true;
+      if (r.root_id) rootIds[String(r.root_id)] = true;
+      else rootIds[String(r.id)] = true;   // any non-reply row may be a thread root
+    });
+    var ids = Object.keys(rootIds).map(Number).filter(function (n) { return n > 0; });
+    if (!ids.length) return map;
+    try {
+      var rep = await client.from('agent_messages')
+        .select('id,from_user,to_user,body,status,sent_at,created_at,root_id,parent_id,channel')
+        .in('root_id', ids).order('sent_at', { ascending: true }).limit(400);
+      (rep.data || []).forEach(function (r) {
+        var k = String(r.root_id);
+        (map.replies[k] = map.replies[k] || []).push(r);
+      });
+      var missingRoots = Object.keys(map.replies).filter(function (k) { return !visible[k]; }).map(Number);
+      if (missingRoots.length) {
+        var rr = await client.from('agent_messages')
+          .select('id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug')
+          .in('id', missingRoots);
+        (rr.data || []).forEach(function (r) { map.roots[String(r.id)] = r; });
+      }
+    } catch (e) { /* on failure threads render flat, nothing is lost */ }
+    return map;
+  }
+
   function replyContextHtml(msg) {
     if (!msg || !msg.parent_id) return '';
     var p = PARENT_MAP[msg.parent_id];
@@ -138,7 +175,7 @@
 
   // ─── Persistent filter state ───────────────────────────────────────────
   var STATE_KEYS = {
-    lane:     'cc.bus.v2.filter.lane',
+    lane:     'cc.bus.v2.channel',
     sender:   'cc.bus.v2.filter.sender',
     channel:  'cc.bus.v2.filter.channel',
     status:   'cc.bus.v2.filter.status',
@@ -152,7 +189,7 @@
     try { localStorage.setItem(k, v == null ? '' : String(v)); } catch (e) {}
   }
   var STATE = {
-    lane:     lsGet(STATE_KEYS.lane,     'human'),     // human | ai | log | all (agent_messages.lane; default Human for the human viewer)
+    lane:     lsGet(STATE_KEYS.lane,     'az'),        // CHANNEL: both | az | forge | machines | log. COMMAND face defaults AZ - the business side; infrastructure chatter does not clog it (his call, 2026-08-10). One switch away if wanted.
     sender:   lsGet(STATE_KEYS.sender,   'all'),       // all | <instance>
     channel:  lsGet(STATE_KEYS.channel,  'all'),       // all | general | task | build | reply | … (agent_messages.channel CHECK list)
     status:   lsGet(STATE_KEYS.status,   'all'),       // all | unread | awaiting | archived
@@ -173,9 +210,9 @@
       var _qp = _hashQS.get('priority');
       if (_qp) {
         STATE.priority = _qp; lsSet(STATE_KEYS.priority, _qp);
-        // Urgent rows to forge-code/forge live in lane 'ai' — widen the lane so
-        // the pill's count matches what the panel shows (bus #1800 regression).
-        STATE.lane = 'all'; lsSet(STATE_KEYS.lane, 'all');
+        // Urgent rows to forge-code/forge live in lane 'ai' — widen the channel
+        // so the pill's count matches what the panel shows (bus #1800 regression).
+        STATE.lane = 'machines'; lsSet(STATE_KEYS.lane, 'machines');
       }
     }
   } catch (e) {}
@@ -432,10 +469,10 @@
   // ─── Filtering ─────────────────────────────────────────────────────────
   // Lane bucketing (2026-07-19; three-lane split ratified 2026-08-10):
   // agent_messages.lane is trigger-filed as 'human' (both parties human),
-  // 'cross' (one human, one AI), 'ai', 'log', 'local'. This face is a human
-  // viewer, so 'cross' buckets under the Human tab — machine-only chatter
-  // stays off the first glance (Alessio's call: AI↔AI is first-glance on
-  // HIS face only, not here, not Reanna's). Null/unknown buckets with 'ai'
+  // 'cross' (one human, one AI), 'ai', 'log', 'local'. 'cross' buckets under
+  // the Human tab on every face. THIS face is Alessio's: his call is that
+  // AI↔AI IS first-glance here (default lane 'all') — and only here; the
+  // command + Reanna faces default to Human. Null/unknown buckets with 'ai'
   // so rows can never vanish from every tab except All.
   function laneOf(r) {
     var l = String((r && r.lane) || '').toLowerCase();
@@ -451,8 +488,17 @@
   // clicking produces.
   function rowMatches(r, skip) {
     var s = STATE.search.toLowerCase().trim();
-    if (skip !== 'lane' && STATE.lane !== 'all') {
-      if (laneOf(r) !== STATE.lane) return false;
+    // Channel gate (2026-08-10): one switch, whole bus flips. 'both' passes
+    // every non-log row (the split view partitions + counts machines itself);
+    // az/forge take the people lanes and partition by topic in paintAll;
+    // machines = AI↔AI + local crew; log = the system lane.
+    if (skip !== 'lane') {
+      var lo = laneOf(r);
+      var ch = STATE.lane;
+      if (ch === 'az' || ch === 'forge') { if (lo !== 'human') return false; }
+      else if (ch === 'machines') { if (lo !== 'ai' && lo !== 'local') return false; }
+      else if (ch === 'log') { if (lo !== 'log') return false; }
+      // 'both' (and anything unknown) falls through
     }
     if (skip !== 'sender' && STATE.sender !== 'all') {
       if (String(r.from_user || '').toLowerCase() !== STATE.sender) return false;
@@ -568,7 +614,22 @@
     return lead + (body ? body.textContent.trim() : '');
   }
 
-  function renderCard(msg, plan) {
+  function renderCard(msg, plan, replies) {
+    replies = replies || [];
+    // Who's in the mix: everyone who has written or been written to on this
+    // thread — the original pair plus anyone added later (forward = they join).
+    var mix = {};
+    [msg].concat(replies).forEach(function (r) {
+      if (r && r.from_user) mix[r.from_user] = 1;
+      if (r && r.to_user) mix[r.to_user] = 1;
+    });
+    var mixHtml = replies.length
+      ? '<span class="cc-bus-v2__mix" title="everyone in this thread">👥 ' +
+        Object.keys(mix).map(function (n) { return '<b style="color:' + instColor(n).color + '">' + escapeHtml(n) + '</b>'; }).join(' · ') + '</span>'
+      : '';
+    // Reply goes to the last OTHER voice in the thread, not blindly to the root sender.
+    var lastOther = msg.from_user || '';
+    replies.forEach(function (r) { if (r.from_user && r.from_user !== 'alessio') lastOther = r.from_user; });
     var hasPlanDraft = plan && plan.status === 'draft';
     var hasPlanApproved = plan && plan.status && plan.status !== 'draft';
     var body = String(msg.body || '');
@@ -659,9 +720,26 @@
     var flagDots = Object.keys(FLAG_COLORS).map(function (name) {
       return '<button class="cc-bus-v2__flag-dot" data-act="set-flag" data-flag="' + name + '" title="' + name + '" style="width:15px;height:15px;border-radius:50%;border:2px solid ' + (msg.flag_color === name ? '#fff' : 'transparent') + ';background:' + FLAG_COLORS[name] + ';cursor:pointer;padding:0;"></button>';
     }).join('');
+    // The chat: every reply stacks chronologically on the original bus card.
+    var threadHtml = '';
+    if (replies.length) {
+      threadHtml = '<div class="cc-bus-v2__thread">' + replies.map(function (r) {
+        var mine = String(r.from_user || '') === 'alessio';
+        return '<div class="cc-bus-v2__bubble' + (mine ? ' mine' : '') + '">' +
+          '<div class="cc-bus-v2__bubble-head"><b style="color:' + instColor(r.from_user).color + '">' + escapeHtml(r.from_user || '?') + '</b>' +
+          (r.to_user ? '<span style="opacity:.6">→</span><span style="color:' + instColor(r.to_user).color + '">' + escapeHtml(r.to_user) + '</span>' : '') +
+          '<span class="cc-bus-v2__bubble-when">#' + escapeHtml(String(r.id)) + ' · ' + escapeHtml(fmtTime(r.sent_at || r.created_at)) + '</span></div>' +
+          '<div class="cc-bus-v2__bubble-body">' + escapeHtml(String(r.body || '')) + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
+    var fwdTargets = ['forge-code', 'forge-cowork', 'forge-design', 'reanna', 'team', 'forge'];
+    var fwdSelect = '<select data-role="fwd-to" class="hidden">' +
+      fwdTargets.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') + '</select>';
     var actionsHtml =
       '<div class="cc-bus-v2__actions">' +
         '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--reply" data-act="open-reply-wide">↩ Reply</button>' +
+        '<button class="cc-bus-v2__act-btn" data-act="open-forward" title="Send this thread to someone else — they join the mix and their answer stacks here too.">⇄ Forward</button>' +
         '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--done" data-act="toggle-done" data-done="' + (isDone ? '1' : '') + '" title="' + (isDone ? 'Put it back on the list' : 'Finished — takes it off the list. No comment needed. Find it again under the Done filter.') + '">' + doneLabel + '</button>' +
         '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--close" data-act="toggle-close-on-send" title="Reply and finish in one go: arms this thread to be marked done when you hit Send. Just want it done with no message? Use Done.">✦ Close</button>' +
         '<button class="cc-bus-v2__act-btn" data-act="save" data-saved="' + (msg.saved_at ? '1' : '') + '" title="Keep — exempts this from the nightly tidy-up. Nothing is ever deleted either way.">' + saveLabel + '</button>' +
@@ -672,9 +750,10 @@
         '<button data-act="set-flag" data-flag="" style="background:none;border:0;color:#7a7a7a;cursor:pointer;font-size:11px;">✕ clear</button>' +
       '</div>' +
       '<div class="cc-bus-v2__reply-wide hidden" data-role="reply-wide">' +
-        '<textarea data-role="reply-wide-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(msg.from_user || '') + '" placeholder="Type your reply… click the mic icon for dictation. Cmd/Ctrl+Enter to send."></textarea>' +
+        '<textarea data-role="reply-wide-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '" placeholder="Type your reply… click the mic icon for dictation. Cmd/Ctrl+Enter to send."></textarea>' +
         '<div class="cc-bus-v2__reply-wide-row">' +
-          '<span class="cc-bus-v2__reply-wide-hint">Replying to ' + escapeHtml(msg.from_user || '') + ' on bus #' + escapeHtml(msgId) + '</span>' +
+          fwdSelect +
+          '<span class="cc-bus-v2__reply-wide-hint">Replying to ' + escapeHtml(lastOther) + ' on bus #' + escapeHtml(msgId) + '</span>' +
           '<span class="cc-bus-v2__close-hint">✓ Will close this thread when sent</span>' +
           '<button class="cc-bus-v2__reply-wide-cancel" data-act="cancel-reply-wide">Cancel</button>' +
           '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve cc-bus-v2__reply-wide-send" data-act="send-reply-wide">Send</button>' +
@@ -691,13 +770,15 @@
           openAskTag +
           '<span class="cc-bus-v2__id">#' + escapeHtml(msgId) + '</span>' +
           '<span class="cc-bus-v2__time">' + escapeHtml(fmtTime(msg.sent_at || msg.created_at)) + '</span>' +
+          mixHtml +
         '</div>' +
         replyContextHtml(msg) +
         '<div class="' + bodyClass + '">' + bodyHtml + '</div>' +
         '<div class="cc-bus-v2__readrow">' + readBtn + showMore + '</div>' +
+        threadHtml +
         planBar +
         '<div class="cc-bus-v2__reply hidden" data-role="reply">' +
-          '<input type="text" placeholder="Reply on this thread…" data-role="reply-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(msg.from_user || '') + '">' +
+          '<input type="text" placeholder="Reply on this thread…" data-role="reply-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '">' +
           '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve" data-act="send-reply">Send</button>' +
         '</div>' +
         actionsHtml +
@@ -716,8 +797,23 @@
     return (typeof t === 'string' && t.indexOf('taskbatch-') === 0) ? t : null;
   }
   function groupRenderUnits(rows) {
-    var units = [], seen = {};
+    var units = [], seen = {}, seenThread = {};
+    function rowInList(id) {
+      for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) return rows[i];
+      return null;
+    }
     rows.forEach(function (r) {
+      // Thread folding first: any row belonging to a thread with replies emits
+      // ONE thread card (at the position of its newest member) and the rest fold.
+      var rootKey = String(r.root_id || r.id);
+      var replies = THREAD_MAP.replies[rootKey] || [];
+      if (replies.length) {
+        if (seenThread[rootKey]) return;
+        seenThread[rootKey] = true;
+        var rootRow = r.root_id ? (rowInList(r.root_id) || THREAD_MAP.roots[rootKey]) : r;
+        if (rootRow) { units.push({ type: 'thread', msg: rootRow, replies: replies }); return; }
+        // root unreachable — fall through so the reply still shows as a card
+      }
       var tid = batchThreadOf(r);
       if (!tid) { units.push({ type: 'single', msg: r }); return; }
       if (seen[tid]) return;            // batch already folded at its first row
@@ -936,9 +1032,11 @@
     // Lane tabs (2026-07-19): Human / AI / Log / All over agent_messages.lane.
     // Emitted with data-filter-group so the existing delegation handles clicks;
     // header rebuilds every paintAll, so active state re-derives from STATE.
-    var laneTabs = [['human', 'Human'], ['ai', 'AI'], ['local', 'Local AI'], ['log', 'Log'], ['all', 'All']].map(function (t) {
+    // THE CHANNEL SWITCH (his call 2026-08-10: "one switch and the whole bus
+    // changes" — the old five filter chips didn't do the clean cut justice).
+    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'Machines'], ['log', 'Log']].map(function (t) {
       var active = STATE.lane === t[0] ? ' active' : '';
-      return '<button type="button" class="cc-bus-v2__lane-tab' + active + '" data-filter-group="lane" data-filter-value="' + t[0] + '">' + t[1] + '</button>';
+      return '<button type="button" class="cc-bus-v2__lane-tab cc-bus-v2__channel-btn' + active + '" data-filter-group="lane" data-filter-value="' + t[0] + '">' + t[1] + '</button>';
     }).join('');
     // Search input was moved into renderComposer() per Alessio direct 2026-05-17
     // — it now sits inline with the @chips above the type box.
@@ -1245,8 +1343,14 @@
     // Sidebar counts must reflect the ACTIVE lane, or a badge promises rows the
     // lane-filtered list won't show — the "urgent: 10 but the list is empty" bug. (2026-07-20)
     var laneBase = (STATE.lane === 'log') ? ALL_ROWS : humanRows;
-    var sidebarRows = (STATE.lane === 'all') ? laneBase
-      : laneBase.filter(function (r) { return laneOf(r) === STATE.lane; });
+    // Sidebar counts follow the CHANNEL gate exactly, same rules as rowMatches.
+    var sidebarRows = laneBase.filter(function (r) {
+      var lo = laneOf(r), ch = STATE.lane;
+      if (ch === 'az' || ch === 'forge') return lo === 'human';
+      if (ch === 'machines') return lo === 'ai' || lo === 'local';
+      if (ch === 'log') return lo === 'log';
+      return true;   // both
+    });
     if (sidebar) sidebar.innerHTML = renderSidebar(sidebarRows);
 
     // Lane 'log' overlaps the syslog split (system rows never reach humanRows),
@@ -1315,14 +1419,60 @@
         }
       });
 
+      function unitHtml(u) {
+        if (u.type === 'bundle') return renderBundleCard(u.msgs);
+        var plan = pickDraftPlan(u.msg, PLAN_MAP);
+        return renderCard(u.msg, plan, u.replies);
+      }
+      // ─── The channels (Alessio, 2026-08-10, three refinements in one night):
+      // a clean cut between AZ business talk, Forge infrastructure talk, the
+      // machines talking to each other, and the system log. One switch flips
+      // the whole bus. 'both' = the split view, AZ left, Forge right.
+      //   AZ — the business: anything Reanna touches, plus every row whose
+      //   project is shop/clients/people/QuadFang. What the business needs from him.
+      //   Forge — the infrastructure: CC builds, repos, fleet, tools — his
+      //   work on the machine itself. NOT shown on the command face by default.
+      var INFRA_SLUG_RE = /^(command-center|forge|atlas|debug|overwatch|beast|azcc|email-studio|phantom)/;
+      function sideOf(u) {
+        var m = u.msg || (u.msgs && u.msgs[0]) || {};
+        var everyone = [m.from_user, m.to_user];
+        (u.replies || []).forEach(function (r) { everyone.push(r.from_user, r.to_user); });
+        if (everyone.indexOf('reanna') !== -1) return 'az';   // her traffic is business, always
+        var slug = String(m.project_slug || '').toLowerCase();
+        if (slug && slug !== 'unsorted') return INFRA_SLUG_RE.test(slug) ? 'infra' : 'az';
+        return 'infra';   // unfiled machine-age traffic is almost always infra
+      }
+      var splitMode = (STATE.lane === 'both');
       if (!filtered.length) {
-        list.innerHTML = '<div class="cc-bus-v2__empty">No bus messages match these filters.</div>';
+        list.innerHTML = '<div class="cc-bus-v2__empty">Channel is clear.</div>';
+      } else if (STATE.lane === 'az' || STATE.lane === 'forge') {
+        var side = (STATE.lane === 'az') ? 'az' : 'infra';
+        var chanUnits = groupRenderUnits(filtered).filter(function (u) { return sideOf(u) === side; });
+        list.innerHTML = chanUnits.length
+          ? chanUnits.map(unitHtml).join('')
+          : '<div class="cc-bus-v2__empty">Channel is clear.</div>';
+      } else if (splitMode) {
+        var units = groupRenderUnits(filtered);
+        var azUnits = [], infraUnits = [], machineCount = 0;
+        units.forEach(function (u) {
+          var rawLane = String((u.msg && u.msg.lane) || (u.msgs && u.msgs[0] && u.msgs[0].lane) || '').toLowerCase();
+          if (rawLane === 'ai' || rawLane === 'local' || rawLane === 'log') { machineCount++; return; }
+          if (sideOf(u) === 'az') azUnits.push(u); else infraUnits.push(u);
+        });
+        list.innerHTML =
+          '<div class="cc-bus-v2__split">' +
+            '<div class="cc-bus-v2__split-col">' +
+              '<div class="cc-bus-v2__split-h">AZ — the business</div>' +
+              (azUnits.length ? azUnits.map(unitHtml).join('') : '<div class="cc-bus-v2__split-empty">Nothing the business needs from you right now.</div>') +
+            '</div>' +
+            '<div class="cc-bus-v2__split-col">' +
+              '<div class="cc-bus-v2__split-h">Forge — the infrastructure</div>' +
+              (infraUnits.length ? infraUnits.map(unitHtml).join('') : '<div class="cc-bus-v2__split-empty">No infrastructure talk in this window.</div>') +
+            '</div>' +
+            (machineCount ? '<div class="cc-bus-v2__machine-note">▸ ' + machineCount + ' machine-to-machine thread' + (machineCount === 1 ? '' : 's') + ' behind the AI tab</div>' : '') +
+          '</div>';
       } else {
-        list.innerHTML = groupRenderUnits(filtered).map(function (u) {
-          if (u.type === 'bundle') return renderBundleCard(u.msgs);
-          var plan = pickDraftPlan(u.msg, PLAN_MAP);
-          return renderCard(u.msg, plan);
-        }).join('');
+        list.innerHTML = groupRenderUnits(filtered).map(unitHtml).join('');
       }
 
       // Restore expanded bodies (must run BEFORE scrollTop restore so the
@@ -1375,8 +1525,36 @@
     }
   }
 
+  // Styles for the thread chat + the half-and-half split (kept out of the main
+  // CSS string on purpose — additive, zero merge risk with the big block).
+  var THREAD_CSS_DONE = false;
+  function injectThreadStylesOnce() {
+    if (THREAD_CSS_DONE) return;
+    THREAD_CSS_DONE = true;
+    var st = document.createElement('style');
+    st.textContent =
+      '.cc-bus-v2__thread{margin:8px 0 4px;border-left:2px solid var(--border,#30363d);padding-left:10px;display:flex;flex-direction:column;gap:6px}' +
+      '.cc-bus-v2__bubble{background:var(--raised,#161b22);border:1px solid var(--border,#30363d);border-radius:8px;padding:6px 10px;max-width:92%}' +
+      '.cc-bus-v2__bubble.mine{align-self:flex-end;background:var(--amber-soft,rgba(200,146,42,.08));border-color:var(--amber-glow,rgba(200,146,42,.3))}' +
+      '.cc-bus-v2__bubble-head{font-family:var(--mono,monospace);font-size:10px;display:flex;gap:6px;align-items:center;margin-bottom:3px}' +
+      '.cc-bus-v2__bubble-when{margin-left:auto;color:var(--text-xs,#6e7681);font-size:9px}' +
+      '.cc-bus-v2__bubble-body{font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}' +
+      '.cc-bus-v2__mix{font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681)}' +
+      'select[data-role="fwd-to"]{background:var(--surface,#0d1117);color:var(--text,#fff);border:1px solid var(--border,#30363d);border-radius:4px;padding:4px 6px;font-size:11px}' +
+      'select[data-role="fwd-to"].hidden{display:none}' +
+      '.cc-bus-v2__split{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}' +
+      '.cc-bus-v2__split-col{min-width:0}' +
+      '.cc-bus-v2__split-h{font-family:var(--display,inherit);font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding:2px 2px 8px;border-bottom:1px solid var(--border,#30363d);margin-bottom:10px;position:sticky;top:0;background:var(--bg,#090b0d);z-index:2}' +
+      '.cc-bus-v2__split-empty{padding:18px 8px;font-family:var(--mono,monospace);font-size:11px;color:var(--text-xs,#6e7681)}' +
+      '.cc-bus-v2__machine-note{grid-column:1 / -1;font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681);padding:6px 2px}' +
+      '@media (max-width:980px){.cc-bus-v2__split{grid-template-columns:1fr}}' +
+      '.cc-bus-v2__channel-btn{font-size:11px !important;padding:6px 14px !important;border-radius:5px !important;letter-spacing:0.1em !important}';
+    document.head.appendChild(st);
+  }
+
   async function refresh() {
     injectStylesOnce();
+    injectThreadStylesOnce();
     var mount = document.getElementById(MOUNT_ID);
     if (!mount) return;
     var client = sb();
@@ -1387,7 +1565,7 @@
     try {
       var res = await client
         .from('agent_messages')
-        .select('id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane')
+        .select('id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug')
         .order('sent_at', { ascending: false, nullsFirst: false })
         .limit(ROW_LIMIT);
       if (res.error) {
@@ -1409,6 +1587,7 @@
       PLAN_MAP = sessionRes[0];
       SESSION_MAP = sessionRes[1];
       PARENT_MAP = await loadParents(client, ALL_ROWS);
+      THREAD_MAP = await loadThreads(client, ALL_ROWS);
       paintAll();
     } catch (e) {
       mount.innerHTML = '<div class="cc-bus-v2__err">Render error: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
@@ -1568,6 +1747,24 @@
       }
       return;
     }
+    if (act === 'open-forward') {
+      ev.stopPropagation();
+      var cardF = btn.closest('.cc-bus-v2-card');
+      var panelF = cardF && cardF.querySelector('[data-role="reply-wide"]');
+      if (!panelF) return;
+      panelF.classList.remove('hidden');
+      cardF.setAttribute('data-fwd', '1');
+      var selF = panelF.querySelector('[data-role="fwd-to"]');
+      if (selF) selF.classList.remove('hidden');
+      var hintF = panelF.querySelector('.cc-bus-v2__reply-wide-hint');
+      if (hintF) hintF.textContent = 'Forwarding this thread — pick who joins the mix:';
+      var taF = panelF.querySelector('[data-role="reply-wide-input"]');
+      if (taF) {
+        taF.placeholder = 'Optional note — the whole thread rides along either way.';
+        try { taF.focus({ preventScroll: true }); } catch (e) { taF.focus(); }
+      }
+      return;
+    }
     if (act === 'toggle-close-on-send') {
       // Arm/disarm the close-on-send flag for this card. When armed, hitting
       // Send on the reply panel will also archive this thread (status=archived).
@@ -1603,7 +1800,10 @@
         panelC.classList.add('hidden');
         var taC = panelC.querySelector('[data-role="reply-wide-input"]');
         if (taC) taC.value = '';
+        var selC = panelC.querySelector('[data-role="fwd-to"]');
+        if (selC) selC.classList.add('hidden');
       }
+      if (cardC) cardC.removeAttribute('data-fwd');
       return;
     }
     if (act === 'send-reply-wide') {
@@ -1614,6 +1814,14 @@
       var pIdS = taS.getAttribute('data-parent-id');
       var toS = taS.getAttribute('data-to');
       var closeOnSend = cardS.getAttribute('data-close-on-send') === '1';
+      // Forward mode: recipient comes from the picker, and an empty note still
+      // sends — the thread itself is the message.
+      var fwdSelS = cardS.querySelector('[data-role="fwd-to"]');
+      if (cardS.getAttribute('data-fwd') === '1' && fwdSelS) {
+        toS = fwdSelS.value;
+        if (!taS.value.trim()) taS.value = 'fwd: see thread';
+        cardS.removeAttribute('data-fwd');
+      }
       sendReplyWide(pIdS, toS, taS.value, closeOnSend ? pIdS : null);
       taS.value = '';
       var panelS = cardS.querySelector('[data-role="reply-wide"]');
