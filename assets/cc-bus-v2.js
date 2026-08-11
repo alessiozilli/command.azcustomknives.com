@@ -1449,6 +1449,8 @@
       // the card he was reading slid out from under him. Remember WHICH card sat
       // at the top of the viewport and how far into it we were, then put that
       // same card back in that same spot after the rewrite.
+      // Each split column keeps its OWN place — they are two separate reads.
+      var splitScroll = [].slice.call(list.querySelectorAll('.cc-bus-v2__split-col')).map(function (c) { return c.scrollTop; });
       var anchorId = null, anchorDelta = 0;
       var sTop = scroller.getBoundingClientRect().top;
       var cardsNow = list.querySelectorAll('.cc-bus-v2-card');
@@ -1588,6 +1590,13 @@
         }
       });
 
+      // Give the split its height and hand each column its place back.
+      sizeSplitColumns(list);
+      var newCols = list.querySelectorAll('.cc-bus-v2__split-col');
+      for (var sc = 0; sc < newCols.length; sc++) {
+        if (splitScroll[sc]) { try { newCols[sc].scrollTop = splitScroll[sc]; } catch (e) {} }
+      }
+
       // If a message is being read aloud, its button must still say Stop. The
       // voice kept talking through a repaint while the button reverted to
       // "▶ Read", so the only way to stop it was to start something else.
@@ -1636,15 +1645,41 @@
       '.cc-bus-v2__mix{font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681)}' +
       'select[data-role="fwd-to"]{background:var(--surface,#0d1117);color:var(--text,#fff);border:1px solid var(--border,#30363d);border-radius:4px;padding:4px 6px;font-size:11px}' +
       'select[data-role="fwd-to"].hidden{display:none}' +
-      '.cc-bus-v2__split{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}' +
-      '.cc-bus-v2__split-col{min-width:0}' +
+      // A real split: two columns that scroll on their own. Before this the
+      // grid just sat inside the page scroller, so dragging either side moved
+      // both — reading down the Forge column dragged the AZ column out of view.
+      '.cc-bus-v2__split{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr auto;gap:14px;align-items:stretch;min-height:0}' +
+      '.cc-bus-v2__split-col{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar{width:8px}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb{background:var(--border,#30363d);border-radius:4px}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar-track{background:transparent}' +
       '.cc-bus-v2__split-h{font-family:var(--display,inherit);font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding:2px 2px 8px;border-bottom:1px solid var(--border,#30363d);margin-bottom:10px;position:sticky;top:0;background:var(--bg,#090b0d);z-index:2}' +
       '.cc-bus-v2__split-empty{padding:18px 8px;font-family:var(--mono,monospace);font-size:11px;color:var(--text-xs,#6e7681)}' +
       '.cc-bus-v2__machine-note{grid-column:1 / -1;font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681);padding:6px 2px}' +
-      '@media (max-width:980px){.cc-bus-v2__split{grid-template-columns:1fr}}' +
+      // On a phone the two columns stack, so they go back to flowing with the
+      // page — two tiny scroll boxes on one narrow screen would be worse.
+      '@media (max-width:980px){.cc-bus-v2__split{grid-template-columns:1fr;height:auto !important}.cc-bus-v2__split-col{overflow:visible;max-height:none}}' +
       '.cc-bus-v2__channel-btn{font-size:11px !important;padding:6px 14px !important;border-radius:5px !important;letter-spacing:0.1em !important}';
     document.head.appendChild(st);
   }
+
+  // The split is only a real split if each side owns its own scrollbar, and a
+  // column can only scroll if it has a height. Measure the room left under the
+  // header and give the grid exactly that — recomputed on resize and on every
+  // paint, so it never guesses at chrome that moves.
+  function sizeSplitColumns(list) {
+    var split = list && list.querySelector('.cc-bus-v2__split');
+    if (!split) return;
+    if (window.innerWidth <= 980) { split.style.height = ''; return; }   // stacked: let it flow
+    var top = split.getBoundingClientRect().top;
+    var h = Math.max(320, window.innerHeight - top - 16);
+    split.style.height = h + 'px';
+  }
+  window.addEventListener('resize', function () {
+    var mount = document.getElementById(MOUNT_ID);
+    var list = mount && mount.querySelector('[data-role="list"]');
+    if (list) sizeSplitColumns(list);
+  });
 
   // A blip on the wire must not cost him his work. One failed poll used to
   // replace the ENTIRE panel — composer draft, open reply panels, everything —
