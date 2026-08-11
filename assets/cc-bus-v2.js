@@ -365,9 +365,9 @@
       // Bus #ID + time bumped 2026-06-01 (Alessio direct: "barely can see them")
       '#bus-v2-mount .cc-bus-v2__id { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); letter-spacing:0.02em; }',
       // "replying to" line (bus #3949) — the question, above the answer.
-      '#bus-v2-mount .cc-bus-v2__replyctx { display:block; width:100%; text-align:left; margin:2px 0 6px; padding:5px 9px; background:var(--raised,rgba(255,255,255,0.04)); border:1px solid var(--border,#30363d); border-left:2px solid var(--amber,#c8922a); border-radius:3px; font-family:var(--mono,monospace); font-size:11px; line-height:1.45; color:var(--text-dim,#8a9aa8); cursor:pointer; }',
+      '#bus-v2-mount .cc-bus-v2__replyctx { display:block; width:100%; text-align:left; margin:2px 0 6px; padding:5px 9px; background:var(--raised,rgba(255,255,255,0.04)); border:1px solid var(--border,#252c33); border-left:2px solid var(--amber,#c8922a); border-radius:3px; font-family:var(--mono,monospace); font-size:11px; line-height:1.45; color:var(--text-dim,#8a9aa8); cursor:pointer; }',
       '#bus-v2-mount .cc-bus-v2__replyctx:hover { border-color:var(--amber,#c8922a); color:var(--text,#fff); }',
-      '#bus-v2-mount .cc-bus-v2__parentbox { margin:0 0 8px; padding:8px 10px; background:var(--surface,#0d1117); border:1px solid var(--border,#30363d); border-radius:4px; font-size:12px; line-height:1.5; color:var(--text-dim,#8a9aa8); white-space:pre-wrap; max-height:280px; overflow-y:auto; }',
+      '#bus-v2-mount .cc-bus-v2__parentbox { margin:0 0 8px; padding:8px 10px; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; font-size:12px; line-height:1.5; color:var(--text-dim,#8a9aa8); white-space:pre-wrap; max-height:280px; overflow-y:auto; }',
       '#bus-v2-mount .cc-bus-v2__parentbox-h { font-family:var(--mono,monospace); font-size:10px; font-weight:700; margin-bottom:5px; }',
       '#bus-v2-mount .cc-bus-v2__card--flash { animation:ccBusFlash 1.4s ease-out; }',
       '@keyframes ccBusFlash { 0%,40% { background:var(--amber-soft,rgba(200,146,42,0.18)); } 100% { background:transparent; } }',
@@ -1636,24 +1636,29 @@
     THREAD_CSS_DONE = true;
     var st = document.createElement('style');
     st.textContent =
-      '.cc-bus-v2__thread{margin:8px 0 4px;border-left:2px solid var(--border,#30363d);padding-left:10px;display:flex;flex-direction:column;gap:6px}' +
-      '.cc-bus-v2__bubble{background:var(--raised,#161b22);border:1px solid var(--border,#30363d);border-radius:8px;padding:6px 10px;max-width:92%}' +
+      '.cc-bus-v2__thread{margin:8px 0 4px;border-left:2px solid var(--border,#252c33);padding-left:10px;display:flex;flex-direction:column;gap:6px}' +
+      '.cc-bus-v2__bubble{background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:8px;padding:6px 10px;max-width:92%}' +
       '.cc-bus-v2__bubble.mine{align-self:flex-end;background:var(--amber-soft,rgba(200,146,42,.08));border-color:var(--amber-glow,rgba(200,146,42,.3))}' +
       '.cc-bus-v2__bubble-head{font-family:var(--mono,monospace);font-size:10px;display:flex;gap:6px;align-items:center;margin-bottom:3px}' +
       '.cc-bus-v2__bubble-when{margin-left:auto;color:var(--text-xs,#6e7681);font-size:9px}' +
       '.cc-bus-v2__bubble-body{font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}' +
       '.cc-bus-v2__mix{font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681)}' +
-      'select[data-role="fwd-to"]{background:var(--surface,#0d1117);color:var(--text,#fff);border:1px solid var(--border,#30363d);border-radius:4px;padding:4px 6px;font-size:11px}' +
+      'select[data-role="fwd-to"]{background:var(--surface,#0f1316);color:var(--text,#dde4eb);border:1px solid var(--border,#252c33);border-radius:4px;padding:4px 6px;font-size:11px}' +
       'select[data-role="fwd-to"].hidden{display:none}' +
       // A real split: two columns that scroll on their own. Before this the
       // grid just sat inside the page scroller, so dragging either side moved
       // both — reading down the Forge column dragged the AZ column out of view.
       '.cc-bus-v2__split{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr auto;gap:14px;align-items:stretch;min-height:0}' +
-      '.cc-bus-v2__split-col{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar{width:8px}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb{background:var(--border,#30363d);border-radius:4px}' +
+      // Scrollbars follow the house recipe (the page-wide rule + the tokens), so
+      // they read as part of the dark board instead of two pale system bars —
+      // and scrollbar-color carries the same thing to Firefox, which ignores the
+      // -webkit- rules entirely. Token-driven, so light theme comes free.
+      '.cc-bus-v2__split-col{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin;scrollbar-color:var(--border,#252c33) transparent}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar{width:6px;height:6px}' +
       '.cc-bus-v2__split-col::-webkit-scrollbar-track{background:transparent}' +
-      '.cc-bus-v2__split-h{font-family:var(--display,inherit);font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding:2px 2px 8px;border-bottom:1px solid var(--border,#30363d);margin-bottom:10px;position:sticky;top:0;background:var(--bg,#090b0d);z-index:2}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb{background:var(--border,#252c33);border-radius:2px}' +
+      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb:hover{background:var(--border-hi,#2e3740)}' +
+      '.cc-bus-v2__split-h{font-family:var(--display,inherit);font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding:2px 2px 8px;border-bottom:1px solid var(--border,#252c33);margin-bottom:10px;position:sticky;top:0;background:var(--bg,#090b0d);z-index:2}' +
       '.cc-bus-v2__split-empty{padding:18px 8px;font-family:var(--mono,monospace);font-size:11px;color:var(--text-xs,#6e7681)}' +
       '.cc-bus-v2__machine-note{grid-column:1 / -1;font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681);padding:6px 2px}' +
       // On a phone the two columns stack, so they go back to flowing with the
