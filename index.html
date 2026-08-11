@@ -998,8 +998,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!window.supa) { if ((n||0) < 60) setTimeout(function(){ boot((n||0)+1); }, 250); return; }
       wireGift(); wireAdd(); load(); loadGift();
       setInterval(function(){
-        var lane = document.querySelector('[data-lane="corporate"].cc-lane');
-        if (!lane || lane.style.display === 'none' || editingNow()) return;   // busy/hidden → skip tick
+        // This face marks the visible lane with .active on #lane-corporate — it
+        // has no .cc-lane class at all, so the old selector never matched and
+        // this refresh has been dead since the port. Skip while backgrounded too.
+        var lane = document.getElementById('lane-corporate');
+        if (!lane || !lane.classList.contains('active') || document.hidden || editingNow()) return;
         load(); loadGift();
       }, 60000);
     }
@@ -4293,7 +4296,7 @@ window.openActiveRun = function() {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
 <script defer src="assets/cc-col-resize.js?v=20260809-svqsweep"></script>
-<script defer src="assets/cc-bus-v2.js?v=20260810-channels3"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Bus split in half (You+Reanna | You+Forge) on Human/All; replies stack as a chat on the root card; Reply/Forward/Done per card; machine chatter behind the AI tab -->
+<script defer src="assets/cc-bus-v2.js?v=20260811-draftsurvive"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
 <script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .scx-3col + .svsc-3col are registered SURFACES -->
 <script>

@@ -101,6 +101,37 @@
     });
     return map;
   }
+  // ─── DRAFTS: in-flight replies that outlive every repaint ──────────────
+  // Alessio, 2026-08-11: "if I open a reply up, I want to be able to keep that
+  // window open through refreshes. The whole refresh needs to keep me on the
+  // same page — it always kicks me back."
+  // An open reply used to be pure DOM: the panel's .hidden class, the typed
+  // text, the forward target and the armed Close flag all lived on the card and
+  // died the moment anything rewrote the list — the 30s poll, a realtime insert,
+  // pressing Done, changing a filter. Now every one of those is a record here,
+  // written on every keystroke, mirrored to localStorage, and re-emitted by
+  // renderCard. That is why a draft now survives a repaint AND a browser reload.
+  var DRAFTS_KEY = 'cc.bus.v2.drafts';
+  var DRAFTS = (function () {
+    try { return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  })();
+  function draftsSave() {
+    try { localStorage.setItem(DRAFTS_KEY, JSON.stringify(DRAFTS)); } catch (e) {}
+  }
+  function draftGet(msgId) { return DRAFTS[String(msgId)] || null; }
+  function draftSet(msgId, patch) {
+    var k = String(msgId);
+    DRAFTS[k] = Object.assign({ text: '', fwdTo: null, armed: false }, DRAFTS[k] || {}, patch || {});
+    draftsSave();
+    return DRAFTS[k];
+  }
+  function draftClear(msgId) { delete DRAFTS[String(msgId)]; draftsSave(); }
+  function draftHasText(msgId) {
+    var d = draftGet(msgId);
+    return !!(d && String(d.text || '').trim());
+  }
+
   // ─── Thread folding (Alessio ratified 2026-08-10) ──────────────────────
   // A reply never stands alone: the whole exchange stacks as a chat on its
   // ROOT card. root_id is trigger-stamped in the DB (bus_auto_thread) and a
@@ -108,12 +139,15 @@
   // holds every reply ASC; THREAD_MAP.roots holds root rows older than the
   // fetch window so a fresh reply can still summon its original card.
   var THREAD_MAP = { replies: {}, roots: {} };
+  var ROW_COLS = 'id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug';
   async function loadThreads(client, rows) {
     var map = { replies: {}, roots: {} };
     var rootIds = {};
-    var visible = {};
     rows.forEach(function (r) {
-      visible[String(r.id)] = true;
+      // A root row is the one every reply hangs off. Seed the map with every row
+      // we already hold so a root that IS in the window is never re-fetched, and
+      // one that is not gets pulled in below.
+      map.roots[String(r.id)] = r;
       if (r.root_id) rootIds[String(r.root_id)] = true;
       else rootIds[String(r.id)] = true;   // any non-reply row may be a thread root
     });
@@ -121,16 +155,19 @@
     if (!ids.length) return map;
     try {
       var rep = await client.from('agent_messages')
-        .select('id,from_user,to_user,body,status,sent_at,created_at,root_id,parent_id,channel')
+        .select(ROW_COLS)
         .in('root_id', ids).order('sent_at', { ascending: true }).limit(400);
       (rep.data || []).forEach(function (r) {
         var k = String(r.root_id);
         (map.replies[k] = map.replies[k] || []).push(r);
       });
-      var missingRoots = Object.keys(map.replies).filter(function (k) { return !visible[k]; }).map(Number);
+      // Fetch every root we do not already hold. Reachability must NOT depend on
+      // the root surviving a filter or the fetch window — a thread whose opening
+      // message is done/archived/off-window still has to render as one card.
+      var missingRoots = Object.keys(map.replies).filter(function (k) { return !map.roots[k]; }).map(Number);
       if (missingRoots.length) {
         var rr = await client.from('agent_messages')
-          .select('id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug')
+          .select(ROW_COLS)
           .in('id', missingRoots);
         (rr.data || []).forEach(function (r) { map.roots[String(r.id)] = r; });
       }
@@ -735,15 +772,27 @@
         '</div>';
       }).join('') + '</div>';
     }
+    // ─── An open reply is DURABLE state, not a DOM accident ───────────────
+    // Everything the user has in flight on this card — the panel being open, the
+    // text typed, who they forwarded to, whether Close is armed — comes out of
+    // DRAFTS and is baked into the HTML. That is what makes it survive the 30s
+    // poll, every action repaint, and a full browser reload (his ask,
+    // 2026-08-11: "if I open a reply up, I want to keep that window open").
+    var draft = DRAFTS[msgId] || null;
     var fwdTargets = ['forge-code', 'forge-cowork', 'forge-design', 'reanna', 'team', 'forge'];
-    var fwdSelect = '<select data-role="fwd-to" class="hidden">' +
-      fwdTargets.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') + '</select>';
+    var fwdOn = !!(draft && draft.fwdTo);
+    var fwdSelect = '<select data-role="fwd-to"' + (fwdOn ? '' : ' class="hidden"') + '>' +
+      fwdTargets.map(function (t) {
+        return '<option value="' + t + '"' + (fwdOn && draft.fwdTo === t ? ' selected' : '') + '>' + t + '</option>';
+      }).join('') + '</select>';
+    var armed = !!(draft && draft.armed);
+    var panelOpen = !!draft;
     var actionsHtml =
       '<div class="cc-bus-v2__actions">' +
         '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--reply" data-act="open-reply-wide">↩ Reply</button>' +
         '<button class="cc-bus-v2__act-btn" data-act="open-forward" title="Send this thread to someone else — they join the mix and their answer stacks here too.">⇄ Forward</button>' +
         '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--done" data-act="toggle-done" data-done="' + (isDone ? '1' : '') + '" title="' + (isDone ? 'Put it back on the list' : 'Finished — takes it off the list. No comment needed. Find it again under the Done filter.') + '">' + doneLabel + '</button>' +
-        '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--close" data-act="toggle-close-on-send" title="Reply and finish in one go: arms this thread to be marked done when you hit Send. Just want it done with no message? Use Done.">✦ Close</button>' +
+        '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--close' + (armed ? ' is-armed' : '') + '" data-act="toggle-close-on-send" title="Reply and finish in one go: arms this thread to be marked done when you hit Send. Just want it done with no message? Use Done.">' + (armed ? '✓ Close' : '✦ Close') + '</button>' +
         '<button class="cc-bus-v2__act-btn" data-act="save" data-saved="' + (msg.saved_at ? '1' : '') + '" title="Keep — exempts this from the nightly tidy-up. Nothing is ever deleted either way.">' + saveLabel + '</button>' +
         '<button class="cc-bus-v2__act-btn" data-act="archive" title="Hide it without marking it finished. Reversible.">' + archiveLabel + '</button>' +
       '</div>' +
@@ -751,18 +800,19 @@
         flagDots +
         '<button data-act="set-flag" data-flag="" style="background:none;border:0;color:#7a7a7a;cursor:pointer;font-size:11px;">✕ clear</button>' +
       '</div>' +
-      '<div class="cc-bus-v2__reply-wide hidden" data-role="reply-wide">' +
-        '<textarea data-role="reply-wide-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '" placeholder="Type your reply… click the mic icon for dictation. Cmd/Ctrl+Enter to send."></textarea>' +
+      '<div class="cc-bus-v2__reply-wide' + (panelOpen ? '' : ' hidden') + '" data-role="reply-wide">' +
+        '<textarea data-role="reply-wide-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '" placeholder="Type your reply… click the mic icon for dictation. Cmd/Ctrl+Enter to send.">' + escapeHtml(draft ? (draft.text || '') : '') + '</textarea>' +
         '<div class="cc-bus-v2__reply-wide-row">' +
           fwdSelect +
-          '<span class="cc-bus-v2__reply-wide-hint">Replying to ' + escapeHtml(lastOther) + ' on bus #' + escapeHtml(msgId) + '</span>' +
+          '<span class="cc-bus-v2__reply-wide-hint">' + (fwdOn ? 'Forwarding this thread — pick who joins the mix:' : 'Replying to ' + escapeHtml(lastOther) + ' on bus #' + escapeHtml(msgId)) + '</span>' +
           '<span class="cc-bus-v2__close-hint">✓ Will close this thread when sent</span>' +
           '<button class="cc-bus-v2__reply-wide-cancel" data-act="cancel-reply-wide">Cancel</button>' +
           '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve cc-bus-v2__reply-wide-send" data-act="send-reply-wide">Send</button>' +
         '</div>' +
       '</div>';
 
-    return '<article class="' + cardClasses.join(' ') + '" data-msg-id="' + escapeHtml(msgId) + '"' + stripeStyle + '>' +
+    return '<article class="' + cardClasses.join(' ') + '" data-msg-id="' + escapeHtml(msgId) + '"' +
+        (armed ? ' data-close-on-send="1"' : '') + (fwdOn ? ' data-fwd="1"' : '') + stripeStyle + '>' +
         '<div class="cc-bus-v2__meta">' +
           '<span class="cc-bus-v2__from" style="color:' + fromColor + ';">' + escapeHtml(msg.from_user || '?') + '</span>' +
           intentHtml +
@@ -800,10 +850,6 @@
   }
   function groupRenderUnits(rows) {
     var units = [], seen = {}, seenThread = {};
-    function rowInList(id) {
-      for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) return rows[i];
-      return null;
-    }
     rows.forEach(function (r) {
       // Thread folding first: any row belonging to a thread with replies emits
       // ONE thread card (at the position of its newest member) and the rest fold.
@@ -811,10 +857,12 @@
       var replies = THREAD_MAP.replies[rootKey] || [];
       if (replies.length) {
         if (seenThread[rootKey]) return;
-        seenThread[rootKey] = true;
-        var rootRow = r.root_id ? (rowInList(r.root_id) || THREAD_MAP.roots[rootKey]) : r;
-        if (rootRow) { units.push({ type: 'thread', msg: rootRow, replies: replies }); return; }
-        // root unreachable — fall through so the reply still shows as a card
+        // Bookkeeping ONLY once the root is actually in hand. Marking it first
+        // ate every sibling reply whenever the root could not be found — one
+        // message showed and the rest of the exchange vanished off the screen.
+        var rootRow = r.root_id ? THREAD_MAP.roots[rootKey] : r;
+        if (rootRow) { seenThread[rootKey] = true; units.push({ type: 'thread', msg: rootRow, replies: replies }); return; }
+        // root unreachable — fall through so the reply still shows as its own card
       }
       var tid = batchThreadOf(r);
       if (!tid) { units.push({ type: 'single', msg: r }); return; }
@@ -1357,10 +1405,19 @@
     });
     if (sidebar) sidebar.innerHTML = renderSidebar(sidebarRows);
 
+    // GROUP FIRST, FILTER SECOND — a conversation is an atom.
+    // Filtering rows and then grouping tore threads in half: search for a word
+    // that appears in a reply and you got the reply with no question above it,
+    // and the rest of the exchange vanished. Now the thread is assembled from
+    // the unfiltered set and kept whole if the root OR ANY reply matches.
     // Lane 'log' overlaps the syslog split (system rows never reach humanRows),
-    // so the Log tab filters the FULL set — otherwise it renders near-empty.
-    // The syslog column itself stays unfiltered, as before. (2026-07-19)
-    var filtered = applyFilters(STATE.lane === 'log' ? ALL_ROWS : humanRows);
+    // so the Log tab groups the FULL set — otherwise it renders near-empty.
+    var baseRows = (STATE.lane === 'log') ? ALL_ROWS : humanRows;
+    var filtered = groupRenderUnits(baseRows).filter(function (u) {
+      var rows = [u.msg].concat(u.replies || []).concat(u.msgs || []);
+      for (var i = 0; i < rows.length; i++) if (rows[i] && rowMatches(rows[i])) return true;
+      return false;
+    });
     if (header) header.innerHTML = renderHeader(filtered.length);
 
     // ─── System log column render (read-only, no filtering, capped at 100) ─
@@ -1387,6 +1444,18 @@
       // The real scroller is .cc-bus-v2__main; under 1100px the operator lane is.
       var scroller = list.closest('.cc-bus-v2__main') || list.parentElement || list;
       var savedScrollTop = scroller.scrollTop;
+      // ANCHOR ON A CARD, NOT A PIXEL. Restoring a raw offset kept the scrollbar
+      // still while the content moved under it: one new message at the top and
+      // the card he was reading slid out from under him. Remember WHICH card sat
+      // at the top of the viewport and how far into it we were, then put that
+      // same card back in that same spot after the rewrite.
+      var anchorId = null, anchorDelta = 0;
+      var sTop = scroller.getBoundingClientRect().top;
+      var cardsNow = list.querySelectorAll('.cc-bus-v2-card');
+      for (var ci = 0; ci < cardsNow.length; ci++) {
+        var cr = cardsNow[ci].getBoundingClientRect();
+        if (cr.bottom > sTop + 4) { anchorId = cardsNow[ci].getAttribute('data-msg-id'); anchorDelta = cr.top - sTop; break; }
+      }
       var replySnap = {};
       var expandedSnap = {};
       var activeEl = document.activeElement;
@@ -1451,12 +1520,12 @@
         list.innerHTML = '<div class="cc-bus-v2__empty">Channel is clear.</div>';
       } else if (STATE.lane === 'az' || STATE.lane === 'forge') {
         var side = (STATE.lane === 'az') ? 'az' : 'infra';
-        var chanUnits = groupRenderUnits(filtered).filter(function (u) { return sideOf(u) === side; });
+        var chanUnits = filtered.filter(function (u) { return sideOf(u) === side; });
         list.innerHTML = chanUnits.length
           ? chanUnits.map(unitHtml).join('')
           : '<div class="cc-bus-v2__empty">Channel is clear.</div>';
       } else if (splitMode) {
-        var units = groupRenderUnits(filtered);
+        var units = filtered;
         var azUnits = [], infraUnits = [], machineCount = 0;
         units.forEach(function (u) {
           var rawLane = String((u.msg && u.msg.lane) || (u.msgs && u.msgs[0] && u.msgs[0].lane) || '').toLowerCase();
@@ -1476,7 +1545,7 @@
             (machineCount ? '<div class="cc-bus-v2__machine-note">▸ ' + machineCount + ' machine-to-machine thread' + (machineCount === 1 ? '' : 's') + ' behind the AI tab</div>' : '') +
           '</div>';
       } else {
-        list.innerHTML = groupRenderUnits(filtered).map(unitHtml).join('');
+        list.innerHTML = filtered.map(unitHtml).join('');
       }
 
       // Restore expanded bodies (must run BEFORE scrollTop restore so the
@@ -1519,9 +1588,30 @@
         }
       });
 
-      // Restore scroll position last (after expanded bodies are open so the
-      // measured offset matches what the user saw before refresh).
-      try { scroller.scrollTop = savedScrollTop; } catch (e) {}
+      // If a message is being read aloud, its button must still say Stop. The
+      // voice kept talking through a repaint while the button reverted to
+      // "▶ Read", so the only way to stop it was to start something else.
+      if (SPEECH.id && String(SPEECH.id).indexOf('msg-') === 0) {
+        var spCard = list.querySelector('[data-msg-id="' + String(SPEECH.id).slice(4) + '"]');
+        var spBtn = spCard && spCard.querySelector('[data-act="read-body"]');
+        if (spBtn) { spBtn.textContent = '◼ Stop'; spBtn.classList.add('speaking'); }
+      }
+
+      // Restore scroll last (after expanded bodies are open so the measured
+      // geometry matches what he saw). Anchor card first, raw offset only as a
+      // fallback when that card is genuinely gone from the list.
+      try {
+        var placed = false;
+        if (anchorId) {
+          var aCard = list.querySelector('[data-msg-id="' + anchorId + '"]');
+          if (aCard) {
+            var nowTop = aCard.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+            scroller.scrollTop = scroller.scrollTop + (nowTop - anchorDelta);
+            placed = true;
+          }
+        }
+        if (!placed) scroller.scrollTop = savedScrollTop;
+      } catch (e) {}
     }
 
     if (composer && !composer.querySelector('[data-role="compose-input"]')) {
@@ -1556,6 +1646,29 @@
     document.head.appendChild(st);
   }
 
+  // A blip on the wire must not cost him his work. One failed poll used to
+  // replace the ENTIRE panel — composer draft, open reply panels, everything —
+  // with a red line. Now: if the bus is already on screen, the trouble shows as
+  // a thin banner above it and nothing is torn down. Only a cold start (nothing
+  // rendered yet) gets the full-panel message.
+  function busTrouble(mount, msg) {
+    var painted = mount.querySelector('[data-role="list"]');
+    if (!painted) {
+      mount.innerHTML = '<div class="cc-bus-v2__err">' + escapeHtml(msg) + '</div>';
+      return;
+    }
+    var bar = mount.querySelector('[data-role="trouble"]');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.setAttribute('data-role', 'trouble');
+      bar.style.cssText = 'font-family:var(--mono,monospace);font-size:10px;color:#f85149;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);border-radius:3px;padding:4px 8px;margin:4px 0;';
+      mount.insertBefore(bar, mount.firstChild);
+    }
+    bar.textContent = '⚠ ' + msg + ' — your open replies are untouched; retrying.';
+    clearTimeout(busTrouble._t);
+    busTrouble._t = setTimeout(function () { if (bar && bar.parentNode) bar.parentNode.removeChild(bar); }, 12000);
+  }
+
   async function refresh() {
     injectStylesOnce();
     injectThreadStylesOnce();
@@ -1563,17 +1676,17 @@
     if (!mount) return;
     var client = sb();
     if (!client) {
-      mount.innerHTML = '<div class="cc-bus-v2__err">Supabase client not ready. Reload the page.</div>';
+      busTrouble(mount, 'Supabase client not ready. Reload the page.');
       return;
     }
     try {
       var res = await client
         .from('agent_messages')
-        .select('id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug')
+        .select(ROW_COLS)
         .order('sent_at', { ascending: false, nullsFirst: false })
         .limit(ROW_LIMIT);
       if (res.error) {
-        mount.innerHTML = '<div class="cc-bus-v2__err">Bus query error: ' + escapeHtml(res.error.message) + '</div>';
+        busTrouble(mount, 'Bus query error: ' + res.error.message);
         return;
       }
       ALL_ROWS = res.data || [];
@@ -1594,7 +1707,7 @@
       THREAD_MAP = await loadThreads(client, ALL_ROWS);
       paintAll();
     } catch (e) {
-      mount.innerHTML = '<div class="cc-bus-v2__err">Render error: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
+      busTrouble(mount, 'Render error: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
@@ -1741,6 +1854,7 @@
       var cardR = btn.closest('.cc-bus-v2-card');
       var panelR = cardR && cardR.querySelector('[data-role="reply-wide"]');
       if (panelR) {
+        draftSet(cardR.getAttribute('data-msg-id'), {});   // the panel being open is itself durable
         panelR.classList.remove('hidden');
         var taR = panelR.querySelector('[data-role="reply-wide-input"]');
         // preventScroll: un-hiding the panel adds ~80px of textarea BELOW the card's old
@@ -1760,6 +1874,9 @@
       cardF.setAttribute('data-fwd', '1');
       var selF = panelF.querySelector('[data-role="fwd-to"]');
       if (selF) selF.classList.remove('hidden');
+      // Remember WHO, not just that the picker is showing. Forward used to be
+      // DOM-only: one repaint and Send quietly went back to the thread partner.
+      draftSet(cardF.getAttribute('data-msg-id'), { fwdTo: (selF && selF.value) || 'forge-code' });
       var hintF = panelF.querySelector('.cc-bus-v2__reply-wide-hint');
       if (hintF) hintF.textContent = 'Forwarding this thread — pick who joins the mix:';
       var taF = panelF.querySelector('[data-role="reply-wide-input"]');
@@ -1787,6 +1904,7 @@
         btn.classList.add('is-armed');
         btn.textContent = '✓ Close';
       }
+      draftSet(cardK.getAttribute('data-msg-id'), { armed: !armed });
       // Also open the reply panel so user can type immediately.
       var panelK = cardK.querySelector('[data-role="reply-wide"]');
       if (panelK) {
@@ -1807,7 +1925,11 @@
         var selC = panelC.querySelector('[data-role="fwd-to"]');
         if (selC) selC.classList.add('hidden');
       }
-      if (cardC) cardC.removeAttribute('data-fwd');
+      if (cardC) {
+        cardC.removeAttribute('data-fwd');
+        cardC.removeAttribute('data-close-on-send');
+        draftClear(cardC.getAttribute('data-msg-id'));   // Cancel is the ONE way a draft dies unsent
+      }
       return;
     }
     if (act === 'send-reply-wide') {
@@ -1817,16 +1939,21 @@
       if (!taS) return;
       var pIdS = taS.getAttribute('data-parent-id');
       var toS = taS.getAttribute('data-to');
-      var closeOnSend = cardS.getAttribute('data-close-on-send') === '1';
+      // The DRAFT is the truth, not the DOM: a repaint between arming and
+      // sending used to silently disarm Close and drop the forward target.
+      var dS = draftGet(cardS.getAttribute('data-msg-id')) || {};
+      var closeOnSend = dS.armed || cardS.getAttribute('data-close-on-send') === '1';
       // Forward mode: recipient comes from the picker, and an empty note still
       // sends — the thread itself is the message.
       var fwdSelS = cardS.querySelector('[data-role="fwd-to"]');
-      if (cardS.getAttribute('data-fwd') === '1' && fwdSelS) {
-        toS = fwdSelS.value;
+      var fwdTo = dS.fwdTo || (cardS.getAttribute('data-fwd') === '1' && fwdSelS ? fwdSelS.value : null);
+      if (fwdTo) {
+        toS = (fwdSelS && !fwdSelS.classList.contains('hidden')) ? fwdSelS.value : fwdTo;
         if (!taS.value.trim()) taS.value = 'fwd: see thread';
         cardS.removeAttribute('data-fwd');
       }
       sendReplyWide(pIdS, toS, taS.value, closeOnSend ? pIdS : null);
+      draftClear(cardS.getAttribute('data-msg-id'));   // sent — the draft is spent
       taS.value = '';
       var panelS = cardS.querySelector('[data-role="reply-wide"]');
       if (panelS) panelS.classList.add('hidden');
@@ -1847,6 +1974,12 @@
       var cardDn = btn.closest('.cc-bus-v2-card');
       if (!cardDn) return;
       var mIdDn = cardDn.getAttribute('data-msg-id');
+      // Done drops the card out of the list. If there is an unsent reply on it,
+      // that text would go with it — ask first instead of eating the words.
+      if (btn.getAttribute('data-done') !== '1' && draftHasText(mIdDn)) {
+        if (!window.confirm('You have an unsent reply on #' + mIdDn + '.\n\nMarking it done takes the card off the list and discards what you typed.\n\nDiscard it and mark done?')) return;
+      }
+      draftClear(mIdDn);
       doneBus(mIdDn, btn.getAttribute('data-done') === '1');
       return;
     }
@@ -1872,6 +2005,10 @@
           'Bus #' + mIdA + ' asked ' + whoU + ' to do something, and nobody has replied to it yet.\n\n' +
           'Archiving hides it. The ask does not go away.\n\nArchive it anyway?')) return;
       }
+      if (!isArchived && draftHasText(mIdA)) {
+        if (!window.confirm('You have an unsent reply on #' + mIdA + '.\n\nArchiving hides the card and discards what you typed.\n\nDiscard it and archive?')) return;
+      }
+      draftClear(mIdA);
       archiveBus(mIdA, isArchived);
       return;
     }
@@ -1928,6 +2065,28 @@
         if (s) { s.focus(); s.setSelectionRange(val.length, val.length); }
       }, 180);
     }
+    // Every keystroke in a reply box lands in the durable draft, so the next
+    // repaint (poll, realtime, Done, filter change) re-emits it instead of
+    // eating it. Cheap: one localStorage write per debounce tick.
+    if (target.matches('#' + MOUNT_ID + ' [data-role="reply-wide-input"]')) {
+      var cardIn = target.closest('.cc-bus-v2-card');
+      if (cardIn) {
+        clearTimeout(draftDebounce);
+        var txt = target.value, mid = cardIn.getAttribute('data-msg-id');
+        draftDebounce = setTimeout(function () { draftSet(mid, { text: txt }); }, 150);
+      }
+    }
+  });
+  var draftDebounce = null;
+
+  // Who a forward goes to is durable too — picking a name is a decision, and a
+  // repaint must never quietly hand it back to the thread partner.
+  document.addEventListener('change', function (ev) {
+    var target = ev.target;
+    if (!target || !target.matches) return;
+    if (!target.matches('#' + MOUNT_ID + ' [data-role="fwd-to"]')) return;
+    var cardCh = target.closest('.cc-bus-v2-card');
+    if (cardCh) draftSet(cardCh.getAttribute('data-msg-id'), { fwdTo: target.value });
   });
 
   // Enter key in reply input sends; Cmd/Ctrl+Enter in composer sends
@@ -1957,8 +2116,16 @@
       // it — while the textarea placeholder tells you to send with Cmd/Ctrl+Enter.
       // Following the on-screen instruction defeated the button.
       var cardKb = target.closest('.cc-bus-v2-card');
-      var closeKb = cardKb && cardKb.getAttribute('data-close-on-send') === '1';
+      var dKb = cardKb ? (draftGet(cardKb.getAttribute('data-msg-id')) || {}) : {};
+      var closeKb = dKb.armed || (cardKb && cardKb.getAttribute('data-close-on-send') === '1');
+      // Keyboard send honours a chosen forward target as well — the mouse path
+      // did and this one did not, so ⌘/Ctrl+Enter used to mail the wrong person.
+      if (dKb.fwdTo) {
+        to = dKb.fwdTo;
+        if (!target.value.trim()) target.value = 'fwd: see thread';
+      }
       sendReplyWide(parentId, to, target.value, closeKb ? parentId : null);
+      if (cardKb) draftClear(cardKb.getAttribute('data-msg-id'));
       target.value = '';
       var card = target.closest('.cc-bus-v2-card');
       var panel = card && card.querySelector('[data-role="reply-wide"]');
