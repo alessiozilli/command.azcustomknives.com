@@ -4489,29 +4489,72 @@ window.openActiveRun = function() {
   async function rtLoadDay(){
     var box = el('rt-till-detail'); if(!box || !S.tillDay || !window.supa) return;
     try{
-      /* PK is composite (sale_date, location) — a date alone matches both tills. */
-      var r = await window.supa.from('square_sales_daily')
-        .select('sale_date,location,orders,gross_dollars,tax_dollars,tip_dollars,discount_dollars,top_items,synced_at')
-        .eq('sale_date', S.tillDay).eq('location','retail').maybeSingle();
-      if(r.error) throw r.error;
-      var d = r.data;
-      if(!d){ box.innerHTML = '<div class="rt-empty">That day is no longer in the till table.</div>'; return; }
-      var items = d.top_items || [];
-      box.innerHTML = '<div class="rt-big">'+money(d.gross_dollars)+'</div>'
-        + '<div class="rt-sub">'+esc(day(d.sale_date))+' · '+esc(d.location)+' till · '+d.orders+(d.orders===1?' order':' orders')+'</div>'
-        + '<dl class="rt-kv">'
+      /* Two reads, one picture: the till row for the basket, and az_day_money for the
+         honest arithmetic the workbook does — rang, what the goods cost, what left the
+         bank, and the overhead that lands whether we sell or not. */
+      var pair = await Promise.all([
+        window.supa.from('square_sales_daily')
+          .select('sale_date,location,orders,gross_dollars,tax_dollars,tip_dollars,discount_dollars,top_items,synced_at')
+          .eq('sale_date', S.tillDay).eq('location','retail').maybeSingle(),
+        window.supa.from('az_day_money')
+          .select('day,rang,retail_rang,service_rang,direct_cost,items_costed,items_total,cash_out,spend_lines,labor,overhead,cash_net,true_profit,retail_margin')
+          .eq('day', S.tillDay).maybeSingle(),
+        window.supa.from('az_money_out')
+          .select('paid_to,category,what,amount_cad').eq('spend_date', S.tillDay).order('amount_cad',{ascending:false})
+      ]);
+      var d = pair[0].data, m = pair[1].data, outs = pair[2].data || [];
+      if(pair[0].error) throw pair[0].error;
+      if(!d && !m){ box.innerHTML = '<div class="rt-empty">Nothing recorded for that day.</div>'; return; }
+      var items = (d && d.top_items) || [];
+      var gross = d ? Number(d.gross_dollars||0) : 0;
+      var cost  = m ? Number(m.direct_cost||0) : 0;
+      var margin = gross - cost;
+      var pct = gross > 0 ? Math.round(margin / gross * 100) : null;
+
+      var h = '<div class="rt-big">'+money(gross)+'</div>'
+        + '<div class="rt-sub">'+esc(day(S.tillDay))+' · retail till'+(d?' · '+d.orders+(d.orders===1?' order':' orders'):'')+'</div>';
+
+      /* THE RETAIL SLICE — what she actually made on the counter */
+      h += '<div class="rt-sec">What the counter made</div>'
+        + '<div class="rt-line"><span>Rang</span><span>'+money(gross)+'</span></div>'
+        + '<div class="rt-line"><span>What the goods cost us</span><span>-'+money(cost)+'</span></div>'
+        + '<div class="rt-line"><span><b>Left on the counter</b></span><span><b>'+money(margin)+(pct!==null?' · '+pct+'%':'')+'</b></span></div>';
+      if(m && m.items_total > 0 && m.items_costed < m.items_total){
+        h += '<div class="rt-note">Costed '+m.items_costed+' of '+m.items_total+' lines. The rest are service-side items the retail shelf does not carry, so their cost is left out rather than guessed — the real margin is no better than this.</div>';
+      }
+
+      /* THE WHOLE DAY — the workbook's arithmetic, rent included */
+      if(m){
+        h += '<div class="rt-sec">The whole day, honestly</div>'
+          + '<div class="rt-line"><span>Everything rang (both tills)</span><span>'+money(m.rang)+'</span></div>'
+          + (Number(m.service_rang)>0 ? '<div class="rt-line"><span>— of that, service side</span><span>'+money(m.service_rang)+'</span></div>' : '')
+          + '<div class="rt-line"><span>Cost of goods sold</span><span>-'+money(m.direct_cost)+'</span></div>'
+          + '<div class="rt-line"><span>Money out that day</span><span>-'+money(m.cash_out)+(m.spend_lines?' · '+m.spend_lines+' line'+(m.spend_lines===1?'':'s'):'')+'</span></div>'
+          + '<div class="rt-line"><span>Overhead — rent never sleeps</span><span>-'+money(m.overhead)+'</span></div>'
+          + '<div class="rt-line" style="border-bottom:0"><span><b>TRUE profit</b></span><span><b style="color:'
+            + (Number(m.true_profit)>=0?'var(--green)':'var(--red)')+'">'+money(m.true_profit)+'</b></span></div>';
+        if(outs.length){
+          h += '<div class="rt-sec">Where the money went</div>'
+            + outs.map(function(o){ return '<div class="rt-line"><span>'+esc(o.paid_to||o.category||'—')+(o.what?' · '+esc(o.what):'')+'</span><span>-'+money(o.amount_cad)+'</span></div>'; }).join('');
+        }
+        h += '<div class="rt-note">Same arithmetic as the DAY tab in AZCK_Money.xlsx: rang minus cost of goods, minus labour, minus $'
+          + Number(m.overhead).toFixed(2) + ' of fixed costs that land on every calendar day. Labour is not counted yet — nobody logs minutes against a counter sale, so TRUE profit here is the best case, not the final one.</div>';
+      }
+
+      /* THE BASKET */
+      h += '<div class="rt-sec">Top items</div>'
+        + (items.length
+            ? items.map(function(t){ return '<div class="rt-line"><span>'+esc(t.item)+'</span><span>x'+t.qty+'</span></div>'; }).join('')
+            : '<div class="rt-note">Square reported no item breakdown for this day.</div>');
+      if(d){
+        h += '<dl class="rt-kv">'
           + '<dt>Tax</dt><dd>'+money(d.tax_dollars)+'</dd>'
           + '<dt>Tips</dt><dd>'+money(d.tip_dollars)+'</dd>'
           + '<dt>Discounts</dt><dd>'+money(d.discount_dollars)+'</dd>'
-        + '</dl>'
-        /* top_items is a top-N summary from Square ({qty,item} only). It carries no
-           prices and does NOT sum to the gross — calling it "items sold" would be a
-           quiet lie, so the heading and the note both say what it really is. */
-        + '<div class="rt-sec">Top items</div>'
-        + (items.length
-            ? items.map(function(t){ return '<div class="rt-line"><span>'+esc(t.item)+'</span><span>×'+t.qty+'</span></div>'; }).join('')
-            : '<div class="rt-note">Square reported no item breakdown for this day.</div>')
-        + '<div class="rt-note">Square sends a top-few list, not the full basket — these lines do not add up to the total above. Last synced '+esc(when(d.synced_at))+'.</div>';
+          + '</dl>'
+          + '<div class="rt-note">Square sends a top-few list, not the full basket. Last synced '+esc(when(d.synced_at))+'.</div>';
+      }
+      box.innerHTML = h;
     }catch(e){ box.innerHTML = '<div class="rt-empty">Could not read that day: '+esc(e.message||String(e))+'</div>'; }
   }
 
