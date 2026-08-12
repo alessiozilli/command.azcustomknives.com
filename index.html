@@ -4388,6 +4388,10 @@ window.openActiveRun = function() {
     try{ var p=k.split('-'); return new Date(+p[0], +p[1]-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
     catch(e){ return k; }
   }
+  /* An unrecorded cost is not a zero cost. */
+  function dbCost(v){
+    return Number(v) > 0 ? '-'+money(v) : '<span style="color:var(--text-xs)">not recorded</span>';
+  }
   function dName(d){
     try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
     catch(e){ return d; }
@@ -4397,11 +4401,27 @@ window.openActiveRun = function() {
     var list = el('db-months');
     if(!list || !window.supa) return;
     try{
-      var r = await window.supa.from('az_day_money')
-        .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,orders,direct_cost,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
-        .order('day', { ascending: false }).limit(500);
+      var pair = await Promise.all([
+        window.supa.from('az_day_money')
+          .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,orders,direct_cost,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
+          .order('day', { ascending: false }).limit(500),
+        window.supa.from('az_day_division')
+          .select('day,division,rang,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,profit')
+          .order('day', { ascending: false }).limit(2000)
+      ]);
+      var r = pair[0];
       if(r.error) throw r.error;
+      if(pair[1].error) throw pair[1].error;
       D.days = r.data || [];
+      D.div = {};
+      (pair[1].data||[]).forEach(function(x){
+        var k = mKey(x.day), b = D.div[k] || (D.div[k] = {});
+        var a = b[x.division] || (b[x.division] = { sold:0, cost:0, wages:0, oh:0, profit:0, lines:0, costed:0, uncosted:0 });
+        a.sold += Number(x.rang||0);        a.cost   += Number(x.cost_known||0);
+        a.wages += Number(x.wages_share||0); a.oh     += Number(x.overhead_share||0);
+        a.profit+= Number(x.profit||0);      a.lines  += Number(x.lines||0);
+        a.costed+= Number(x.lines_costed||0);a.uncosted += Number(x.rang_uncosted||0);
+      });
       if(!D.days.length){ list.innerHTML = '<div class="db-empty">No sale days recorded yet.</div>'; return; }
       var months = {};
       D.days.forEach(function(d){
@@ -4452,26 +4472,31 @@ window.openActiveRun = function() {
     var sold = days.filter(function(d){ return d.rang_today; });
     var best = sold.slice().sort(function(a,b){ return Number(b.rang)-Number(a.rang); })[0];
     var worst = sold.slice().sort(function(a,b){ return Number(a.rang)-Number(b.rang); })[0];
+    var uncosted = Object.keys(D.div[D.month]||{}).reduce(function(a,k){ return a + D.div[D.month][k].uncosted; }, 0);
     var bar   = (m.oh + m.wages) / Math.max(m.cal,1);
     var cleared = sold.filter(function(d){ return Number(d.rang) >= bar; }).length;
     box.innerHTML = '<div class="db-big">'+money(m.rang)+'</div>'
       + '<div class="db-sub">'+esc(mName(D.month))+' · '+m.sold+' selling day'+(m.sold===1?'':'s')+' of '+m.cal+' · '+m.orders+' orders</div>'
       + '<div class="db-sec">The month, honestly</div>'
       + '<div class="db-line"><span>Ours to keep</span><span>'+money(m.rang)+'</span></div>'
-      + '<div class="db-line"><span>Cost of goods sold</span><span>-'+money(m.cogs)+'</span></div>'
-      + '<div class="db-line"><span>Money out</span><span>-'+money(m.out)+'</span></div>'
+      + '<div class="db-line"><span>Cost of goods sold</span><span>'+dbCost(m.cogs)+'</span></div>'
+      + '<div class="db-line"><span>Money out</span><span>'+dbCost(m.out)+'</span></div>'
       + '<div class="db-line"><span>Wages — '+m.cal+' days</span><span>-'+money(m.wages)+'</span></div>'
       + '<div class="db-line"><span>Rent — '+m.cal+' days</span><span>-'+money(m.oh)+'</span></div>'
       + '<div class="db-line" style="border-bottom:0"><span><b>Profit</b></span><span class="'+(m.best>=0?'good':'bad')+'"><b>'+money(m.best)+'</b></span></div>'
       + '<div class="db-note">GST '+money(m.gst)+' and tips '+money(m.tips)+' were charged on top of that and are not counted: the tax belongs to the government, the tips are not the business\u2019s to keep.</div>'
       /* WHERE it came from — this is what the Dashboard is for. The Till next door
          answers the other question: WHAT sold, line by line. */
-      + '<div class="db-sec">Where it came from</div>'
+      + '<div class="db-sec">Where it came from — and what each side kept</div>'
       + DB_DIVS.map(function(x){
           if(!(m[x.k] > 0)) return '';
           var pc = Math.round(m[x.k] / Math.max(m.rang,0.01) * 100);
-          return '<div class="db-line"><span>'+esc(x.label)+'</span><span>'+money(m[x.k])+' · '+pc+'%</span></div>';
+          var a  = (D.div[D.month]||{})[x.k];
+          var pr = a ? '<span class="'+(a.profit>=0?'good':'bad')+'"> '+money(a.profit)+'</span>' : '';
+          return '<div class="db-line"><span>'+esc(x.label)+'</span><span>'+money(m[x.k])+' · '+pc+'%'+pr+'</span></div>';
         }).join('')
+      + '<div class="db-note">Each side carries its own share of the rent and wages — the same share of the money it brings in. The five add back to the profit above exactly. '
+        + (uncosted > 0 ? money(uncosted)+' of this month has no cost of goods on record, so every one of these reads better than it is.' : '')+'</div>'
       + '<div class="db-sec">How the days went</div>'
       + '<div class="db-line"><span>Days that cleared '+money(bar)+'</span><span>'+cleared+' of '+m.cal+'</span></div>'
       + (best  ? '<div class="db-line"><span>Best day — '+esc(dName(best.day))+'</span><span>'+money(best.rang)+'</span></div>' : '')
@@ -4660,7 +4685,7 @@ window.openActiveRun = function() {
      at-risk job would have vanished silently. Named in full on purpose. */
   var OPEN_STATUSES = ['new','scheduled','in_shop','at_risk'];
 
-  var S = { tillDay:null, grain:'day', division:'all', all:[], groups:{}, order:[],
+  var S = { tillDay:null, grain:'day', division:'all', all:[], byDay:{}, groups:{}, order:[],
             stockLoc:'Blue Building', stockId:null, stock:[] };
 
   function el(id){ return document.getElementById(id); }
@@ -4734,12 +4759,30 @@ window.openActiveRun = function() {
       a.gst    += Number(r.gst||0);
       a.tips   += Number(r.tips||0);
       a.best   += Number(r.true_profit||0);
+      var d = S.division !== 'all' && S.byDay[r.day] && S.byDay[r.day][S.division];
+      if(d){
+        a.dcost   += Number(d.cost_known||0);
+        a.dwages  += Number(d.wages_share||0);
+        a.doh     += Number(d.overhead_share||0);
+        a.dspend  += Number(d.spend_share||0);
+        a.dprofit += Number(d.profit||0);
+        a.dlines  += Number(d.lines||0);
+        a.dcosted += Number(d.lines_costed||0);
+        a.duncost += Number(d.rang_uncosted||0);
+      }
       return a;
     }, { cal:0, sold:0, orders:0, all:0, retail:0, service:0, courses:0, supplies:0,
          other:0, cogs:0, rcost:0, costed:0, lines:0, out:0, oh:0, wages:0, mins:0,
-         gst:0, tips:0, best:0 });
+         gst:0, tips:0, best:0,
+         dcost:0, dwages:0, doh:0, dspend:0, dprofit:0, dlines:0, dcosted:0, duncost:0 });
     /* .rang is whatever the chosen pill is looking at; .all is always the whole shop. */
     a.rang = S.division === 'all' ? a.all : a[S.division];
+    a.share = a.all > 0 ? a[S.division] / a.all : 0;
+    if(S.division !== 'all'){
+      /* the standing weight, not this period's mix — that is what the costs used */
+      var any = rows.length && S.byDay[rows[0].day] && S.byDay[rows[0].day][S.division];
+      if(any) a.share = Number(any.share_of_revenue||a.share);
+    }
     return a;
   }
 
@@ -4768,11 +4811,24 @@ window.openActiveRun = function() {
     try{
       /* EVERY calendar day, not only the ones that rang — the quiet days carry
          the rent that makes a week or a month honest. */
-      var r = await window.supa.from('az_day_money')
-        .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,split_source,orders,direct_cost,retail_cost,items_costed,items_total,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
-        .order('day',{ascending:false}).limit(500);
+      var both = await Promise.all([
+        window.supa.from('az_day_money')
+          .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,split_source,orders,direct_cost,retail_cost,items_costed,items_total,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
+          .order('day',{ascending:false}).limit(500),
+        /* Each side of the shop carrying its own costs. Rent and wages are shared
+           out by each side's slice of revenue — see az_day_division. */
+        window.supa.from('az_day_division')
+          .select('day,division,rang,share_of_revenue,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,spend_share,profit')
+          .order('day',{ascending:false}).limit(2000)
+      ]);
+      var r = both[0];
       if(r.error) throw r.error;
+      if(both[1].error) throw both[1].error;
       S.all = r.data || [];
+      S.byDay = {};
+      (both[1].data||[]).forEach(function(x){
+        (S.byDay[x.day] || (S.byDay[x.day] = {}))[x.division] = x;
+      });
       if(!S.all.length){
         list.innerHTML = '<div class="rt-empty">No sale days synced yet. A day appears here once Square reports takings for it — a missing day means "not synced", never "$0".</div>';
         return;
@@ -4855,14 +4911,15 @@ window.openActiveRun = function() {
 
       var h = '<div class="rt-big">'+money(t.rang)+'</div>'
         + '<div class="rt-sub">'+esc(day(S.tillDay))+' · '+t.orders+(t.orders===1?' order':' orders')+'</div>';
-      if(S.division==='all' && t.retail > 0){
+      var rt = S.byDay[S.tillDay] && S.byDay[S.tillDay].retail;
+      if(S.division==='all' && t.retail > 0 && rt){
+        var rc = Number(rt.cost_known||0), rl = Number(rt.lines||0), rk = Number(rt.lines_costed||0);
         h += '<div class="rt-sec">What the counter made</div>'
-          + '<div class="rt-line"'+(t.costed?'':' style="border-bottom:0"')+'><span>Sold</span><span>'+money(t.retail)+'</span></div>';
-        if(t.costed > 0){
-          var pct = Math.round((t.retail - t.rcost) / t.retail * 100);
-          h += '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(t.rcost)+'</span></div>'
-            +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.retail - t.rcost)+' · '+pct+'%</b></span></div>'
-            +  '<div class="rt-note">Costed '+t.costed+' of '+t.lines+' lines. The rest are not on the retail shelf, so their cost is left out rather than guessed — the real margin is no better than this.</div>';
+          + '<div class="rt-line"'+(rk?'':' style="border-bottom:0"')+'><span>Sold</span><span>'+money(t.retail)+'</span></div>';
+        if(rk > 0){
+          h += '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(rc)+'</span></div>'
+            +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.retail - rc)+' · '+Math.round((t.retail-rc)/t.retail*100)+'%</b></span></div>'
+            +  (rk < rl ? '<div class="rt-note">Costed '+rk+' of '+rl+' lines — '+money(rt.rang_uncosted)+' of this has no cost on record, so the real margin is thinner than it reads.</div>' : '');
         } else {
           h += '<div class="rt-note">'+NO_COST+'</div>';
         }
@@ -4879,7 +4936,15 @@ window.openActiveRun = function() {
   /* A blank cost is not a 100% margin. Say what is actually true: the shelf in
      az_retail_inventory only carries the Wuben stock so far, so nothing else that
      sells has a cost on record and no margin can be shown for it. */
-  var NO_COST = 'No margin shown: none of these lines has a cost on record. The shelf only carries the Wuben stock so far — the rest of what sells has never been costed, and a guess would be worse than a blank.';
+  /* Checked 2026-08-12: Square stores no unit cost and has no vendors, and the
+     workbook's MONEY OUT / MONEY IN sheets are empty. The only real costs anywhere
+     are the Wuben lines. Say that, rather than render an unknown as a zero. */
+  /* "-$0.00" reads as "this was free". It never was. Where nothing is on record,
+     say so in the value column instead of printing a zero. */
+  function costCell(v, anyLines){
+    return (Number(v) > 0 || !anyLines) ? '-'+money(v) : '<span style="color:var(--text-xs)">not recorded</span>';
+  }
+  var NO_COST = 'Nobody has recorded what those cost us. Only the Wuben stock has a real unit cost on file — not Shun, not Epicurean, not F.Dick, and no import fees or freight anywhere. Tell any Forge session what a line costs and it lands in the cost table.';
   function rtBasket(rows){
     rows = (rows||[]).filter(function(r){ return S.division==='all' || r.division===S.division; });
     if(!rows.length){
@@ -4896,18 +4961,29 @@ window.openActiveRun = function() {
 
   /* the honest stack, identical at every grain */
   function rtStack(t, outs, grain){
+    /* One side of the shop gets the SAME honest stack as the whole shop. Rent and
+       wages are shared out by that side's slice of revenue — quiet days included —
+       so the five sides add back to the whole-shop bottom line exactly. */
     if(S.division !== 'all'){
-      var dv = DIVS.filter(function(d){ return d.k===S.division; })[0] || DIVS[0];
-      var h2 = '<div class="rt-sec">'+esc(dv.label)+'</div>'
-        + '<div class="rt-line"><span>Sold</span><span>'+money(t.rang)+'</span></div>';
-      if(S.division==='retail' && t.costed > 0){
-        h2 += '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(t.rcost)+'</span></div>'
-           +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.rang - t.rcost)+'</b></span></div>';
-      } else if(S.division==='retail'){
-        h2 += '<div class="rt-note">'+NO_COST+'</div>';
+      var dv  = DIVS.filter(function(d){ return d.k===S.division; })[0] || DIVS[0];
+      var pc  = Math.round((t.share||0) * 100);
+      var one = grain === 'day';
+      var h2 = '<div class="rt-sec">'+esc(dv.label)+(one?', honestly':'')+'</div>'
+        + '<div class="rt-line"><span>Sold</span><span>'+money(t.rang)+'</span></div>'
+        + '<div class="rt-line"><span>What those goods cost us'
+          + (t.dcosted && t.dcosted < t.dlines ? ' <span class="rt-tag">'+t.dcosted+' of '+t.dlines+' lines</span>' : '')
+          + '</span><span>'+costCell(t.dcost, t.dlines)+'</span></div>'
+        + (t.dspend > 0 ? '<div class="rt-line"><span>Money out — '+pc+'% share</span><span>-'+money(t.dspend)+'</span></div>' : '')
+        + '<div class="rt-line"><span>Wages — '+pc+'% share'+(one?'':' of '+t.cal+' days')+'</span><span>-'+money(t.dwages)+'</span></div>'
+        + '<div class="rt-line"><span>Rent — '+pc+'% share'+(one?'':' of '+t.cal+' days')+'</span><span>-'+money(t.doh)+'</span></div>'
+        + '<div class="rt-line" style="border-bottom:0"><span><b>Profit</b></span><span><b class="'+(t.dprofit>=0?'rt-good':'rt-bad')+'">'+money(t.dprofit)+'</b></span></div>'
+        + '<div class="rt-note">'+esc(dv.label)+' brings in '+pc+'% of the money, so it carries '+pc+'% of the rent and wages — every calendar day, sold or not. That is the rule; the five sides add back to the whole shop exactly.</div>';
+      if(t.duncost > 0){
+        h2 += '<div class="rt-note">' + money(t.duncost) + ' of that has NO cost on record'
+          + (t.dlines ? ' ('+(t.dlines-t.dcosted)+' of '+t.dlines+' lines)' : '')
+          + '. ' + NO_COST + '</div>';
       }
-      return h2 + '<div class="rt-note">One side of the shop on its own. Rent, wages and profit are not shown here: '
-        + money(t.cal ? (t.oh+t.wages)/t.cal : 0) + ' a day of rent and wages belongs to the whole business, and nobody has set a rule for splitting it between the sides. Switch to Whole shop for the bottom line.</div>';
+      return h2;
     }
     var oneDay = grain === 'day';
     var rentLine = oneDay ? 'Rent — it never sleeps'      : 'Rent — ' + t.cal + ' days';
@@ -4917,8 +4993,8 @@ window.openActiveRun = function() {
       + DIVS.map(function(d){
           return t[d.k] > 0 ? '<div class="rt-line"><span>— of that, '+d.line+'</span><span>'+money(t[d.k])+'</span></div>' : '';
         }).join('')
-      + '<div class="rt-line"><span>Cost of goods sold</span><span>-'+money(t.cogs)+'</span></div>'
-      + '<div class="rt-line"><span>Money out</span><span>-'+money(t.out)+'</span></div>'
+      + '<div class="rt-line"><span>Cost of goods sold</span><span>'+costCell(t.cogs, t.lines)+'</span></div>'
+      + '<div class="rt-line"><span>Money out</span><span>'+costCell(t.out, true)+'</span></div>'
       + '<div class="rt-line"><span>'+wageLine+'</span><span>-'+money(t.wages)+'</span></div>'
       + '<div class="rt-line"><span>'+rentLine+'</span><span>-'+money(t.oh)+'</span></div>'
       + '<div class="rt-line" style="border-bottom:0"><span><b>Profit</b></span><span><b class="'+(t.best>=0?'rt-good':'rt-bad')+'">'+money(t.best)+'</b></span></div>'
