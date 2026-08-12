@@ -4305,6 +4305,176 @@ window.openActiveRun = function() {
     </script>
   </section>
 
+  <!-- ═══ DASHBOARD — the business at a glance, and the year's money.
+       This lane stopped being a placeholder on 2026-08-12: the Square backfill put
+       every 2026 selling day in the database, and the Till only ever shows the RETAIL
+       till, so 128 service days had nowhere to be seen. This is where they live.
+       Same nav | info | comms shape as Services > Queue and Retail. ═══ -->
+  <section class="lane faces-tokens cc-lane" id="lane-dashboard" data-lane="dashboard">
+    <style>
+      [data-lane="dashboard"] .db-3col { display:grid; grid-template-columns:1.25fr 2.3fr 1.45fr; gap:var(--sp-10); align-items:stretch; position:relative; margin:var(--sp-12) var(--sp-16); }
+      #lane-dashboard .db-3col { flex:0 0 auto; height:calc(100vh - 165px); min-height:420px; }
+      [data-lane="dashboard"] .db-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-lane="dashboard"] .db-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      [data-lane="dashboard"] .db-col__count { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--text-xs); letter-spacing:0.04em; text-transform:none; font-weight:400; }
+      [data-lane="dashboard"] .db-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
+      @media (max-width:700px){
+        [data-lane="dashboard"] .db-3col, #lane-dashboard .db-3col { grid-template-columns:1fr; height:auto; min-height:0; }
+        [data-lane="dashboard"] .db-col { overflow:visible; }
+        [data-lane="dashboard"] .db-col__body { overflow:visible; }
+      }
+      [data-lane="dashboard"] .db-row { display:flex; gap:8px; align-items:center; padding:7px 8px; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:12px; color:var(--text-dim); }
+      [data-lane="dashboard"] .db-row:hover { background:var(--raised); }
+      [data-lane="dashboard"] .db-row.on { background:var(--raised); border-color:var(--amber); color:var(--text); }
+      [data-lane="dashboard"] .db-row__main { flex:1; min-width:0; }
+      [data-lane="dashboard"] .db-row__name { font-size:12px; color:var(--text); }
+      [data-lane="dashboard"] .db-row__sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:2px; }
+      [data-lane="dashboard"] .db-row__val { font-family:var(--mono); font-size:11px; white-space:nowrap; text-align:right; }
+      [data-lane="dashboard"] .db-big { font-family:var(--mono); font-size:26px; color:var(--amber); line-height:1.1; }
+      [data-lane="dashboard"] .db-sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:3px; }
+      [data-lane="dashboard"] .db-sec { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border); }
+      [data-lane="dashboard"] .db-line { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--text-dim); padding:4px 0; border-bottom:1px solid var(--border); }
+      [data-lane="dashboard"] .db-line:last-child { border-bottom:0; }
+      [data-lane="dashboard"] .db-note { font-size:11px; color:var(--text-xs); line-height:1.5; margin-top:8px; }
+      [data-lane="dashboard"] .db-empty { font-size:12px; color:var(--text-xs); line-height:1.6; padding:var(--sp-12); border:1px dashed var(--border); border-radius:4px; }
+      [data-lane="dashboard"] .good { color:var(--green); }
+      [data-lane="dashboard"] .bad  { color:var(--red); }
+      [data-lane="dashboard"] .db-bar { height:3px; background:var(--border); border-radius:2px; margin-top:4px; overflow:hidden; }
+      [data-lane="dashboard"] .db-bar i { display:block; height:100%; background:var(--amber); }
+      [data-lane="dashboard"] .db-msg { padding:6px 9px; border:1px solid var(--border); border-radius:3px; background:var(--raised); margin-bottom:6px; }
+      [data-lane="dashboard"] .db-msg__head { display:flex; gap:6px; align-items:baseline; font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; flex-wrap:wrap; }
+      [data-lane="dashboard"] .db-msg__from { color:var(--amber); }
+      [data-lane="dashboard"] .db-msg__when { margin-left:auto; }
+      [data-lane="dashboard"] .db-msg__body { font-size:11.5px; color:var(--text-dim); line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+    </style>
+
+    <div class="db-3col">
+      <div class="db-col">
+        <div class="db-col__head">The year <span class="db-col__count" id="db-year-count">…</span></div>
+        <div class="db-col__body" id="db-months">Loading…</div>
+      </div>
+      <div class="db-col">
+        <div class="db-col__head">The month</div>
+        <div class="db-col__body" id="db-detail">Pick a month on the left.</div>
+      </div>
+      <div class="db-col">
+        <div class="db-col__head">Business bus <span class="db-col__count" id="db-bus-count">…</span></div>
+        <div class="db-col__body" id="db-bus">Loading…</div>
+      </div>
+    </div>
+
+    <script>
+/* ═══ DASHBOARD money view (2026-08-12).
+   Reads az_day_money — the view that does the workbook's DAY arithmetic over every
+   CALENDAR day, so a quiet Sunday still carries its rent. Nothing here is stored;
+   it is all computed from Square, the retail shelf costs and az_money_out at read
+   time. "Best case" is the honest name: labour is not in it yet. ═══ */
+(function(){
+  'use strict';
+  var D = { days: [], month: null };
+  function el(id){ return document.getElementById(id); }
+  function money(v){ var n=Number(v||0); return (n<0?'-$':'$') + Math.abs(n).toFixed(2); }
+  function mKey(d){ return String(d).slice(0,7); }
+  function mName(k){
+    try{ var p=k.split('-'); return new Date(+p[0], +p[1]-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
+    catch(e){ return k; }
+  }
+  function dName(d){
+    try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
+    catch(e){ return d; }
+  }
+
+  window.renderDashboard = async function(){
+    var list = el('db-months');
+    if(!list || !window.supa) return;
+    try{
+      var r = await window.supa.from('az_day_money')
+        .select('day,rang,retail_rang,service_rang,orders,direct_cost,cash_out,spend_lines,overhead,true_profit,rang_today')
+        .order('day', { ascending: false }).limit(500);
+      if(r.error) throw r.error;
+      D.days = r.data || [];
+      if(!D.days.length){ list.innerHTML = '<div class="db-empty">No sale days recorded yet.</div>'; return; }
+      var months = {};
+      D.days.forEach(function(d){
+        var k = mKey(d.day);
+        var m = months[k] || (months[k] = { k:k, cal:0, sold:0, orders:0, rang:0, cogs:0, out:0, oh:0, best:0 });
+        m.cal++; if(d.rang_today) m.sold++;
+        m.orders += Number(d.orders||0);
+        m.rang   += Number(d.rang||0);
+        m.cogs   += Number(d.direct_cost||0);
+        m.out    += Number(d.cash_out||0);
+        m.oh     += Number(d.overhead||0);
+        m.best   += Number(d.true_profit||0);
+      });
+      D.months = months;
+      var keys = Object.keys(months).sort().reverse();
+      var top = Math.max.apply(null, keys.map(function(k){ return months[k].rang; })) || 1;
+      var yr = keys.reduce(function(a,k){ a.rang+=months[k].rang; a.best+=months[k].best; a.orders+=months[k].orders; return a; }, {rang:0,best:0,orders:0});
+      el('db-year-count').textContent = money(yr.rang) + ' · ' + yr.orders + ' orders';
+      if(!D.month) D.month = keys[0];
+      list.innerHTML = keys.map(function(k){
+        var m = months[k];
+        return '<div class="db-row'+(k===D.month?' on':'')+'" data-m="'+k+'" onclick="dbPickMonth(this)">'
+          + '<div class="db-row__main"><div class="db-row__name">'+esc(mName(k))+'</div>'
+          + '<div class="db-row__sub">'+m.sold+' selling day'+(m.sold===1?'':'s')+' · '+m.orders+' orders</div>'
+          + '<div class="db-bar"><i style="width:'+Math.round(m.rang/top*100)+'%"></i></div></div>'
+          + '<div class="db-row__val">'+money(m.rang)
+          + '<div class="'+(m.best>=0?'good':'bad')+'">'+money(m.best)+'</div></div></div>';
+      }).join('');
+      dbPaintMonth();
+      dbLoadBus();
+    }catch(e){ list.innerHTML = '<div class="db-empty">Could not read the year: '+esc(e.message||String(e))+'</div>'; }
+  };
+
+  window.dbPickMonth = function(row){ D.month = row.dataset.m; window.renderDashboard(); };
+
+  function dbPaintMonth(){
+    var box = el('db-detail'); if(!box || !D.month) return;
+    var m = D.months[D.month];
+    var days = D.days.filter(function(d){ return mKey(d.day)===D.month; })
+                     .sort(function(a,b){ return a.day < b.day ? 1 : -1; });
+    var sold = days.filter(function(d){ return d.rang_today; });
+    var best = sold.slice().sort(function(a,b){ return Number(b.rang)-Number(a.rang); })[0];
+    box.innerHTML = '<div class="db-big">'+money(m.rang)+'</div>'
+      + '<div class="db-sub">'+esc(mName(D.month))+' · '+m.sold+' selling day'+(m.sold===1?'':'s')+' of '+m.cal+' · '+m.orders+' orders</div>'
+      + '<div class="db-sec">The month, honestly</div>'
+      + '<div class="db-line"><span>Rang</span><span>'+money(m.rang)+'</span></div>'
+      + '<div class="db-line"><span>Cost of goods sold</span><span>-'+money(m.cogs)+'</span></div>'
+      + '<div class="db-line"><span>Money out</span><span>-'+money(m.out)+'</span></div>'
+      + '<div class="db-line"><span>Overhead — '+m.cal+' days of rent</span><span>-'+money(m.oh)+'</span></div>'
+      + '<div class="db-line" style="border-bottom:0"><span><b>Best case</b></span><span class="'+(m.best>=0?'good':'bad')+'"><b>'+money(m.best)+'</b></span></div>'
+      + (best ? '<div class="db-note">Best day was '+esc(dName(best.day))+' at '+money(best.rang)+'. Average across the '+m.sold+' selling day'+(m.sold===1?'':'s')+': '+money(m.rang/Math.max(m.sold,1))+'. Rent alone costs '+money(m.oh/m.cal)+' a day, so a day under that loses money before anything else is counted.</div>' : '')
+      + '<div class="db-sec">Day by day</div>'
+      + sold.map(function(d){
+          var p = Number(d.true_profit);
+          return '<div class="db-line"><span>'+esc(dName(d.day))+' · '+d.orders+(Number(d.orders)===1?' order':' orders')+'</span>'
+            + '<span>'+money(d.rang)+' <span class="'+(p>=0?'good':'bad')+'">'+money(p)+'</span></span></div>';
+        }).join('')
+      + '<div class="db-note">Best case = rang minus cost of goods, minus labour, minus rent. Labour is still zero in it because nobody logs minutes against a sale, so the real month cannot be better than this — only worse. Quiet days carry rent too; that is why the day count above says '+m.sold+' of '+m.cal+'.</div>';
+  }
+
+  async function dbLoadBus(){
+    var box = el('db-bus'); if(!box || !window.supa) return;
+    try{
+      var r = await window.supa.from('agent_messages')
+        .select('id,from_user,to_user,body,created_at')
+        .in('project_slug', ['azcc','command-center-cowork','azck-retail-cowork','azck-finance-cowork'])
+        .order('created_at', { ascending: false }).limit(25);
+      if(r.error) throw r.error;
+      var rows = r.data || [];
+      el('db-bus-count').textContent = rows.length ? rows.length + ' recent' : 'none yet';
+      box.innerHTML = rows.length ? rows.map(function(x){
+        var b = esc(x.body||''); if(b.length>320) b = b.slice(0,320)+'…';
+        var when=''; try{ when = new Date(x.created_at).toLocaleString(); }catch(e){}
+        return '<div class="db-msg"><div class="db-msg__head"><span class="db-msg__from">'+esc(x.from_user)+'</span><span>→</span><span>'+esc(x.to_user)+'</span><span class="db-msg__when">'+esc(when)+'</span></div>'
+          + '<div class="db-msg__body">'+b+'</div></div>';
+      }).join('') : '<div class="db-empty">Nothing on the business lanes yet.</div>';
+    }catch(e){ box.innerHTML = '<div class="db-empty">Could not read the bus: '+esc(e.message||String(e))+'</div>'; }
+  }
+})();
+    </script>
+  </section>
+
   <!-- ═══ RETAIL — her side of the business. Three subtabs, each a
        navigation | information | communication triple, mirroring the house
        standard set by Services ▸ Queue (.scx-3col, nav | job | bus) and
@@ -4708,7 +4878,7 @@ window.openActiveRun = function() {
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
-<script defer src="assets/cc-col-resize.js?v=20260812-retail3col"></script>
+<script defer src="assets/cc-col-resize.js?v=20260812-dashmoney"></script>
 <script defer src="assets/cc-bus-v2.js?v=20260811-barsdark"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
 <script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .scx-3col + .svsc-3col are registered SURFACES -->
@@ -4730,7 +4900,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 /* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
    nothing pretends to be live until phase 3 moves the real tab in. */
 const LANES = [
-  ['dashboard','DASHBOARD','The business at a glance.','Phase 3 builds this last, from real lanes.'],
+  ['dashboard','DASHBOARD','The business at a glance — the year in money.','LIVE 2026-08-12: reads az_day_money over every calendar day. Static section below; buildShell skips it.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','LIVE — ported 2026-08-05 (port 6/6, string complete). Static section below; buildShell skips it.'],
   ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
@@ -4786,6 +4956,9 @@ function switchLane(id){
     (function retry(n){ if(window.supa && window.CCMasterDetail){ try{ window.renderShopHeatTreat(); }catch(e){ console.warn('[shop-ht] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
     if((document.querySelector('#lane-shop .cc-subpane.active')||{dataset:{}}).dataset.subtab==='after-hours')
       setTimeout(()=>{ try{ window.renderShopAfterHours && window.renderShopAfterHours(); }catch(e){} }, 60);
+  }
+  if(id==='dashboard'){
+    (function retry(n){ if(window.supa && window.renderDashboard){ try{ window.renderDashboard(); }catch(e){ console.warn('[dashboard] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   }
   if(id==='retail'){
     (function retry(n){ if(window.supa && window.renderRetail){ try{ window.renderRetail(); }catch(e){ console.warn('[retail] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
@@ -4908,6 +5081,9 @@ async function boot(){
        where this hook is absent, i.e. on the faces build it was mirrored from.) */
     window.CC_BUS_IDENTITY=()=> (session.user.email||'').toLowerCase()==='admin@azcustomknives.com' ? 'reanna' : 'alessio';
     if(!$('#nav').children.length) buildShell();
+    /* DASHBOARD is lane 0 and is already open on load, so switchLane never fires for
+       it — render it here or the first thing he sees is an empty box. */
+    (function retry(n){ if(window.supa && window.renderDashboard){ try{ window.renderDashboard(); }catch(e){ console.warn('[dashboard] boot render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
     /* deep-link: #lane or #lane/subtab survives refresh (faces pattern) */
     const h=(location.hash||'').replace('#','').split('/');
     if(h[0] && document.getElementById('lane-'+h[0])){
