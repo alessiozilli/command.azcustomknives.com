@@ -4678,7 +4678,9 @@ window.openActiveRun = function() {
       box.innerHTML = rows.length ? rows.map(function(x){
         var b = esc(x.body||''); if(b.length>320) b = b.slice(0,320)+'…';
         var when=''; try{ when = new Date(x.created_at).toLocaleString(); }catch(e){}
-        return '<div class="db-msg"><div class="db-msg__head"><span class="db-msg__from">'+esc(x.from_user)+'</span><span>→</span><span>'+esc(x.to_user)+'</span><span class="db-msg__when">'+esc(when)+'</span></div>'
+        return '<div class="db-msg"><div class="db-msg__head">'
+          + '<span style="color:var(--text)"><b>#'+esc(x.id)+'</b></span>'
+          + '<span class="db-msg__from">'+esc(x.from_user)+'</span><span>→</span><span>'+esc(x.to_user)+'</span><span class="db-msg__when">'+esc(when)+'</span></div>'
           + '<div class="db-msg__body">'+b+'</div></div>';
       }).join('') : '<div class="db-empty">Nothing on the business lanes yet.</div>';
     }catch(e){ box.innerHTML = '<div class="db-empty">Could not read the bus: '+esc(e.message||String(e))+'</div>'; }
@@ -5355,7 +5357,10 @@ window.openActiveRun = function() {
       var rows = r.data||[];
       var html = rows.length ? rows.map(function(m){
         var b = esc(m.body||''); if(b.length>500) b = b.slice(0,500)+'…';
+        /* The bus number goes first. Without it he cannot say "look at #4812" to
+           anyone, and neither can any other instance. */
         return '<div class="rt-msg"><div class="rt-msg__head">'
+            + '<span style="color:var(--text)"><b>#'+esc(m.id)+'</b></span>'
             + '<span class="rt-msg__from">'+esc(m.from_user)+'</span><span>→</span><span>'+esc(m.to_user)+'</span>'
             + '<span class="rt-msg__when">'+esc(when(m.created_at))+'</span></div>'
           + '<div class="rt-msg__body">'+b+'</div></div>';
