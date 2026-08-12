@@ -525,7 +525,7 @@
   function counts(){
     const rows = S.rows || [];
     return {
-      board: rows.filter(r => (onBench(r) && committed(r)) || isPickup(r)).length
+      board: rows.filter(r => onBench(r) && committed(r)).length   // pickups are NOT board work (2026-08-12)
            + rows.filter(r => isRequest(r) && r.next_action_date && r.next_action_date <= todayStr()).length,
       schedule: null,
       bench: rows.filter(r => onBench(r) && !!r.preferred_date).length,
@@ -595,7 +595,6 @@
   function paintBoard(left){
     const rows = S.rows || [], t = todayStr();
     const bench = rows.filter(r => onBench(r) && committed(r)).sort(benchSort);
-    const basket = rows.filter(isPickup).sort((a,b) => (a.done_at||'') < (b.done_at||'') ? -1 : 1);
     const chase = rows.filter(r => isRequest(r))
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
     const chaseDue = chase.filter(r => r.next_action_date && r.next_action_date <= t);
@@ -632,11 +631,12 @@
         { a:'done', l:'Mark done', go:true }
       ].filter(Boolean))).join('') : '<div class="scx-empty">Bench clear.</div>';
 
-    h += '<div class="scx-sec">In the basket — done, waiting for pickup — '+basket.length+'</div>';
-    h += basket.length ? basket.map(r => rowHtml(r, [
-        !r.notified_at ? { a:'notified', l:'Mark told them' } : null,
-        { a:'picked_up', l:'Mark picked up', go:true }
-      ].filter(Boolean))).join('') : '<div class="scx-empty">Basket empty.</div>';
+    /* THE BASKET IS NOT ON THE BOARD (Alessio, 2026-08-12, third time asked).
+       Finished work waiting on a customer is not his queue. "If this is on my
+       queue, it is just sitting there. Every day I look at it and get stressed
+       by it. I am creating this so I cannot be stressed." Done-and-not-collected
+       lives on the PICKUPS tab, where it is someone's job to chase it — and it
+       is still one tap away. Nothing was deleted; it was moved off his glance. */
 
     h += '<div class="scx-sec">Next 7 days</div>';
     h += week.length ? week.map(d =>
@@ -653,7 +653,7 @@
 
     if(left) left.innerHTML = h;
     const cnt = document.getElementById('scx-count');
-    if(cnt) cnt.textContent = bench.length + basket.length + chaseDue.length;
+    if(cnt) cnt.textContent = bench.length + chaseDue.length;   // basket excluded — not his work
     /* NOTHING auto-selects (Alessio, 2026-08-09): the centre shows only what HE
        tapped — otherwise it just offers + New job. */
   }
