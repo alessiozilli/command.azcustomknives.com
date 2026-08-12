@@ -4371,25 +4371,7 @@ window.openActiveRun = function() {
    time. Wages and rent are both charged on every calendar day. ═══ */
 (function(){
   'use strict';
-  /* Supabase's REST layer caps a single request at 1000 rows and returns the
-   truncated set WITHOUT an error. az_day_division is five rows per calendar day,
-   so it passed that cap in January and the oldest days were silently dropped —
-   a whole month reading as free rent. Always page it. */
-async function ccPagedRead(table, cols, order, pageSize){
-  var out = [], from = 0, size = pageSize || 900;
-  for(var guard = 0; guard < 40; guard++){
-    var r = await window.supa.from(table).select(cols)
-              .order(order, { ascending: false }).range(from, from + size - 1);
-    if(r.error) throw r.error;
-    var got = r.data || [];
-    out = out.concat(got);
-    if(got.length < size) break;
-    from += size;
-  }
-  return out;
-}
-
-/* ═══ DASHBOARD — where we stand RIGHT NOW.
+  /* ═══ DASHBOARD — where we stand RIGHT NOW.
      Alessio, 2026-08-12: "Why is the dashboard a year of our income and then the
      month of our income? What do you think the difference between till and
      dashboard is?" He was right — this screen was the Till again with fewer
@@ -5407,6 +5389,26 @@ async function ccPagedRead(table, cols, order, pageSize){
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* Supabase's REST layer caps a single request at 1000 rows and returns the
+   truncated set WITHOUT an error. az_day_division is five rows per calendar day,
+   so it passed that cap in January and the oldest days were silently dropped —
+   a whole month reading as free rent. Always page it. */
+async function ccPagedRead(table, cols, order, pageSize){
+  var out = [], from = 0, size = pageSize || 900;
+  for(var guard = 0; guard < 40; guard++){
+    var r = await window.supa.from(table).select(cols)
+              .order(order, { ascending: false }).range(from, from + size - 1);
+    if(r.error) throw r.error;
+    var got = r.data || [];
+    out = out.concat(got);
+    if(got.length < size) break;
+    from += size;
+  }
+  return out;
+}
+window.ccPagedRead = ccPagedRead;
+</script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
 <script defer src="assets/cc-col-resize.js?v=20260812-dashmoney"></script>
 <script defer src="assets/cc-bus-v2.js?v=20260811-barsdark"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
