@@ -4625,33 +4625,41 @@ window.openActiveRun = function() {
   async function rtLoadTill(){
     var list = el('rt-till-list'); if(!list || !window.supa) return;
     try{
-      var r = await window.supa.from('square_sales_daily')
-        .select('sale_date,orders,gross_dollars')
-        .eq('location','retail')
-        .order('sale_date',{ascending:false}).limit(60);
+      /* EVERY sale day, not just the retail register's (2026-08-12, his second ask).
+         The two tills only became separate registers on 2026-07-29 — before that the
+         whole business rang through one. Filtering this list to location='retail'
+         showed him exactly ONE day (Aug 8) and hid seven months of his own takings.
+         A filter on a distinction that did not exist yet is not a filter, it is a
+         blindfold. The list now shows the day's WHOLE take; the pane below splits it
+         into retail and service wherever that split is real. */
+      var r = await window.supa.from('az_day_money')
+        .select('day,rang,retail_rang,service_rang,orders,true_profit,rang_today')
+        .eq('rang_today', true)
+        .order('day',{ascending:false}).limit(400);
       if(r.error) throw r.error;
-      S.days = r.data||[];
-      var rows = S.days;
-      el('rt-till-count').textContent = rows.length ? rows.length + (rows.length===1?' day':' days') : 'none';
-      if(!rows.length){
-        list.innerHTML = '<div class="rt-empty">No '+esc(S.tillLoc)+' sale days synced yet. A day appears here once Square reports takings for it — a missing day means "not synced", never "$0".</div>';
+      S.days = (r.data||[]).map(function(d){
+        return { sale_date:d.day, orders:d.orders, gross_dollars:d.rang,
+                 retail:d.retail_rang, service:d.service_rang, profit:d.true_profit };
+      });
+      el('rt-till-count').textContent = S.days.length
+        ? S.days.length + (S.days.length===1?' day':' days') : 'none';
+      if(!S.days.length){
+        list.innerHTML = '<div class="rt-empty">No sale days synced yet. A day appears here once Square reports takings for it — a missing day means "not synced", never "$0".</div>';
         return;
       }
-      list.innerHTML = rows.map(function(d){
-        return '<div class="rt-row'+(d.sale_date===S.tillDay?' on':'')+'" data-d="'+esc(d.sale_date)+'" onclick="rtPickDay(this)">'
-          + '<div class="rt-row__main"><div class="rt-row__name">'+esc(day(d.sale_date))+'</div>'
-          + '<div class="rt-row__sub">'+d.orders+(d.orders===1?' order':' orders')+'</div></div>'
-          + '<div class="rt-row__val">'+money(d.gross_dollars)+'</div></div>';
-      }).join('');
-      if(!S.tillDay && rows.length){ S.tillDay = rows[0].sale_date; rtPaintTill(); rtLoadDay(); }
+      if(!S.tillDay) S.tillDay = S.days[0].sale_date;
+      rtPaintTill();
+      rtLoadDay();
     }catch(e){ list.innerHTML = '<div class="rt-empty">Could not read the till: '+esc(e.message||String(e))+'</div>'; }
   }
   function rtPaintTill(){
     var list = el('rt-till-list'); if(!list) return;
     list.innerHTML = S.days.map(function(d){
+      var tag = Number(d.retail) > 0
+        ? '<span class="rt-tag">retail '+money(d.retail)+'</span>' : '';
       return '<div class="rt-row'+(d.sale_date===S.tillDay?' on':'')+'" data-d="'+esc(d.sale_date)+'" onclick="rtPickDay(this)">'
         + '<div class="rt-row__main"><div class="rt-row__name">'+esc(day(d.sale_date))+'</div>'
-        + '<div class="rt-row__sub">'+d.orders+(d.orders===1?' order':' orders')+'</div></div>'
+        + '<div class="rt-row__sub">'+d.orders+(Number(d.orders)===1?' order':' orders')+' '+tag+'</div></div>'
         + '<div class="rt-row__val">'+money(d.gross_dollars)+'</div></div>';
     }).join('');
   }
@@ -4665,31 +4673,48 @@ window.openActiveRun = function() {
       var pair = await Promise.all([
         window.supa.from('square_sales_daily')
           .select('sale_date,location,orders,gross_dollars,tax_dollars,tip_dollars,discount_dollars,top_items,synced_at')
-          .eq('sale_date', S.tillDay).eq('location','retail').maybeSingle(),
+          .eq('sale_date', S.tillDay),
         window.supa.from('az_day_money')
           .select('day,rang,retail_rang,service_rang,direct_cost,items_costed,items_total,cash_out,spend_lines,labor,overhead,cash_net,true_profit,retail_margin')
           .eq('day', S.tillDay).maybeSingle(),
         window.supa.from('az_money_out')
           .select('paid_to,category,what,amount_cad').eq('spend_date', S.tillDay).order('amount_cad',{ascending:false})
       ]);
-      var d = pair[0].data, m = pair[1].data, outs = pair[2].data || [];
       if(pair[0].error) throw pair[0].error;
-      if(!d && !m){ box.innerHTML = '<div class="rt-empty">Nothing recorded for that day.</div>'; return; }
-      var items = (d && d.top_items) || [];
-      var gross = d ? Number(d.gross_dollars||0) : 0;
+      var tills = pair[0].data || [], m = pair[1].data, outs = pair[2].data || [];
+      var d = tills.filter(function(x){ return x.location==='retail'; })[0] || null;   // the retail register
+      var sv = tills.filter(function(x){ return x.location==='service'; })[0] || null; // the service register
+      if(!tills.length && !m){ box.innerHTML = '<div class="rt-empty">Nothing recorded for that day.</div>'; return; }
+      /* Top items are the day's whole basket, both registers, so a pre-split day still
+         shows what actually sold instead of an empty list. */
+      var items = tills.reduce(function(a,x){ return a.concat(x.top_items||[]); }, []);
+      /* The headline comes from az_day_money, which is the authority on a day's total.
+         Deriving it from the till rows instead let the header read $0.00 while the
+         section below read $739.24 on the same day — caught in the browser before
+         this shipped. Till rows only refine the picture; they never define it. */
+      var gross  = m ? Number(m.rang||0)   : tills.reduce(function(a,x){ return a + Number(x.gross_dollars||0); }, 0);
+      var orders = m ? Number(m.orders||0) : tills.reduce(function(a,x){ return a + Number(x.orders||0); }, 0);
+      var retailGross = d ? Number(d.gross_dollars||0) : (m ? Number(m.retail_rang||0) : 0);
       var cost  = m ? Number(m.direct_cost||0) : 0;
-      var margin = gross - cost;
-      var pct = gross > 0 ? Math.round(margin / gross * 100) : null;
+      var margin = retailGross - cost;
+      var pct = retailGross > 0 ? Math.round(margin / retailGross * 100) : null;
+      var whichTill = (d && sv) ? ' · both registers'
+                    : d ? ' · retail register'
+                    : sv ? ' · service register' : '';
 
       var h = '<div class="rt-big">'+money(gross)+'</div>'
-        + '<div class="rt-sub">'+esc(day(S.tillDay))+' · retail till'+(d?' · '+d.orders+(d.orders===1?' order':' orders'):'')+'</div>';
+        + '<div class="rt-sub">'+esc(day(S.tillDay))+' · '+orders+(orders===1?' order':' orders')+whichTill+'</div>';
 
-      /* THE RETAIL SLICE — what she actually made on the counter */
-      h += '<div class="rt-sec">What the counter made</div>'
-        + '<div class="rt-line"><span>Rang</span><span>'+money(gross)+'</span></div>'
-        + '<div class="rt-line"><span>What the goods cost us</span><span>-'+money(cost)+'</span></div>'
-        + '<div class="rt-line"><span><b>Left on the counter</b></span><span><b>'+money(margin)+(pct!==null?' · '+pct+'%':'')+'</b></span></div>';
-      if(m && m.items_total > 0 && m.items_costed < m.items_total){
+      /* THE RETAIL SLICE — only when the retail register actually rang that day. */
+      if(retailGross > 0){
+        h += '<div class="rt-sec">What the counter made</div>'
+          + '<div class="rt-line"><span>Rang</span><span>'+money(retailGross)+'</span></div>'
+          + '<div class="rt-line"><span>What the goods cost us</span><span>-'+money(cost)+'</span></div>'
+          + '<div class="rt-line"><span><b>Left on the counter</b></span><span><b>'+money(margin)+(pct!==null?' · '+pct+'%':'')+'</b></span></div>';
+      } else {
+        h += '<div class="rt-note">The retail register did not ring on this day. It only became a separate till on 2026-07-29 — before that the whole business went through one register, so everything below is that one take.</div>';
+      }
+      if(retailGross > 0 && m && m.items_total > 0 && m.items_costed < m.items_total){
         h += '<div class="rt-note">Costed '+m.items_costed+' of '+m.items_total+' lines. The rest are service-side items the retail shelf does not carry, so their cost is left out rather than guessed — the real margin is no better than this.</div>';
       }
 
@@ -4716,13 +4741,14 @@ window.openActiveRun = function() {
         + (items.length
             ? items.map(function(t){ return '<div class="rt-line"><span>'+esc(t.item)+'</span><span>x'+t.qty+'</span></div>'; }).join('')
             : '<div class="rt-note">Square reported no item breakdown for this day.</div>');
-      if(d){
+      if(tills.length){
+        var sum = function(k){ return tills.reduce(function(a,x){ return a + Number(x[k]||0); }, 0); };
         h += '<dl class="rt-kv">'
-          + '<dt>Tax</dt><dd>'+money(d.tax_dollars)+'</dd>'
-          + '<dt>Tips</dt><dd>'+money(d.tip_dollars)+'</dd>'
-          + '<dt>Discounts</dt><dd>'+money(d.discount_dollars)+'</dd>'
+          + '<dt>Tax</dt><dd>'+money(sum('tax_dollars'))+'</dd>'
+          + '<dt>Tips</dt><dd>'+money(sum('tip_dollars'))+'</dd>'
+          + '<dt>Discounts</dt><dd>'+money(sum('discount_dollars'))+'</dd>'
           + '</dl>'
-          + '<div class="rt-note">Square sends a top-few list, not the full basket. Last synced '+esc(when(d.synced_at))+'.</div>';
+          + '<div class="rt-note">Square sends a top-few list, not the full basket. Last synced '+esc(when(tills[0].synced_at))+'.</div>';
       }
       box.innerHTML = h;
     }catch(e){ box.innerHTML = '<div class="rt-empty">Could not read that day: '+esc(e.message||String(e))+'</div>'; }
