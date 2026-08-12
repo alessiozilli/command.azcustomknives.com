@@ -4371,7 +4371,25 @@ window.openActiveRun = function() {
    time. Wages and rent are both charged on every calendar day. ═══ */
 (function(){
   'use strict';
-  /* ═══ DASHBOARD — where we stand RIGHT NOW.
+  /* Supabase's REST layer caps a single request at 1000 rows and returns the
+   truncated set WITHOUT an error. az_day_division is five rows per calendar day,
+   so it passed that cap in January and the oldest days were silently dropped —
+   a whole month reading as free rent. Always page it. */
+async function ccPagedRead(table, cols, order, pageSize){
+  var out = [], from = 0, size = pageSize || 900;
+  for(var guard = 0; guard < 40; guard++){
+    var r = await window.supa.from(table).select(cols)
+              .order(order, { ascending: false }).range(from, from + size - 1);
+    if(r.error) throw r.error;
+    var got = r.data || [];
+    out = out.concat(got);
+    if(got.length < size) break;
+    from += size;
+  }
+  return out;
+}
+
+/* ═══ DASHBOARD — where we stand RIGHT NOW.
      Alessio, 2026-08-12: "Why is the dashboard a year of our income and then the
      month of our income? What do you think the difference between till and
      dashboard is?" He was right — this screen was the Till again with fewer
@@ -4423,16 +4441,15 @@ window.openActiveRun = function() {
           .gte('start_time', new Date(Date.now() - 14*3600e3).toISOString())
           .order('start_time', { ascending: true }).limit(40),
         /* Each side of the shop with its OWN costs — the thing he keeps asking for. */
-        window.supa.from('az_day_division')
-          .select('day,division,rang,tips,cost_known,lines,lines_costed,rang_uncosted,share_of_revenue,overhead_share,wages_share,spend_share,profit')
-          .order('day', { ascending: false }).limit(2000)
+        ccPagedRead('az_day_division',
+          'day,division,rang,tips,cost_known,lines,lines_costed,rang_uncosted,share_of_revenue,overhead_share,wages_share,spend_share,profit',
+          'day')
       ]);
       if(q[0].error) throw q[0].error;
       D.days = q[0].data || [];
       D.jobs = (q[1].data || []);
       D.cal  = (q[2].data || []);
-      if(q[3].error) throw q[3].error;
-      D.divRows = q[3].data || [];
+      D.divRows = q[3] || [];
       buildNeeds();
       paintNeeds();
       dbPaintDetail();
@@ -4977,16 +4994,15 @@ window.openActiveRun = function() {
           .order('day',{ascending:false}).limit(500),
         /* Each side of the shop carrying its own costs. Rent and wages are shared
            out by each side's slice of revenue — see az_day_division. */
-        window.supa.from('az_day_division')
-          .select('day,division,rang,tips,share_of_revenue,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,spend_share,profit')
-          .order('day',{ascending:false}).limit(2000)
+        ccPagedRead('az_day_division',
+          'day,division,rang,tips,share_of_revenue,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,spend_share,profit',
+          'day')
       ]);
       var r = both[0];
       if(r.error) throw r.error;
-      if(both[1].error) throw both[1].error;
       S.all = r.data || [];
       S.byDay = {};
-      (both[1].data||[]).forEach(function(x){
+      (both[1]||[]).forEach(function(x){
         (S.byDay[x.day] || (S.byDay[x.day] = {}))[x.division] = x;
       });
       if(!S.all.length){
