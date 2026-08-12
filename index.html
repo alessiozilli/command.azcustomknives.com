@@ -4305,94 +4305,450 @@ window.openActiveRun = function() {
     </script>
   </section>
 
+  <!-- ═══ RETAIL — her side of the business. Three subtabs, each a
+       navigation | information | communication triple, mirroring the house
+       standard set by Services ▸ Queue (.scx-3col, nav | job | bus) and
+       3D Printing (.p3d-3col). Own class prefix per CC_DESIGN_SYSTEM §4:
+       copy the pattern, never share another surface's classes.
+       Composer sits at the TOP of every bus column (§2.7). ═══ -->
   <section class="lane faces-tokens cc-lane" id="lane-retail" data-lane="retail">
     <style>
-      [data-lane="retail"] .ret-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; align-items:start; }
-      [data-lane="retail"] .ret-num { font-family:var(--mono); font-size:22px; color:var(--amber); margin:4px 0 2px; }
-      [data-lane="retail"] .ret-row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-dim); }
-      [data-lane="retail"] .ret-row:last-child { border-bottom:0; }
-      [data-lane="retail"] .ret-chip { display:inline-block; padding:2px 8px; border:1px solid var(--border); border-radius:3px; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-right:6px; }
-      [data-lane="retail"] .ret-chip.rush { border-color:var(--amber); color:var(--amber); }
-      [data-lane="retail"] .ret-note { font-size:11px; color:var(--text-xs); margin-top:8px; }
-      [data-lane="retail"] table { width:100%; border-collapse:collapse; font-size:12px; }
-      [data-lane="retail"] th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-xs); padding:4px 6px; border-bottom:1px solid var(--border); }
-      [data-lane="retail"] td { padding:5px 6px; border-bottom:1px solid var(--border); color:var(--text-dim); }
+      /* Grid geometry copied from .scx-3col (Services ▸ Queue) so flipping between
+         the two surfaces feels like one system. Registered in cc-col-resize.js
+         SURFACES as cc.retail.cols — all three subtabs share one width memory,
+         so the columns stay put as she moves between Till, Counter and Stock. */
+      [data-lane="retail"] .rt-3col { display:grid; grid-template-columns:1.25fr 2.3fr 1.45fr; gap:var(--sp-10); align-items:stretch; position:relative; margin:var(--sp-12) var(--sp-16); }
+      /* The subpane is a flex column and `.faces-tokens .cc-subpane.active > *` gives every
+         child flex:1 1 0% — a 0% basis beats a plain height, which collapsed this grid to
+         ~245px. Services hits the same wall and answers it with an ID-scoped override
+         (#lane-services … > .sv3, line ~175); same answer here, same reason. */
+      #lane-retail .cc-subpane.active > .rt-3col { flex:0 0 auto; height:calc(100vh - 205px); min-height:420px; }
+      [data-lane="retail"] .rt-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+      [data-lane="retail"] .rt-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+      [data-lane="retail"] .rt-col__count { margin-left:auto; font-family:var(--mono); font-size:10px; color:var(--text-xs); letter-spacing:0.04em; text-transform:none; font-weight:400; }
+      [data-lane="retail"] .rt-col__body { flex:1 1 0%; min-height:0; overflow-y:auto; }
+      @media (max-width:700px){
+        [data-lane="retail"] .rt-3col { grid-template-columns:1fr; height:auto; min-height:0; }
+        [data-lane="retail"] .rt-col { overflow:visible; }
+        [data-lane="retail"] .rt-col__body { overflow:visible; }
+      }
+
+      /* ── navigation rows ── */
+      [data-lane="retail"] .rt-row { display:flex; gap:8px; align-items:center; padding:7px 8px; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:12px; color:var(--text-dim); }
+      [data-lane="retail"] .rt-row:hover { background:var(--raised); }
+      [data-lane="retail"] .rt-row.on { background:var(--raised); border-color:var(--amber); color:var(--text); }
+      [data-lane="retail"] .rt-row__main { flex:1; min-width:0; }
+      [data-lane="retail"] .rt-row__name { font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      [data-lane="retail"] .rt-row__sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:2px; }
+      [data-lane="retail"] .rt-row__val { font-family:var(--mono); font-size:11px; color:var(--amber); white-space:nowrap; }
+
+      /* ── filter chips ── */
+      [data-lane="retail"] .rt-chips { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; flex-shrink:0; }
+      [data-lane="retail"] .rt-chip { font-family:var(--display-tabs),sans-serif; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:4px 9px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:pointer; }
+      [data-lane="retail"] .rt-chip.on { background:var(--amber); color:#000; border-color:var(--amber); }
+      [data-lane="retail"] .rt-tag { display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:0.06em; text-transform:uppercase; padding:1px 6px; border:1px solid var(--border); border-radius:3px; color:var(--text-xs); }
+      [data-lane="retail"] .rt-tag.rush { border-color:var(--red); color:var(--red); }
+      [data-lane="retail"] .rt-tag.ready { border-color:var(--green); color:var(--green); }
+
+      /* ── information pane ── */
+      [data-lane="retail"] .rt-big { font-family:var(--mono); font-size:26px; color:var(--amber); line-height:1.1; }
+      [data-lane="retail"] .rt-sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:3px; }
+      [data-lane="retail"] .rt-kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:12px; margin-top:10px; }
+      [data-lane="retail"] .rt-kv dt { font-family:var(--mono); font-size:10px; color:var(--text-xs); text-transform:uppercase; letter-spacing:0.06em; align-self:center; }
+      [data-lane="retail"] .rt-kv dd { margin:0; color:var(--text-dim); }
+      [data-lane="retail"] .rt-sec { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border); }
+      [data-lane="retail"] .rt-line { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--text-dim); padding:4px 0; border-bottom:1px solid var(--border); }
+      [data-lane="retail"] .rt-line:last-child { border-bottom:0; }
+      [data-lane="retail"] .rt-note { font-size:11px; color:var(--text-xs); line-height:1.5; margin-top:8px; }
+      [data-lane="retail"] .rt-empty { font-size:12px; color:var(--text-xs); line-height:1.6; padding:var(--sp-12); border:1px dashed var(--border); border-radius:4px; }
+
+      /* ── communication column (composer glued to the top, §2.7) ── */
+      [data-lane="retail"] .rt-bus__compose { flex-shrink:0; display:flex; flex-direction:column; gap:6px; padding-bottom:8px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+      [data-lane="retail"] .rt-bus__to { display:flex; gap:6px; align-items:center; font-family:var(--mono); font-size:10px; color:var(--text-xs); }
+      [data-lane="retail"] .rt-bus__to select { flex:1; min-width:0; background:var(--raised); color:var(--text); border:1px solid var(--border); border-radius:3px; padding:4px 6px; font-family:var(--mono); font-size:10px; }
+      [data-lane="retail"] .rt-bus__text { width:100%; box-sizing:border-box; background:var(--raised); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--mono); font-size:11px; line-height:1.4; resize:vertical; min-height:44px; max-height:140px; }
+      [data-lane="retail"] .rt-bus__send { align-self:flex-start; font-family:var(--display-tabs),sans-serif; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:5px 12px; background:var(--raised); color:var(--text-dim); border:1px solid var(--border); border-radius:3px; cursor:pointer; }
+      [data-lane="retail"] .rt-bus__send:hover { color:var(--amber); border-color:var(--amber); }
+      [data-lane="retail"] .rt-bus__send:disabled { opacity:0.5; cursor:default; }
+      [data-lane="retail"] .rt-bus__say { font-family:var(--mono); font-size:10px; min-height:12px; }
+      [data-lane="retail"] .rt-msg { padding:6px 9px; border:1px solid var(--border); border-radius:3px; background:var(--raised); margin-bottom:6px; }
+      [data-lane="retail"] .rt-msg__head { display:flex; gap:6px; align-items:baseline; font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; flex-wrap:wrap; }
+      [data-lane="retail"] .rt-msg__from { color:var(--amber); }
+      [data-lane="retail"] .rt-msg__when { margin-left:auto; }
+      [data-lane="retail"] .rt-msg__body { font-size:11.5px; color:var(--text-dim); line-height:1.5; white-space:pre-wrap; word-break:break-word; }
     </style>
-    <div class="cc-lane__head">
-      <span class="cc-lane__bracket">[</span>
-      <span class="cc-lane__title">Retail</span>
-      <span class="cc-lane__bracket">]</span>
-      <span class="cc-lane__count" id="ret-count">…</span>
-    </div>
-    <div class="ret-grid">
-      <div class="cc-card">
-        <div class="cc-card__label">Till — retail division</div>
-        <div class="cc-card__title" id="ret-till-today">…</div>
-        <div class="cc-card__sub" id="ret-till-days">Loading…</div>
-        <div class="ret-note">Live from Square (square_sales_daily, location retail) — synced nightly on the beast.</div>
-      </div>
-      <div class="cc-card">
-        <div class="cc-card__label">Counter — open jobs</div>
-        <div class="cc-card__title" id="ret-queue-chips">…</div>
-        <div class="cc-card__sub" id="ret-queue-list">Loading…</div>
-        <button class="cc-card__btn" type="button" onclick="switchLane('services')">Full board → Services</button>
-      </div>
-      <div class="cc-card">
-        <div class="cc-card__label">Stock — retail shelf</div>
-        <div class="cc-card__sub" id="ret-inv">Loading…</div>
-        <div class="ret-note">Master ledger: AZCK_Money.xlsx INVENTORY tab · Square is the till truth this mirrors.</div>
+
+    <!-- ═══ TILL — the money that crossed the counter ═══ -->
+    <div class="cc-subpane active" data-subtab="till">
+      <div class="rt-3col">
+        <div class="rt-col">
+          <div class="rt-col__head">Sale days <span class="rt-col__count" id="rt-till-count">…</span></div>
+          <div class="rt-chips">
+            <button type="button" class="rt-chip on" data-loc="retail" onclick="rtTillLoc(this)">Retail</button>
+            <button type="button" class="rt-chip" data-loc="service" onclick="rtTillLoc(this)">Service</button>
+          </div>
+          <div class="rt-col__body" id="rt-till-list">Loading…</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">The day</div>
+          <div class="rt-col__body" id="rt-till-detail">Pick a day on the left.</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">Retail bus <span class="rt-col__count" id="rt-bus-count-till">…</span></div>
+          <div class="rt-bus__compose" data-rt-compose="till"></div>
+          <div class="rt-col__body" id="rt-bus-list-till">Loading…</div>
+        </div>
       </div>
     </div>
+
+    <!-- ═══ COUNTER — the jobs customers are waiting on ═══ -->
+    <div class="cc-subpane" data-subtab="counter">
+      <div class="rt-3col">
+        <div class="rt-col">
+          <div class="rt-col__head">Jobs <span class="rt-col__count" id="rt-job-count">…</span></div>
+          <div class="rt-chips">
+            <button type="button" class="rt-chip on" data-jf="open" onclick="rtJobFilter(this)">Open</button>
+            <button type="button" class="rt-chip" data-jf="ready" onclick="rtJobFilter(this)">Ready</button>
+            <button type="button" class="rt-chip" data-jf="all" onclick="rtJobFilter(this)">All</button>
+          </div>
+          <div class="rt-col__body" id="rt-job-list">Loading…</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">The job</div>
+          <div class="rt-col__body" id="rt-job-detail">Pick a job on the left.</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">Retail bus <span class="rt-col__count" id="rt-bus-count-counter">…</span></div>
+          <div class="rt-bus__compose" data-rt-compose="counter"></div>
+          <div class="rt-col__body" id="rt-bus-list-counter">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ STOCK — what is on her shelf ═══ -->
+    <div class="cc-subpane" data-subtab="stock">
+      <div class="rt-3col">
+        <div class="rt-col">
+          <div class="rt-col__head">Shelf <span class="rt-col__count" id="rt-stock-count">…</span></div>
+          <div class="rt-col__body" id="rt-stock-list">Loading…</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">The item</div>
+          <div class="rt-col__body" id="rt-stock-detail">Pick an item on the left.</div>
+        </div>
+        <div class="rt-col">
+          <div class="rt-col__head">Retail bus <span class="rt-col__count" id="rt-bus-count-stock">…</span></div>
+          <div class="rt-bus__compose" data-rt-compose="stock"></div>
+          <div class="rt-col__body" id="rt-bus-list-stock">Loading…</div>
+        </div>
+      </div>
+    </div>
+
     <script>
-/* RETAIL lane (2026-08-12) — her side of the business. Three windows, zero copies:
-   till = square_sales_daily (location retail), counter = az_shop_queue (the view over
-   az_service_bookings), stock = az_retail_inventory (fills when the Square stock sync
-   lands — bus #4735). Reads run signed-in; RLS backs every table. */
-window.renderRetail = async function(){
-  const money = v => '$' + Number(v||0).toFixed(2);
-  const el = id => document.getElementById(id);
-  try{
-    const r = await window.supa.from('square_sales_daily')
-      .select('sale_date,orders,gross_dollars').eq('location','retail')
-      .order('sale_date',{ascending:false}).limit(14);
-    if(r.error) throw r.error;
-    const days = r.data||[];
-    const total = days.reduce((s,d)=>s+Number(d.gross_dollars||0),0);
-    el('ret-till-today').textContent = days.length
-      ? days[0].sale_date+' — '+money(days[0].gross_dollars)+' ('+days[0].orders+' order'+(days[0].orders===1?'':'s')+')'
-      : 'No retail sale days yet';
-    el('ret-till-days').innerHTML = days.length
-      ? '<div class="ret-num">'+money(total)+'</div><div class="ret-note">across the last '+days.length+' retail sale day'+(days.length===1?'':'s')+'</div>'
-        + days.slice(0,7).map(d=>'<div class="ret-row"><span>'+d.sale_date+'</span><span>'+d.orders+' · '+money(d.gross_dollars)+'</span></div>').join('')
-      : 'The till writes one row per sale day — quiet shelf so far.';
-  }catch(e){ el('ret-till-days').textContent = 'Till read failed: '+(e.message||e); }
-  try{
-    const q = await window.supa.from('az_shop_queue')
-      .select('customer_name,item_summary,quantity,promised_date,promised_time,rush,status,picked_up_at')
-      .in('status',['new','scheduled','in_shop','done'])
-      .order('promised_date',{ascending:true}).limit(30);
-    if(q.error) throw q.error;
-    const rows = q.data||[];
-    const open = rows.filter(x=>!(x.status==='done'&&x.picked_up_at));
-    const ready = rows.filter(x=>x.status==='done'&&!x.picked_up_at);
-    el('ret-count').textContent = open.length+' open';
-    el('ret-queue-chips').innerHTML =
-      '<span class="ret-chip">new '+rows.filter(x=>x.status==='new').length+'</span>'+
-      '<span class="ret-chip">in shop '+rows.filter(x=>x.status==='in_shop').length+'</span>'+
-      '<span class="ret-chip">ready '+ready.length+'</span>';
-    el('ret-queue-list').innerHTML = open.length
-      ? open.slice(0,8).map(x=>'<div class="ret-row"><span>'+esc(x.customer_name||'—')+' · '+esc(x.item_summary||'')+(x.quantity>1?' ×'+x.quantity:'')+'</span><span>'+(x.rush?'<span class="ret-chip rush">rush</span>':'')+esc(x.promised_date||'no date')+(x.promised_time?' '+esc(x.promised_time):'')+'</span></div>').join('')
-      : 'Counter is clear.';
-  }catch(e){ el('ret-queue-list').textContent = 'Queue read failed: '+(e.message||e); }
-  try{
-    const inv = await window.supa.from('az_retail_inventory')
-      .select('item,sku,qty,price_cad,updated_at').order('item');
-    if(inv.error) throw inv.error;
-    el('ret-inv').innerHTML = (inv.data||[]).length
-      ? '<table><tr><th>Item</th><th>Qty</th><th>Price</th></tr>'+inv.data.map(i=>'<tr><td>'+esc(i.item)+'</td><td>'+i.qty+'</td><td>'+(i.price_cad!=null?money(i.price_cad):'—')+'</td></tr>').join('')+'</table>'
-      : 'No stock rows yet — the Square stock sync is dispatched (bus #4735). This card fills itself when the first sync lands.';
-  }catch(e){ el('ret-inv').textContent = 'Stock read failed: '+(e.message||e); }
-};
+/* ═══ RETAIL lane (rebuilt 2026-08-12) — her side of the business.
+   Three subtabs, each navigation | information | communication.
+
+   TILL    days (square_sales_daily)     → the day's takings + top items → bus
+   COUNTER jobs (az_shop_queue)          → the job, its lines, its clock  → bus
+   STOCK   shelf (az_retail_inventory)   → the item                       → bus
+
+   Every cell reads live; nothing is baked in. Each read has its OWN try/catch so a
+   single failure writes an error into its own column instead of blanking the lane.
+   Bus writes obey the agent_messages CHECK constraints and CC_DESIGN_SYSTEM §2.2
+   (visible send feedback) and §2.3 (never send from_instance). lane and root_id are
+   trigger-owned — never hand-set. ═══ */
+(function(){
+  'use strict';
+
+  var RETAIL_SLUG = 'azck-retail-cowork';
+  /* Genuinely unfinished work. The full CHECK domain is
+     new|scheduled|in_shop|at_risk|done|picked_up|cancelled|archived — 'at_risk' and
+     'picked_up' carry no rows today, and leaving them out of the list is how the first
+     at-risk job would have vanished silently. Named in full on purpose. */
+  var OPEN_STATUSES = ['new','scheduled','in_shop','at_risk'];
+
+  var S = { tillLoc:'retail', tillDay:null, days:[], jobFilter:'open', jobId:null, jobs:[], stockId:null, stock:[] };
+
+  function el(id){ return document.getElementById(id); }
+  function money(v){ return '$' + Number(v||0).toFixed(2); }          // numerics arrive as strings
+  function when(ts){ try { return new Date(ts).toLocaleString(); } catch(e){ return String(ts||''); } }
+  function day(d){ try { return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); } catch(e){ return String(d||''); } }
+
+  /* ── TILL ────────────────────────────────────────────────────────────── */
+  window.rtTillLoc = function(btn){
+    document.querySelectorAll('[data-lane="retail"] .rt-chip[data-loc]').forEach(function(b){ b.classList.toggle('on', b===btn); });
+    S.tillLoc = btn.dataset.loc; S.tillDay = null;
+    el('rt-till-detail').textContent = 'Pick a day on the left.';
+    rtLoadTill();
+  };
+  async function rtLoadTill(){
+    var list = el('rt-till-list'); if(!list || !window.supa) return;
+    try{
+      var r = await window.supa.from('square_sales_daily')
+        .select('sale_date,orders,gross_dollars')
+        .eq('location', S.tillLoc)
+        .order('sale_date',{ascending:false}).limit(60);
+      if(r.error) throw r.error;
+      S.days = r.data||[];
+      var rows = S.days;
+      el('rt-till-count').textContent = rows.length ? rows.length + (rows.length===1?' day':' days') : 'none';
+      if(!rows.length){
+        list.innerHTML = '<div class="rt-empty">No '+esc(S.tillLoc)+' sale days synced yet. A day appears here once Square reports takings for it — a missing day means "not synced", never "$0".</div>';
+        return;
+      }
+      list.innerHTML = rows.map(function(d){
+        return '<div class="rt-row'+(d.sale_date===S.tillDay?' on':'')+'" data-d="'+esc(d.sale_date)+'" onclick="rtPickDay(this)">'
+          + '<div class="rt-row__main"><div class="rt-row__name">'+esc(day(d.sale_date))+'</div>'
+          + '<div class="rt-row__sub">'+d.orders+(d.orders===1?' order':' orders')+'</div></div>'
+          + '<div class="rt-row__val">'+money(d.gross_dollars)+'</div></div>';
+      }).join('');
+      if(!S.tillDay && rows.length){ S.tillDay = rows[0].sale_date; rtPaintTill(); rtLoadDay(); }
+    }catch(e){ list.innerHTML = '<div class="rt-empty">Could not read the till: '+esc(e.message||String(e))+'</div>'; }
+  }
+  function rtPaintTill(){
+    var list = el('rt-till-list'); if(!list) return;
+    list.innerHTML = S.days.map(function(d){
+      return '<div class="rt-row'+(d.sale_date===S.tillDay?' on':'')+'" data-d="'+esc(d.sale_date)+'" onclick="rtPickDay(this)">'
+        + '<div class="rt-row__main"><div class="rt-row__name">'+esc(day(d.sale_date))+'</div>'
+        + '<div class="rt-row__sub">'+d.orders+(d.orders===1?' order':' orders')+'</div></div>'
+        + '<div class="rt-row__val">'+money(d.gross_dollars)+'</div></div>';
+    }).join('');
+  }
+  window.rtPickDay = function(row){ S.tillDay = row.dataset.d; rtPaintTill(); rtLoadDay(); };
+  async function rtLoadDay(){
+    var box = el('rt-till-detail'); if(!box || !S.tillDay || !window.supa) return;
+    try{
+      /* PK is composite (sale_date, location) — a date alone matches both tills. */
+      var r = await window.supa.from('square_sales_daily')
+        .select('sale_date,location,orders,gross_dollars,tax_dollars,tip_dollars,discount_dollars,top_items,synced_at')
+        .eq('sale_date', S.tillDay).eq('location', S.tillLoc).maybeSingle();
+      if(r.error) throw r.error;
+      var d = r.data;
+      if(!d){ box.innerHTML = '<div class="rt-empty">That day is no longer in the till table.</div>'; return; }
+      var items = d.top_items || [];
+      box.innerHTML = '<div class="rt-big">'+money(d.gross_dollars)+'</div>'
+        + '<div class="rt-sub">'+esc(day(d.sale_date))+' · '+esc(d.location)+' till · '+d.orders+(d.orders===1?' order':' orders')+'</div>'
+        + '<dl class="rt-kv">'
+          + '<dt>Tax</dt><dd>'+money(d.tax_dollars)+'</dd>'
+          + '<dt>Tips</dt><dd>'+money(d.tip_dollars)+'</dd>'
+          + '<dt>Discounts</dt><dd>'+money(d.discount_dollars)+'</dd>'
+        + '</dl>'
+        /* top_items is a top-N summary from Square ({qty,item} only). It carries no
+           prices and does NOT sum to the gross — calling it "items sold" would be a
+           quiet lie, so the heading and the note both say what it really is. */
+        + '<div class="rt-sec">Top items</div>'
+        + (items.length
+            ? items.map(function(t){ return '<div class="rt-line"><span>'+esc(t.item)+'</span><span>×'+t.qty+'</span></div>'; }).join('')
+            : '<div class="rt-note">Square reported no item breakdown for this day.</div>')
+        + '<div class="rt-note">Square sends a top-few list, not the full basket — these lines do not add up to the total above. Last synced '+esc(when(d.synced_at))+'.</div>';
+    }catch(e){ box.innerHTML = '<div class="rt-empty">Could not read that day: '+esc(e.message||String(e))+'</div>'; }
+  }
+
+  /* ── COUNTER ─────────────────────────────────────────────────────────── */
+  window.rtJobFilter = function(btn){
+    document.querySelectorAll('[data-lane="retail"] .rt-chip[data-jf]').forEach(function(b){ b.classList.toggle('on', b===btn); });
+    S.jobFilter = btn.dataset.jf; rtPaintJobs();
+  };
+  async function rtLoadJobs(){
+    var list = el('rt-job-list'); if(!list || !window.supa) return;
+    try{
+      var r = await window.supa.from('az_shop_queue')
+        .select('source_booking_id,job_type,customer_name,item_summary,quantity,promised_date,promised_time,rush,status,price_cad,item_location,picked_up_at')
+        .order('promised_date',{ascending:true,nullsFirst:false}).limit(200);
+      if(r.error) throw r.error;
+      S.jobs = r.data||[];
+      rtPaintJobs();
+      if(!S.jobId){
+        var first = (el('rt-job-list')||{}).querySelector ? el('rt-job-list').querySelector('.rt-row') : null;
+        if(first){ S.jobId = first.dataset.j; rtPaintJobs(); rtLoadJob(); }
+      }
+    }catch(e){ list.innerHTML = '<div class="rt-empty">Could not read the counter: '+esc(e.message||String(e))+'</div>'; }
+  }
+  function rtPaintJobs(){
+    var list = el('rt-job-list'); if(!list) return;
+    var open  = S.jobs.filter(function(j){ return OPEN_STATUSES.indexOf(j.status) !== -1; });
+    /* Finished but still on the shelf — a SEPARATE bucket, never added to "open".
+       Counting done-and-unpicked jobs as open is what made this lane claim 18 open
+       when 7 were unfinished (every done row has a null picked_up_at). */
+    var ready = S.jobs.filter(function(j){ return j.status==='done' && !j.picked_up_at; });
+    var rows  = S.jobFilter==='open' ? open : S.jobFilter==='ready' ? ready : S.jobs;
+    el('rt-job-count').textContent = open.length + ' open · ' + ready.length + ' ready';
+    if(!rows.length){ list.innerHTML = '<div class="rt-empty">Nothing here right now.</div>'; return; }
+    list.innerHTML = rows.map(function(j){
+      var tag = j.rush ? '<span class="rt-tag rush">rush</span>'
+              : (j.status==='done' && !j.picked_up_at) ? '<span class="rt-tag ready">ready</span>'
+              : '<span class="rt-tag">'+esc(j.status)+'</span>';
+      return '<div class="rt-row'+(j.source_booking_id===S.jobId?' on':'')+'" data-j="'+esc(j.source_booking_id)+'" onclick="rtPickJob(this)">'
+        + '<div class="rt-row__main"><div class="rt-row__name">'+esc(j.customer_name||'—')+'</div>'
+        + '<div class="rt-row__sub">'+esc(j.item_summary||'')+(j.quantity>1?' ×'+j.quantity:'')+'</div></div>'
+        + '<div style="text-align:right"><div>'+tag+'</div>'
+        + '<div class="rt-row__sub">'+esc(j.promised_date||'no date')+'</div></div></div>';
+    }).join('');
+  }
+  window.rtPickJob = function(row){ S.jobId = row.dataset.j; rtPaintJobs(); rtLoadJob(); };
+  async function rtLoadJob(){
+    var box = el('rt-job-detail'); if(!box || !S.jobId || !window.supa) return;
+    box.textContent = 'Loading…';
+    try{
+      /* The queue is a VIEW and hides 16 base columns — notably the payment fields.
+         Read the base row for the full picture. */
+      var r = await window.supa.from('az_service_bookings')
+        .select('id,status,rush,quantity,category,service,blade_detail,notes,preferred_date,preferred_time,total_cad,line_items,item_location,intake_by,customer_name,customer_phone,customer_email,payment_amount_cents,payment_kind,paid_at,square_link_url,bus_message_id,source,created_at,started_at,done_at,picked_up_at,notified_at')
+        .eq('id', S.jobId).maybeSingle();
+      if(r.error) throw r.error;
+      var j = r.data;
+      if(!j){ box.innerHTML = '<div class="rt-empty">That job is gone from the book.</div>'; return; }
+      var lines = j.line_items || [];
+      var clock = [['Received',j.created_at],['Started',j.started_at],['Done',j.done_at],['Customer told',j.notified_at],['Picked up',j.picked_up_at]]
+        .filter(function(p){ return p[1]; });
+      box.innerHTML = '<div class="rt-big" style="font-size:18px">'+esc(j.customer_name||'—')+'</div>'
+        + '<div class="rt-sub">'+esc(j.blade_detail||j.service||j.category||'booking')+(j.quantity>1?' · ×'+j.quantity:'')+(j.rush?' · RUSH':'')+'</div>'
+        + '<dl class="rt-kv">'
+          + '<dt>Status</dt><dd>'+esc(j.status)+(j.status==='done'&&!j.picked_up_at?' — waiting on the shelf':'')+'</dd>'
+          + '<dt>Promised</dt><dd>'+esc(j.preferred_date||'no date')+(j.preferred_time?' '+esc(j.preferred_time):'')+'</dd>'
+          + '<dt>Total</dt><dd>'+(j.total_cad!=null?money(j.total_cad):'—')+'</dd>'
+          + '<dt>Where</dt><dd>'+esc(j.item_location||'—')+'</dd>'
+          + '<dt>Taken by</dt><dd>'+esc(j.intake_by||'—')+'</dd>'
+          + '<dt>Phone</dt><dd>'+esc(j.customer_phone||'—')+'</dd>'
+        + '</dl>'
+        + (lines.length ? '<div class="rt-sec">Lines</div>' + lines.map(function(l){
+            return '<div class="rt-line"><span>'+esc(l.label||l.kind||'line')+'</span><span>'+(l.line_cad!=null?money(l.line_cad):'')+'</span></div>';
+          }).join('') : '')
+        + (clock.length ? '<div class="rt-sec">Clock</div>' + clock.map(function(p){
+            return '<div class="rt-line"><span>'+p[0]+'</span><span>'+esc(when(p[1]))+'</span></div>';
+          }).join('') : '')
+        + (j.paid_at ? '<div class="rt-sec">Paid</div><div class="rt-line"><span>'+esc(j.payment_kind||'payment')+'</span><span>'+esc(when(j.paid_at))+'</span></div>' : '')
+        + (j.notes ? '<div class="rt-sec">Notes</div><div class="rt-note">'+esc(j.notes)+'</div>' : '');
+    }catch(e){ box.innerHTML = '<div class="rt-empty">Could not read that job: '+esc(e.message||String(e))+'</div>'; }
+  }
+
+  /* ── STOCK ───────────────────────────────────────────────────────────── */
+  async function rtLoadStock(){
+    var list = el('rt-stock-list'); if(!list || !window.supa) return;
+    try{
+      var r = await window.supa.from('az_retail_inventory')
+        .select('id,item,sku,qty,price_cad,updated_at,updated_by')
+        .eq('location','retail').order('item');
+      if(r.error) throw r.error;
+      S.stock = r.data||[];
+      el('rt-stock-count').textContent = S.stock.length ? S.stock.length + ' items' : 'empty';
+      if(!S.stock.length){
+        list.innerHTML = '<div class="rt-empty">The shelf table is still empty. The Square stock sync that fills it is dispatched on the bus as #4735 — this column writes itself the moment the first sync lands. Until then the master count lives in AZCK_Money.xlsx, INVENTORY tab.</div>';
+        el('rt-stock-detail').innerHTML = '<div class="rt-empty">Nothing to show yet. Each item will carry its name, SKU, count on hand, price and when it was last counted.</div>';
+        return;
+      }
+      list.innerHTML = S.stock.map(function(i){
+        return '<div class="rt-row'+(i.id===S.stockId?' on':'')+'" data-s="'+esc(i.id)+'" onclick="rtPickStock(this)">'
+          + '<div class="rt-row__main"><div class="rt-row__name">'+esc(i.item)+'</div>'
+          + '<div class="rt-row__sub">'+esc(i.sku||'no sku')+'</div></div>'
+          + '<div class="rt-row__val">'+i.qty+'</div></div>';
+      }).join('');
+      if(!S.stockId){ var f0 = list.querySelector('.rt-row'); if(f0) window.rtPickStock(f0); }
+    }catch(e){ list.innerHTML = '<div class="rt-empty">Could not read the shelf: '+esc(e.message||String(e))+'</div>'; }
+  }
+  window.rtPickStock = function(row){
+    S.stockId = row.dataset.s; rtLoadStock();
+    var i = S.stock.filter(function(x){ return String(x.id)===String(S.stockId); })[0];
+    if(!i) return;
+    el('rt-stock-detail').innerHTML = '<div class="rt-big" style="font-size:18px">'+esc(i.item)+'</div>'
+      + '<div class="rt-sub">'+esc(i.sku||'no sku')+'</div>'
+      + '<dl class="rt-kv">'
+        + '<dt>On hand</dt><dd>'+i.qty+'</dd>'
+        + '<dt>Price</dt><dd>'+(i.price_cad!=null?money(i.price_cad):'—')+'</dd>'
+        + '<dt>Counted</dt><dd>'+esc(when(i.updated_at))+'</dd>'
+        + '<dt>By</dt><dd>'+esc(i.updated_by||'—')+'</dd>'
+      + '</dl>';
+  };
+
+  /* ── COMMUNICATION — one column, mounted three times ─────────────────── */
+  var TARGETS = ['forge-cowork','forge-code','alessio','reanna','team'];
+  function mountComposers(){
+    document.querySelectorAll('[data-lane="retail"] .rt-bus__compose').forEach(function(host){
+      if(host.dataset.built) return; host.dataset.built = '1';
+      var k = host.dataset.rtCompose;
+      host.innerHTML = '<div class="rt-bus__to"><span>to</span><select id="rt-to-'+k+'">'
+          + TARGETS.map(function(t){ return '<option value="'+t+'">'+t+'</option>'; }).join('')
+        + '</select></div>'
+        /* The universal mic (assets/cc-mic.js) attaches itself to this textarea —
+           never wire a second one (CC_DESIGN_SYSTEM §2.1). */
+        + '<textarea class="rt-bus__text" id="rt-text-'+k+'" placeholder="Message about the retail side…"></textarea>'
+        + '<div style="display:flex;gap:8px;align-items:center">'
+          + '<button type="button" class="rt-bus__send" id="rt-send-'+k+'" onclick="rtPostBus(\'' + k + '\')">Send</button>'
+          + '<span class="rt-bus__say" id="rt-say-'+k+'"></span>'
+        + '</div>';
+    });
+  }
+  window.rtPostBus = async function(k){
+    var ta = el('rt-text-'+k), to = el('rt-to-'+k), btn = el('rt-send-'+k), say = el('rt-say-'+k);
+    if(!ta || !btn) return;
+    var body = (ta.value||'').trim();
+    if(!body){ say.style.color='var(--text-xs)'; say.textContent='Nothing to send.'; return; }
+    if(!window.supa){ say.style.color='var(--red)'; say.textContent='Database not ready.'; return; }
+    btn.disabled = true; say.style.color='var(--text-xs)'; say.textContent='Sending…';
+    try{
+      /* Every value here sits inside an agent_messages CHECK constraint. project_slug
+         is explicit on purpose: it defaults to 'unsorted', and an unsorted message
+         would never find its way back to this column. No from_instance (§2.3), and
+         no lane/root_id — the database owns those. */
+      var r = await window.supa.from('agent_messages').insert({
+        from_user: (typeof window.CC_BUS_IDENTITY==='function' ? window.CC_BUS_IDENTITY() : 'alessio'),
+        to_user: (to && to.value) || 'forge-cowork',
+        channel: 'shop',
+        priority: 'normal',
+        status: 'sent',
+        awaiting_reply_from: (to && to.value) || 'forge-cowork',
+        project_slug: RETAIL_SLUG,
+        body: body
+      }).select('id').single();
+      if(r.error) throw r.error;
+      ta.value = '';
+      say.style.color='var(--green)'; say.textContent='Sent — #'+r.data.id;
+      setTimeout(function(){ if(say) say.textContent=''; }, 4000);
+      rtLoadBus();
+    }catch(e){
+      say.style.color='var(--red)'; say.textContent='Failed: '+(e.message||String(e));
+    }finally{ btn.disabled = false; }
+  };
+  async function rtLoadBus(){
+    if(!window.supa) return;
+    var hosts = ['till','counter','stock'];
+    try{
+      var r = await window.supa.from('agent_messages')
+        .select('id,from_user,to_user,body,created_at,priority')
+        .eq('project_slug', RETAIL_SLUG)
+        .order('created_at',{ascending:false}).limit(30);
+      if(r.error) throw r.error;
+      var rows = r.data||[];
+      var html = rows.length ? rows.map(function(m){
+        var b = esc(m.body||''); if(b.length>500) b = b.slice(0,500)+'…';
+        return '<div class="rt-msg"><div class="rt-msg__head">'
+            + '<span class="rt-msg__from">'+esc(m.from_user)+'</span><span>→</span><span>'+esc(m.to_user)+'</span>'
+            + '<span class="rt-msg__when">'+esc(when(m.created_at))+'</span></div>'
+          + '<div class="rt-msg__body">'+b+'</div></div>';
+      }).join('') : '<div class="rt-empty">Nothing filed to the retail bus yet. Anything sent from the box above lands here, and the whole fleet can see it.</div>';
+      hosts.forEach(function(k){
+        var l = el('rt-bus-list-'+k); if(l) l.innerHTML = html;
+        var c = el('rt-bus-count-'+k); if(c) c.textContent = rows.length ? rows.length+(rows.length===1?' message':' messages') : 'none yet';
+      });
+    }catch(e){
+      hosts.forEach(function(k){
+        var l = el('rt-bus-list-'+k);
+        if(l) l.innerHTML = '<div class="rt-empty">Could not read the bus: '+esc(e.message||String(e))+'</div>';
+      });
+    }
+  }
+
+  /* ── entry point — switchLane and switchSubtab both call this ─────────── */
+  window.renderRetail = function(sub){
+    mountComposers();
+    var pane = document.querySelector('#lane-retail .cc-subpane.active');
+    var which = sub || (pane && pane.dataset.subtab) || 'till';
+    if(which==='till')    { rtLoadTill(); if(S.tillDay) rtLoadDay(); }
+    if(which==='counter') { rtLoadJobs(); if(S.jobId) rtLoadJob(); }
+    if(which==='stock')   { rtLoadStock(); }
+    rtLoadBus();
+  };
+})();
     </script>
   </section>
   </main>
@@ -4401,7 +4757,7 @@ window.renderRetail = async function(){
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script defer src="assets/cc-bus-composer.js?v=20260805-svcport"></script><!-- the ONE shared composer, mirrored from azck-faces; command build derives from_user from the signed-in session -->
-<script defer src="assets/cc-col-resize.js?v=20260809-svqsweep"></script>
+<script defer src="assets/cc-col-resize.js?v=20260812-retail3col"></script>
 <script defer src="assets/cc-bus-v2.js?v=20260811-barsdark"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
 <script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .scx-3col + .svsc-3col are registered SURFACES -->
@@ -4430,7 +4786,7 @@ const LANES = [
   ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
-  ['retail','RETAIL','Her side of the business — till, counter, stock.','LIVE 2026-08-12 — till + counter read the database; stock fills when the Square sync lands (bus #4735). Static section below; buildShell skips it.'],
+  ['retail','RETAIL','Her side of the business — till, counter, stock.','LIVE 2026-08-12 — Till / Counter / Stock, each navigation | information | communication. Stock fills when the Square sync lands (bus #4735). Static section below; buildShell skips it.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
 
@@ -4507,6 +4863,11 @@ const SUBNAV = {
     { id:'chat', label:'Chat' },
     { id:'email', label:'Email' },
   ],
+  retail: [
+    { id:'till',    label:'Till'    },
+    { id:'counter', label:'Counter' },
+    { id:'stock',   label:'Stock'   },
+  ],
   services: [
     { id:'calendar', label:'Calendar' },
     // BOOKINGS folded into QUEUE 2026-08-06 (faces PR #340) — az_shop_queue is a
@@ -4543,6 +4904,8 @@ function switchSubtab(lane,target){
   if(lane==='comms' && target==='bus' && window.renderBusRecent) window.renderBusRecent();
   if(lane==='shop' && target==='after-hours' && window.renderShopAfterHours)
     setTimeout(()=>{ try{ window.renderShopAfterHours(); }catch(e){ console.warn('[shop-ah] render failed',e); } }, 50);
+  if(lane==='retail' && window.renderRetail)
+    setTimeout(()=>{ try{ window.renderRetail(target); }catch(e){ console.warn('[retail] render failed',e); } }, 50);
 }
 /* Lazy renderers, faces retry pattern — deferred assets may land after the tap. */
 function svcRender(target){
