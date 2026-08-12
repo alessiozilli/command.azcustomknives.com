@@ -130,6 +130,9 @@
   ];
   const SVQ_ENG_PIECE  = 15;
   const SVQ_ENG_EXTRAS = [ { key:'engrush', label:'Rush order', cad:25, flag:true } ];
+  const SVQ_ENG_ITEMS = [
+    { key:'knife', label:'Knife' }, { key:'board', label:'Cutting board' },
+    { key:'sheath', label:'Sheath' }, { key:'other', label:'Other' } ];
   const SVQ_ALL_EXTRAS = SVQ_EXTRAS.concat(SVQ_ENG_EXTRAS);
   const SVQ_SHEATHS = {
     kydex:     { label:'Custom Kydex', variantLabel:'Option', variants: [
@@ -299,7 +302,7 @@
     tab: 'board', rows: null, claims: [], attendees: [], hours: [], gcal: [],
     sel: null, editing: null, busy: false, err: null, host: null, opts: {},
     // composer
-    formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null,
+    formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, eitem:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null
   };
 
@@ -1101,7 +1104,11 @@
       const eg = SVQ_ENGRAVING.find(x => x.key === S.ekind);
       ql.textContent = eg ? ('How many pieces — each after the first is $' + (eg.piece || SVQ_ENG_PIECE)) : 'How many pieces';
       el('scx-kind').innerHTML = SVQ_ENGRAVING.map(g => chip('ekind:'+g.key, g.label, S.ekind===g.key, g.first)).join('');
-      vw.hidden = true; sw.hidden = true;
+      /* the variant row doubles as "What came in" here — engraving has no variants (bus #4351) */
+      vw.hidden = false;
+      el('scx-variant-lbl').textContent = 'What came in';
+      el('scx-variant').innerHTML = SVQ_ENG_ITEMS.map(t => chip('eitem:'+t.key, t.label, S.eitem===t.key)).join('');
+      sw.hidden = true;
     } else {
       ql.textContent = 'How many';
       vw.hidden = true; sw.hidden = true;
@@ -1136,7 +1143,7 @@
   }
 
   function typeChanged(){
-    S.variant = null; S.size = null; S.ekind = null; S.qty = 1; S.addons = {};
+    S.variant = null; S.size = null; S.ekind = null; S.eitem = null; S.qty = 1; S.addons = {};
     const cat = SVQ_CATALOGS[scxType()];
     if(cat) S.kind = Object.keys(cat)[0];
     // classes are sessions by default; teambuilding course kind is an event
@@ -1150,10 +1157,12 @@
     if(mode === 'engraving'){
       if(!S.ekind){ alert('Pick what kind of engraving first.'); return; }
       const g = SVQ_ENGRAVING.find(x => x.key === S.ekind);
+      const it = SVQ_ENG_ITEMS.find(x => x.key === S.eitem);
       const cad = g.first + (S.qty - 1) * (g.piece || SVQ_ENG_PIECE);
-      S.lines.push({ kind:'engraving', label: S.qty+' × '+g.label.toLowerCase()+' engraving',
+      S.lines.push({ kind:'engraving',
+                     label: S.qty+' × '+g.label.toLowerCase()+' engraving'+(it ? ' — '+it.label.toLowerCase() : ''),
                      qty:S.qty, unit_cad:g.first, line_cad:cad });
-      S.ekind = null; S.qty = 1; paintBuilder(); return;
+      S.ekind = null; S.eitem = null; S.qty = 1; paintBuilder(); return;
     }
     const manLbl = document.getElementById('scx-man-label');
     if(mode === 'manual' || (SVQ_MANUAL_TOO[scxType()] && manLbl && manLbl.value.trim())){
@@ -1201,7 +1210,9 @@
     const g = i => { const el = document.getElementById(i); return ((el && el.value) || '').trim(); };
     const name = g('scx-name');
     if(!name){ alert('Customer name is needed.'); return; }
-    if(!S.lines.length){ alert('Add at least one line — pick what came in, a size, how many, then + Add to this job.'); return; }
+    if(!S.lines.length){ alert(scxMode() === 'engraving'
+      ? 'Add at least one line — pick what kind of engraving, how many pieces, then + Add to this job.'
+      : 'Add at least one line — pick what came in, a size, how many, then + Add to this job.'); return; }
     const btn = document.getElementById('scx-save');
     if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
     const unlock = () => { if(btn){ btn.disabled = false; btn.textContent = 'Add it'; } };
@@ -1366,6 +1377,7 @@
       const v = el.dataset.scxc, k = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':')+1);
       if(k==='kind'){ S.kind = val; S.variant = null; S.size = null; S.addons = {}; }
       else if(k==='ekind'){ S.ekind = (S.ekind===val ? null : val); }
+      else if(k==='eitem'){ S.eitem = (S.eitem===val ? null : val); }
       else if(k==='var'){ S.variant = (S.variant===val ? null : val); S.addons = {}; }
       else if(k==='ad'){
         const gi = val.indexOf(':'), gr = val.slice(0, gi), mk = val.slice(gi+1);
