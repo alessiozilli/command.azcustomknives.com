@@ -4411,7 +4411,10 @@ window.renderRetail = async function(){
 const supa = window.supabase.createClient(
   'https://twrlvnfszohyrmivdhre.supabase.co',
   'sb_publishable_xnDjiN2NRly0mU4aRMpLjA_HVqqcjxI',
-  { auth: { storageKey: 'azck_command_auth' } }   // own session bucket — no token handoff, ever
+  { auth: { storageKey: 'azck_command_auth', persistSession: true, autoRefreshToken: true } }
+  // own session bucket — no token handoff, ever. persist + autoRefresh are the supabase-js
+  // defaults, spelled out on purpose (2026-08-12 stay-signed-in fix) so this face never
+  // regresses into the no-refresh disease the faces' auth.js already cured (audit C3b).
 );
 window.supa = supa; // the ported Services code + the shared composer address the client as window.supa — one client, one page (fleet law)
 const ALLOWED = ['alessio.zilli@azcustomknives.com','admin@azcustomknives.com'];
@@ -4567,11 +4570,26 @@ $('#editBtn').onclick=()=>{ const on=document.body.classList.toggle('cc-edit-on'
 
 /* gate */
 async function boot(){
-  const {data:{session}} = await supa.auth.getSession();
+  /* Resilient session read (2026-08-12): one transient null on a slow load used to bounce
+     a signed-in human straight to the password form. Retry before deciding — the same
+     cure the faces' auth.js carries. */
+  let session=null;
+  for(let i=0;i<3;i++){
+    const r=await supa.auth.getSession(); session=(r.data&&r.data.session)||null;
+    if(session) break;
+    await new Promise(res=>setTimeout(res,400));
+  }
   if(session && ALLOWED.includes((session.user.email||'').toLowerCase())){
     $('#gate').style.display='none'; $('#app').style.display='flex';
     $('#userPill').textContent=session.user.email.split('@')[0];
-    $('#userPill').onclick=async()=>{ await supa.auth.signOut(); location.reload(); };
+    $('#userPill').title='Devices & sign out';
+    /* The pill used to fire supa.auth.signOut() bare — and the DEFAULT SCOPE IS GLOBAL:
+       one tap here revoked every session on every device for that user (the audit-C3b
+       landmine, alive on this face until 2026-08-12 — token history showed 272/283 of
+       his refresh tokens revoked, 1963/1983 of hers). The pill now opens the devices
+       panel, where every sign-out button names its blast radius. */
+    $('#userPill').onclick=()=>window.ccAccountOpen();
+    try{ window.ccRegisterDevice(session); }catch(e){}
     /* Bus identity for the shared composer: NEVER presign — admin@ is Reanna's seat.
        (feedback_never_presign_as_alessio; the composer falls back to alessio only
        where this hook is absent, i.e. on the faces build it was mirrored from.) */
@@ -4584,7 +4602,7 @@ async function boot(){
       if(h[1] && SUBNAV[h[0]]) switchSubtab(h[0],h[1]);
     }
   } else if(session){
-    await supa.auth.signOut();
+    await supa.auth.signOut({ scope: 'local' });   // no seat here ≠ kill their other devices
     $('#err').textContent='That login has no seat here.';
   }
 }
@@ -4595,6 +4613,93 @@ $('#loginForm').onsubmit=async e=>{
   boot();
 };
 boot();
+</script>
+
+<!-- ── Devices & sign-out panel (2026-08-12) — opens from the user pill. Reads/renames
+     cc_devices (RLS: own rows only, shared with the faces, so renames fix the
+     "New device" labels everywhere). Three sign-out buttons, each naming its blast
+     radius; nothing here ever global-signs-out by accident again. ── -->
+<div id="acct-modal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.72);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--panel,#141414);border:1px solid var(--line,#333);border-radius:10px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:20px">
+    <style>
+      #acct-modal .acct-btn{padding:11px 14px;border:1px solid var(--line,#444);border-radius:8px;background:var(--panel-2,#1d1d1d);color:inherit;font-size:13px;cursor:pointer}
+      #acct-modal .acct-btn:hover{border-color:var(--red-hot,#e14545)}
+      #acct-modal .acct-btn.warn{border-color:var(--red,#8a1f1f)}
+      #acct-modal input{font-family:inherit}
+    </style>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <h3 style="font:600 15px Oswald,sans-serif;letter-spacing:2px;flex:1">YOUR DEVICES</h3>
+      <button type="button" onclick="ccAcctClose()" style="background:none;border:0;color:inherit;font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <p id="acct-who" style="font-size:12px;opacity:0.7;margin-bottom:12px"></p>
+    <div id="acct-devices" style="font-size:13px">Loading…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+      <button type="button" class="acct-btn" onclick="ccSignOutHere()">Sign out — this device</button>
+      <button type="button" class="acct-btn" onclick="ccSignOutOthers()">Sign out — everywhere else</button>
+      <button type="button" class="acct-btn warn" onclick="ccSignOutAll()">Sign out — everywhere</button>
+    </div>
+    <p style="font-size:11px;opacity:0.6;margin-top:10px;line-height:1.5">Staying signed in is the default now — each device logs in once and keeps its seat. Tap a name to rename it (saves for every face). "Everywhere else" kicks all other devices and keeps this one.</p>
+  </div>
+</div>
+<script>
+'use strict';
+(function(){
+  const ACCT_DEV_KEY='azck_cmd_device_row';
+  function uaLabel(){
+    const ua=navigator.userAgent;
+    if(/iPhone/.test(ua)) return 'iPhone';
+    if(/iPad/.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)) return 'iPad';
+    if(/Macintosh/.test(ua)) return 'Mac';
+    if(/Windows/.test(ua)) return 'Windows PC';
+    return 'Device';
+  }
+  window.ccRegisterDevice = async function(session){
+    try{
+      const uid=session.user.id; let rowId=null;
+      try{ rowId=localStorage.getItem(ACCT_DEV_KEY); }catch(e){}
+      if(rowId){
+        const r=await window.supa.from('cc_devices').update({ last_seen:new Date().toISOString(), user_agent:navigator.userAgent }).eq('id',rowId).eq('user_id',uid).select('id');
+        if(!r.error && r.data && r.data.length) return;
+      }
+      const ins=await window.supa.from('cc_devices').insert({ user_id:uid, label:uaLabel()+' — command', user_agent:navigator.userAgent, last_seen:new Date().toISOString() }).select('id').single();
+      if(!ins.error && ins.data){ try{ localStorage.setItem(ACCT_DEV_KEY, ins.data.id); }catch(e){} }
+    }catch(e){ console.warn('[devices] register failed', e); }
+  };
+  window.ccAccountOpen = async function(){
+    const m=document.getElementById('acct-modal'); m.style.display='flex';
+    const s=await window.supa.auth.getSession();
+    const user=s.data&&s.data.session&&s.data.session.user;
+    document.getElementById('acct-who').textContent=user?('Signed in as '+user.email):'Not signed in';
+    const box=document.getElementById('acct-devices'); box.textContent='Loading…';
+    try{
+      const r=await window.supa.from('cc_devices').select('id,label,last_seen').is('archived_at',null).order('last_seen',{ascending:false}).limit(20);
+      if(r.error) throw r.error;
+      let mine=null; try{ mine=localStorage.getItem(ACCT_DEV_KEY); }catch(e){}
+      box.innerHTML=(r.data||[]).map(function(d){
+        const here=(d.id===mine)?' · <b>this one</b>':'';
+        const seen=d.last_seen? new Date(d.last_seen).toLocaleDateString() : '—';
+        return '<div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(128,128,128,0.2)">'
+          +'<input value="'+esc(d.label||'Device')+'" data-dev="'+d.id+'" onchange="ccRenameDevice(this)" style="flex:1;min-width:0;background:transparent;border:1px solid rgba(128,128,128,0.35);border-radius:6px;padding:9px;color:inherit;font-size:13px">'
+          +'<span style="font-size:11px;opacity:0.65;white-space:nowrap">'+seen+here+'</span></div>';
+      }).join('') || 'No devices registered yet — they appear as each one signs in.';
+    }catch(e){ box.textContent='Could not load devices: '+(e.message||e); }
+  };
+  window.ccAcctClose=function(){ document.getElementById('acct-modal').style.display='none'; };
+  window.ccRenameDevice=async function(inp){
+    try{ await window.supa.from('cc_devices').update({ label:(inp.value||'Device').slice(0,60) }).eq('id',inp.dataset.dev); }catch(e){}
+  };
+  window.ccSignOutHere=async function(){ await window.supa.auth.signOut({ scope:'local' }); location.reload(); };
+  window.ccSignOutOthers=async function(){
+    if(!confirm('Kick every other device off? This one keeps its seat.')) return;
+    await window.supa.auth.signOut({ scope:'others' });
+    alert('Done — every other device will ask for the password next time it opens a face.');
+  };
+  window.ccSignOutAll=async function(){
+    if(!confirm('Sign out EVERYWHERE, including this device?')) return;
+    await window.supa.auth.signOut({ scope:'global' });
+    location.reload();
+  };
+})();
 </script>
 </body>
 </html>
