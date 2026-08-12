@@ -1,0 +1,378 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AZCK Email Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="dark"]{
+  --bg:#090b0d;--surface:#0f1316;--raised:#161b20;--overlay:#1d2429;
+  --border:#252c33;--border-hi:#2e3740;
+  --text:#dde4eb;--text-dim:#8a9aa8;--text-xs:#566470;
+  --amber:#c8922a;--amber-soft:rgba(200,146,42,.10);--amber-glow:rgba(200,146,42,.20);
+  --green:#2ea043;--green-bg:rgba(46,160,67,.14);
+  --red:#e5534b;--red-bg:rgba(229,83,75,.14);
+  --blue:#4493d4;--blue-bg:rgba(68,147,212,.14);
+  --canvas:#11151a;--paper:#ffffff;--paper-ink:#23323c;--paper-soft:#f4f1ea;--paper-line:#e4ddd0;
+}
+[data-theme="light"]{
+  --bg:#f3f1ea;--surface:#ffffff;--raised:#faf8f3;--overlay:#ffffff;
+  --border:#e3ddd1;--border-hi:#cfc7b7;
+  --text:#22262b;--text-dim:#5d6670;--text-xs:#8a9099;
+  --amber:#b9791a;--amber-soft:rgba(185,121,26,.10);--amber-glow:rgba(185,121,26,.18);
+  --green:#1f7a37;--green-bg:rgba(31,122,55,.12);
+  --red:#bd3d33;--red-bg:rgba(189,61,51,.12);
+  --blue:#2f6fae;--blue-bg:rgba(47,111,174,.12);
+  --canvas:#ece8df;--paper:#ffffff;--paper-ink:#23323c;--paper-soft:#f4f1ea;--paper-line:#e4ddd0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Lexend',system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.bm{font-family:'Oswald',sans-serif}.mono{font-family:'JetBrains Mono',monospace}
+.appbar{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.brand{font-family:'Oswald',sans-serif;font-weight:600;font-size:17px;letter-spacing:.04em;text-transform:uppercase;color:var(--text)}
+.brand b{color:var(--amber)}.brand .s{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-xs);text-transform:lowercase;letter-spacing:.04em}
+.spacer{flex:1}
+.chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text-xs);border:1px solid var(--border);border-radius:20px;padding:4px 10px}
+.iconbtn{background:var(--raised);border:1px solid var(--border);color:var(--text-dim);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:15px}
+.iconbtn:hover{border-color:var(--border-hi);color:var(--text)}
+.shell{display:flex;min-height:560px}
+.rail{width:158px;flex:0 0 158px;border-right:1px solid var(--border);background:var(--surface);padding:10px 8px;display:flex;flex-direction:column;gap:3px}
+.nav{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;border:1px solid transparent;color:var(--text-dim);cursor:pointer;font-size:12.5px;text-align:left;background:none;width:100%}
+.nav .i{font-size:16px;width:18px;text-align:center}
+.nav:hover{background:var(--raised);color:var(--text)}
+.nav.on{background:var(--amber-soft);border-color:rgba(200,146,42,.4);color:var(--amber)}
+.rail .sep{height:1px;background:var(--border);margin:8px 4px}
+.rail .mini{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-xs);padding:6px 10px;line-height:1.5}
+.main{flex:1;min-width:0;padding:18px 20px 40px;overflow:auto}
+.view{display:none}.view.on{display:block}
+.vh{display:flex;align-items:flex-end;gap:12px;margin-bottom:16px}
+.vh h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:19px;text-transform:uppercase;letter-spacing:.03em}
+.vh .d{font-size:12px;color:var(--text-dim)}
+.vh .spacer{flex:1}
+.btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;border:1px solid var(--border);background:var(--raised);color:var(--text);border-radius:6px;padding:8px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{border-color:var(--border-hi)}
+.btn.amber{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+.btn.go{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.btn.sm{padding:5px 9px;font-size:10px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:11px 12px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--amber)}
+.kpi .l{font-family:'Oswald',sans-serif;font-size:9px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--text-xs)}
+.kpi .v{font-size:21px;font-weight:600;margin-top:3px}
+.list{display:flex;flex-direction:column;gap:9px}
+.row{background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--border);border-radius:7px;padding:12px 13px;cursor:pointer;display:flex;align-items:center;gap:12px}
+.row:hover{border-color:var(--border-hi)}
+.row.draft{border-left-color:var(--text-xs)}.row.ready{border-left-color:var(--blue)}.row.approved{border-left-color:var(--amber)}.row.sent{border-left-color:var(--green)}
+.row .t{font-weight:500;font-size:13.5px}
+.row .sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.row .spacer{flex:1}
+.tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);color:var(--text-xs)}
+.tag.draft{}.tag.ready{color:var(--blue);border-color:var(--blue);background:var(--blue-bg)}
+.tag.approved{color:var(--amber);border-color:var(--amber);background:var(--amber-soft)}
+.tag.sent{color:var(--green);border-color:var(--green);background:var(--green-bg)}
+.sig{font-family:'JetBrains Mono',monospace;font-size:10px;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;border:1px solid var(--border);color:var(--text-xs)}
+.sig.on{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+.tpl{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;cursor:pointer}
+.tpl:hover{border-color:var(--amber)}
+.tpl .pv{height:128px;background:var(--canvas);border-bottom:1px solid var(--border);padding:11px;display:flex;flex-direction:column;gap:6px}
+.tpl .pv .ph{height:9px;border-radius:2px;background:var(--border-hi)}
+.tpl .pv .img{flex:1;border-radius:4px;background:linear-gradient(0deg,var(--raised),var(--overlay));border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-xs);font-size:16px}
+.tpl .pv .bar{height:22px;border-radius:4px;background:var(--amber);width:60%;align-self:center}
+.tpl .m{padding:10px 12px}
+.tpl .m .n{font-weight:500;font-size:13px}
+.tpl .m .k{font-size:11px;color:var(--text-dim);margin-top:2px}
+.build{display:grid;grid-template-columns:230px 1fr;gap:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:13px}
+.panel h3{font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:11px}
+.fld{margin-bottom:11px}
+.fld label{display:block;font-family:'Oswald',sans-serif;font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--text-xs);margin-bottom:5px}
+.fld input,.fld select,.fld textarea{width:100%;font-family:'Lexend',sans-serif;font-size:12.5px;border:1px solid var(--border);border-radius:6px;padding:8px 9px;background:var(--bg);color:var(--text)}
+.fld input:focus,.fld select:focus{outline:none;border-color:var(--amber)}
+.seg{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.seg button{flex:1;background:var(--bg);border:0;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:7px 4px;cursor:pointer}
+.seg button.on{background:var(--amber-soft);color:var(--amber)}
+.canvas{background:var(--canvas);border:1px solid var(--border);border-radius:9px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:0;min-height:420px}
+.paper{width:100%;max-width:520px;background:var(--paper);border:1px solid var(--paper-line);border-radius:6px;overflow:hidden;color:var(--paper-ink)}
+.blk{position:relative;padding:14px 20px;border-bottom:1px dashed transparent}
+.blk:hover{outline:1.5px solid var(--amber);outline-offset:-1px}
+.blk .ctl{position:absolute;top:5px;right:6px;display:none;gap:3px}
+.blk:hover .ctl{display:flex}
+.blk .ctl button{width:22px;height:22px;border-radius:4px;border:1px solid var(--paper-line);background:var(--paper);color:var(--paper-ink);font-size:11px;cursor:pointer;opacity:.9}
+.b-logo{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#23323c;font-size:15px}
+.b-logo b{color:#c8922a}
+.b-hero{height:150px;background:#dfe5e8;display:flex;align-items:center;justify-content:center;color:#8a9aa8;font-size:22px;padding:0}
+.b-h{font-family:'Oswald',sans-serif;font-weight:600;font-size:20px;color:#23323c}
+.b-p{font-size:13px;line-height:1.65;color:#3c4750}
+.b-prod{display:flex;gap:12px;align-items:center;background:var(--paper-soft);border:1px solid var(--paper-line);border-radius:6px;padding:11px}
+.b-prod .im{width:64px;height:64px;border-radius:5px;background:#dfe5e8;display:flex;align-items:center;justify-content:center;color:#9aa6ad}
+.b-prod .nm{font-weight:600;color:#23323c}.b-prod .pr{color:#c8922a;font-weight:600;margin-top:2px}
+.b-btn{display:inline-block;background:#c8922a;color:#fff;font-weight:600;padding:11px 22px;border-radius:6px;font-size:13px}
+.b-foot{background:var(--paper-soft);font-size:11px;color:#7a858d;text-align:center;line-height:1.6}
+.b-foot a{color:#7a858d;text-decoration:underline}
+.addbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;justify-content:center}
+.chiplet{font-family:'JetBrains Mono',monospace;font-size:10px;border:1px dashed var(--border-hi);color:var(--text-dim);background:var(--raised);border-radius:20px;padding:5px 11px;cursor:pointer}
+.chiplet:hover{border-color:var(--amber);color:var(--amber)}
+.signbar{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}
+.sign{border:1px solid var(--border);border-radius:7px;padding:10px;background:var(--bg)}
+.sign.on{border-color:var(--green);background:var(--green-bg)}
+.sign .nm{font-weight:500;display:flex;align-items:center;gap:6px}
+.sign .em{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-xs);margin:2px 0 8px}
+.sendbar{display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:12px;margin-top:4px}
+.hint{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-xs)}
+.guard{display:flex;gap:8px;align-items:flex-start;background:var(--green-bg);border:1px solid rgba(46,160,67,.4);border-radius:7px;padding:9px 11px;font-size:11.5px;margin-bottom:14px}
+.guard b{color:var(--green)}
+.atable{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden;font-size:12px}
+.atable th,.atable td{text-align:left;padding:9px 11px;border-top:1px solid var(--border)}
+.atable thead th{background:var(--raised);font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-xs);border:0}
+.grp{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+.grpc{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px 13px;min-width:120px;cursor:pointer}
+.grpc.on{border-color:var(--amber)}
+.grpc .n{font-size:12px;color:var(--text-dim)}
+.grpc .c{font-size:20px;font-weight:600;margin-top:3px}
+.bars{display:flex;flex-direction:column;gap:11px;margin-top:6px}
+.barr{display:grid;grid-template-columns:90px 1fr 50px;gap:10px;align-items:center;font-size:12px}
+.barr .track{height:9px;background:var(--raised);border-radius:6px;overflow:hidden}
+.barr .fill{height:100%;background:var(--amber)}
+.note{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-xs);margin-top:14px;border-top:1px dashed var(--border);padding-top:10px}
+@media(max-width:760px){.shell{flex-direction:column}.rail{width:auto;flex:0 0 auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--border)}.rail .sep,.rail .mini{display:none}.build{grid-template-columns:1fr}.gal{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style></head><body>
+
+<div class="appbar">
+  <div class="brand"><b>AZ</b> Custom Knives <span class="s">// email studio</span></div>
+  <div class="spacer"></div>
+  <span class="chip" id="provenance">prototype · sample data</span>
+  <button class="iconbtn" id="themeBtn" title="Toggle theme (demo)" aria-label="Toggle theme">&#9788;</button>
+  <span class="chip">Alessio</span>
+</div>
+
+<div class="shell">
+  <nav class="rail">
+    <button class="nav on" data-v="campaigns"><span class="i">&#9635;</span> Campaigns</button>
+    <button class="nav" data-v="templates"><span class="i">&#9707;</span> Templates</button>
+    <button class="nav" data-v="audience"><span class="i">&#9783;</span> Audience</button>
+    <button class="nav" data-v="reports"><span class="i">&#9202;</span> Reports</button>
+    <div class="sep"></div>
+    <button class="nav" data-v="forge"><span class="i">&#9993;</span> Message Forge</button>
+    <div class="sep"></div>
+    <div class="mini">Sends from<br><b style="color:var(--amber)">admin@<br>azcustomknives.com</b></div>
+    <div class="mini">Nothing sends without both sign-offs.</div>
+  </nav>
+
+  <main class="main">
+
+    <section class="view on" id="v-campaigns">
+      <div class="vh"><h1>Campaigns</h1><div class="d">your AZCK newsletters</div><div class="spacer"></div>
+        <button class="btn amber" onclick="openBuilder()">+ New campaign</button></div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Subscribers</div><div class="v" id="k1">0</div></div>
+        <div class="kpi"><div class="l">Drafts</div><div class="v" id="k2">0</div></div>
+        <div class="kpi"><div class="l">Awaiting sign-off</div><div class="v" id="k3">0</div></div>
+        <div class="kpi"><div class="l">Sent</div><div class="v" id="k4">0</div></div>
+      </div>
+      <div class="list" id="clist"></div>
+    </section>
+
+    <section class="view" id="v-templates">
+      <div class="vh"><h1>Templates</h1><div class="d">start from a layout, then edit it</div></div>
+      <div class="gal" id="gal"></div>
+    </section>
+
+    <section class="view" id="v-builder">
+      <div class="vh"><button class="btn sm" onclick="show('campaigns')">&#8592; Back</button>
+        <h1 style="margin-left:6px">Build</h1><div class="d" id="b-tplname">Newsletter template</div></div>
+      <div class="guard"><span>&#128274;</span><span><b>Nothing sends on its own.</b> Goes out only after both Alessio and Reanna sign off &mdash; enforced in the database. From <b style="color:var(--amber)">admin@azcustomknives.com</b>.</span></div>
+      <div class="build">
+        <div>
+          <div class="panel">
+            <h3>Setup</h3>
+            <div class="fld"><label>Subject line</label><input id="b-subj" value="What's new at AZ Custom Knives"></div>
+            <div class="fld"><label>Preview text</label><input id="b-pre" value="June's builds, a featured blade, and a class opening"></div>
+            <div class="fld"><label>From</label><input value="AZ Custom Knives <admin@azcustomknives.com>"></div>
+            <div class="fld"><label>Send to</label><select><option>All active subscribers</option><option>Customers</option><option>Leads</option><option>Past students</option></select></div>
+            <div class="fld"><label>When</label><div class="seg"><button class="on">Send now</button><button>Schedule</button></div></div>
+            <div class="fld"><label>&nbsp;</label><button class="btn sm" style="width:100%"><span>&#9993;</span> Send test to me</button></div>
+          </div>
+        </div>
+        <div>
+          <div class="canvas">
+            <div class="paper" id="paper"></div>
+            <div class="addbar" id="addbar"></div>
+          </div>
+          <div class="signbar" id="signbar"></div>
+          <div class="sendbar">
+            <button class="btn go" id="b-send" disabled><span>&#9993;</span> Send to 0 subscribers</button>
+            <span class="hint" id="b-sendhint">Greyed out until both sign-offs are in.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-audience">
+      <div class="vh"><h1>Audience</h1><div class="d">your own AZCK list</div><div class="spacer"></div>
+        <button class="btn"><span>&#8681;</span> Import from Wix</button>
+        <button class="btn amber">+ Add person</button></div>
+      <div class="grp" id="grp"></div>
+      <table class="atable"><thead><tr><th>Email</th><th>Name</th><th>Group</th><th>Source</th><th>Status</th></tr></thead>
+        <tbody id="atb"></tbody></table>
+      <div class="note">Sample rows shown. Real list is empty until you import your Wix contacts (with their consent on record &mdash; CASL).</div>
+    </section>
+
+    <section class="view" id="v-reports">
+      <div class="vh"><h1>Reports</h1><div class="d">how a send performed</div></div>
+      <div class="kpis">
+        <div class="kpi"><div class="l">Delivered</div><div class="v">312</div></div>
+        <div class="kpi"><div class="l">Opened</div><div class="v">61%</div></div>
+        <div class="kpi"><div class="l">Clicked</div><div class="v">18%</div></div>
+        <div class="kpi"><div class="l">Unsubscribed</div><div class="v">0.6%</div></div>
+      </div>
+      <div class="panel"><h3>Spring sale &mdash; sent May 28</h3>
+        <div class="bars">
+          <div class="barr"><span>Opened</span><div class="track"><div class="fill" style="width:61%"></div></div><span class="mono">190</span></div>
+          <div class="barr"><span>Clicked</span><div class="track"><div class="fill" style="width:18%;background:var(--green)"></div></div><span class="mono">56</span></div>
+          <div class="barr"><span>Bounced</span><div class="track"><div class="fill" style="width:3%;background:var(--red)"></div></div><span class="mono">9</span></div>
+        </div>
+      </div>
+      <div class="note">Sample numbers. Real opens/clicks fill in here once the send engine is wired and a real campaign goes out.</div>
+    </section>
+
+    <section class="view" id="v-forge">
+      <div class="vh"><h1>Message Forge</h1><div class="d">tell the builder what to change &mdash; goes straight to the bus</div></div>
+      <div class="panel" style="max-width:660px">
+        <div class="fld"><label>Your instruction to Forge</label><textarea id="fmsg" style="min-height:140px" placeholder="e.g. Make the template photos bigger. Add a 'Book a class' button block. Change the sale headline colour."></textarea></div>
+        <div class="erow"><button class="btn amber" id="fsend">Send to Forge</button><span class="hint" id="fstatus">Goes to the bus. Forge reads it and gets to work.</span></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const blocksByTpl = {
+  newsletter:[['logo'],['hero'],['h','News from the forge'],['p','Here is what came off the bench this month, a blade worth a closer look, and a class spot that just opened.'],['prod'],['btn','See the new work'],['foot']],
+  product:[['logo'],['hero'],['h','Meet the new blade'],['p','Hand-forged, full tang, ready to carry. A limited run.'],['prod'],['btn','View this knife'],['foot']],
+  sale:[['logo'],['h','Spring sharpening event'],['p','Bring your blades in this month and get them shop-sharpened. Limited slots.'],['btn','Book a slot'],['foot']],
+  event:[['logo'],['hero'],['h','Knife-making class'],['p','Spend a day at the forge and walk out with a blade you made. Next date just opened.'],['btn','Reserve your seat'],['foot']],
+  plain:[['logo'],['h','A note from AZ Custom Knives'],['p','Write your message here.'],['foot']]
+};
+const templates = [
+  {id:'newsletter',n:'Monthly newsletter',k:'photo + story + product + button'},
+  {id:'product',n:'New product / launch',k:'big photo + the blade + buy'},
+  {id:'sale',n:'Sale / promo',k:'offer + a single clear button'},
+  {id:'event',n:'Class / event',k:'invite + reserve a seat'},
+  {id:'plain',n:'Plain letter',k:'just words, no frills'},
+  {id:'newsletter',n:'Start from scratch',k:'blank, add blocks yourself'}
+];
+const campaigns = [
+  {t:'June Newsletter',sub:'draft · edited today',st:'draft',a:0,r:0,extra:''},
+  {t:'New blade: the Drover',sub:'waiting on sign-off',st:'ready',a:1,r:0,extra:''},
+  {t:'Summer class dates',sub:'both signed · ready to send',st:'approved',a:1,r:1,extra:''},
+  {t:'Spring sale',sub:'sent May 28',st:'sent',a:1,r:1,extra:'61% opened'}
+];
+const groups=[['All active',0,1],['Customers',0,0],['Leads',0,0],['Past students',0,0]];
+const sampleAud=[
+  ['(your list is empty)','—','—','—','—']
+];
+
+function show(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));
+}
+document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>show(n.dataset.v));
+
+function renderCampaigns(){
+  document.getElementById('k1').textContent='0';
+  document.getElementById('k2').textContent=campaigns.filter(c=>c.st==='draft'||c.st==='ready').length;
+  document.getElementById('k3').textContent=campaigns.filter(c=>!(c.a&&c.r)&&c.st!=='sent').length;
+  document.getElementById('k4').textContent=campaigns.filter(c=>c.st==='sent').length;
+  document.getElementById('clist').innerHTML=campaigns.map(c=>
+    '<div class="row '+c.st+'" onclick="openBuilder()"><div><div class="t">'+c.t+'</div><div class="sub">'+c.sub+'</div></div><div class="spacer"></div>'+
+    (c.extra?'<span class="hint">'+c.extra+'</span>':'')+
+    '<span class="sig'+(c.a?' on':'')+'" title="Alessio">A</span><span class="sig'+(c.r?' on':'')+'" title="Reanna">R</span>'+
+    '<span class="tag '+c.st+'">'+c.st+'</span></div>').join('');
+}
+function renderTemplates(){
+  document.getElementById('gal').innerHTML=templates.map(t=>
+    '<div class="tpl" onclick="openBuilder(\''+t.id+'\',\''+t.n.replace(/'/g,"")+'\')">'+
+    '<div class="pv"><div class="ph" style="width:40%"></div><div class="img">&#9650;</div><div class="bar"></div></div>'+
+    '<div class="m"><div class="n">'+t.n+'</div><div class="k">'+t.k+'</div></div></div>').join('');
+}
+function renderAudience(){
+  document.getElementById('grp').innerHTML=groups.map((g,i)=>'<div class="grpc'+(i===0?' on':'')+'"><div class="n">'+g[0]+'</div><div class="c">'+g[1]+'</div></div>').join('');
+  document.getElementById('atb').innerHTML=sampleAud.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('');
+}
+
+let curBlocks=[];
+function blockHTML(b,i){
+  let inner='';
+  if(b[0]==='logo') inner='<div class="b-logo"><b>AZ</b> Custom Knives</div>';
+  else if(b[0]==='hero') inner='<div class="b-hero">&#9650; your photo here</div>';
+  else if(b[0]==='h') inner='<div class="b-h" contenteditable>'+b[1]+'</div>';
+  else if(b[0]==='p') inner='<div class="b-p" contenteditable>'+b[1]+'</div>';
+  else if(b[0]==='prod') inner='<div class="b-prod"><div class="im">&#9650;</div><div><div class="nm">The Drover &mdash; hand-forged</div><div class="pr">$420</div></div></div>';
+  else if(b[0]==='btn') inner='<div style="text-align:center"><span class="b-btn" contenteditable>'+b[1]+'</span></div>';
+  else if(b[0]==='foot') inner='<div class="b-foot">AZ Custom Knives · Grande Prairie, AB<br>You are getting this because you opted in. <a href="#">Unsubscribe</a></div>';
+  const pad=(b[0]==='hero')?'style="padding:0"':'';
+  return '<div class="blk" '+pad+' data-i="'+i+'">'+inner+
+    '<div class="ctl"><button title="up" onclick="mv('+i+',-1)">&#9650;</button><button title="down" onclick="mv('+i+',1)">&#9660;</button><button title="remove" onclick="rm('+i+')">&#10005;</button></div></div>';
+}
+function renderPaper(){ document.getElementById('paper').innerHTML=curBlocks.map((b,i)=>blockHTML(b,i)).join(''); }
+function mv(i,d){const j=i+d;if(j<0||j>=curBlocks.length)return;const t=curBlocks[i];curBlocks[i]=curBlocks[j];curBlocks[j]=t;renderPaper();}
+function rm(i){curBlocks.splice(i,1);renderPaper();}
+function addBlock(type){const def={h:['h','New heading'],p:['p','New paragraph. Click to edit.'],img:['hero'],prod:['prod'],btn:['btn','Button text'],div:['foot']};curBlocks.push(def[type]||['p','New text']);renderPaper();}
+document.getElementById('addbar').innerHTML=['+ Heading|h','+ Text|p','+ Photo|img','+ Product|prod','+ Button|btn'].map(x=>{const[l,t]=x.split('|');return '<span class="chiplet" onclick="addBlock(\''+t+'\')">'+l+'</span>';}).join('');
+
+function openBuilder(tplId,tplName){
+  const id=tplId||'newsletter';
+  curBlocks=JSON.parse(JSON.stringify(blocksByTpl[id]||blocksByTpl.newsletter));
+  document.getElementById('b-tplname').textContent=(tplName||'Newsletter')+' template';
+  renderPaper(); show('builder');
+}
+let sigA=false,sigR=false;
+function toggleSig(w){ if(w==='a')sigA=!sigA; if(w==='r')sigR=!sigR; refreshSign(); }
+function signCardH(key,name,email,on,mine){
+  let btn;
+  if(on) btn = mine?'<button class="btn sm" style="width:100%" onclick="toggleSig(\''+key+'\')">Withdraw my sign-off</button>':'<div class="hint">Signed.</div>';
+  else btn = mine?'<button class="btn sm go" style="width:100%" onclick="toggleSig(\''+key+'\')">Approve as '+name+'</button>':'<div class="hint">Waiting for '+name+' &mdash; she signs from her own command center.</div>';
+  return '<div class="sign'+(on?' on':'')+'"><div class="nm">'+(on?'&#9989;':'&#11036;')+' '+name+(mine?' <span class="hint">(you)</span>':'')+'</div><div class="em">'+email+'</div>'+btn+'</div>';
+}
+function refreshSign(){
+  document.getElementById('signbar').innerHTML=
+    signCardH('a','Alessio','alessio.zilli@azcustomknives.com',sigA,true)+
+    signCardH('r','Reanna','admin@azcustomknives.com',sigR,false);
+  const both=sigA&&sigR, send=document.getElementById('b-send');
+  send.disabled=!both;
+  document.getElementById('b-sendhint').textContent=both?'Both signed off. (Send engine wires up next.)':'Greyed out until both sign-offs are in.';
+}
+
+(function theme(){
+  function apply(t){ document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark'); }
+  try{ const p=new URL(location.href).searchParams.get('theme'); if(p) apply(p); }catch(e){}
+  window.addEventListener('message',e=>{ if(e.data&&e.data.type==='theme') apply(e.data.theme); });
+  document.getElementById('themeBtn').onclick=()=>apply(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');
+})();
+
+async function getStudioSupa(){ for(let i=0;i<60;i++){ try{ if(window.parent && window.parent.supa) return window.parent.supa; }catch(e){} await new Promise(function(r){setTimeout(r,80);}); } return null; }
+(function wireForge(){
+  var btn=document.getElementById('fsend'); if(!btn) return;
+  btn.onclick=async function(){
+    var t=document.getElementById('fmsg').value.trim(), st=document.getElementById('fstatus');
+    if(!t){ st.textContent='Type an instruction first.'; return; }
+    btn.disabled=true; st.textContent='Sending...';
+    var supa=await getStudioSupa();
+    if(!supa){ st.textContent='Open this inside your Command Center to message Forge.'; btn.disabled=false; return; }
+    var from='alessio';
+    try{ var u=await supa.auth.getUser(); var em=(u.data&&u.data.user)?u.data.user.email:''; if(em==='admin@azcustomknives.com') from='reanna'; }catch(e){}
+    try{
+      var r=await supa.from('agent_messages').insert({from_user:from,to_user:'forge-code',channel:'task',project_slug:'email-studio',body:'[Email Studio] '+t,short_summary:t.slice(0,150)});
+      if(r.error) throw r.error;
+      document.getElementById('fmsg').value=''; st.textContent='Sent to Forge. He picks it up from the bus.';
+    }catch(e){ st.textContent='Could not send: '+(e.message||e); }
+    btn.disabled=false;
+  };
+})();
+renderCampaigns(); renderTemplates(); renderAudience(); refreshSign();
+</script>
+</body></html>
