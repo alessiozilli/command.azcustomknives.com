@@ -4350,12 +4350,12 @@ window.openActiveRun = function() {
 
     <div class="db-3col">
       <div class="db-col">
-        <div class="db-col__head">The year <span class="db-col__count" id="db-year-count">…</span></div>
-        <div class="db-col__body" id="db-months">Loading…</div>
+        <div class="db-col__head">Needs you <span class="db-col__count" id="db-need-count">…</span></div>
+        <div class="db-col__body" id="db-need">Loading…</div>
       </div>
       <div class="db-col">
-        <div class="db-col__head">The month</div>
-        <div class="db-col__body" id="db-detail">Pick a month on the left.</div>
+        <div class="db-col__head" id="db-detail-head">Where we stand</div>
+        <div class="db-col__body" id="db-detail">Loading…</div>
       </div>
       <div class="db-col">
         <div class="db-col__head">Business bus <span class="db-col__count" id="db-bus-count">…</span></div>
@@ -4371,140 +4371,199 @@ window.openActiveRun = function() {
    time. Wages and rent are both charged on every calendar day. ═══ */
 (function(){
   'use strict';
-  var D = { days: [], month: null };
-  /* Where the money came from. Split on what SOLD (the Square catalog category),
-     not on which register rang it. */
-  var DB_DIVS = [
-    { k:'retail',   label:'Retail — the counter'  },
-    { k:'service',  label:'Service — the bench'   },
-    { k:'courses',  label:'Courses'               },
-    { k:'supplies', label:'Supplies'              },
-    { k:'other',    label:'Not a sale — gift cards, untitled amounts' }
-  ];
+  /* ═══ DASHBOARD — where we stand RIGHT NOW.
+     Alessio, 2026-08-12: "Why is the dashboard a year of our income and then the
+     month of our income? What do you think the difference between till and
+     dashboard is?" He was right — this screen was the Till again with fewer
+     columns. A dashboard is the STATE: am I above the line today, what needs me,
+     what is about to hurt. The RECORD — days, weeks, months, the year, what sold —
+     lives next door in Retail -> Till and does not belong here twice. ═══ */
+  var D = { days: [], div: {}, items: [], pick: 'stand' };
   function el(id){ return document.getElementById(id); }
   function money(v){ var n=Number(v||0); return (n<0?'-$':'$') + Math.abs(n).toFixed(2); }
   function mKey(d){ return String(d).slice(0,7); }
-  function mName(k){
-    try{ var p=k.split('-'); return new Date(+p[0], +p[1]-1, 1).toLocaleDateString(undefined,{month:'long',year:'numeric'}); }
-    catch(e){ return k; }
-  }
-  /* An unrecorded cost is not a zero cost. */
-  function dbCost(v){
-    return Number(v) > 0 ? '-'+money(v) : '<span style="color:var(--text-xs)">not recorded</span>';
-  }
+  function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function dName(d){
     try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
     catch(e){ return d; }
   }
+  function clock(ts){
+    try{ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; }
+  }
+  function dayCount(from, to){                       // inclusive calendar days
+    return Math.max(1, Math.round((new Date(to+'T00:00:00') - new Date(from+'T00:00:00'))/86400000) + 1);
+  }
 
   window.renderDashboard = async function(){
-    var list = el('db-months');
+    var list = el('db-need');
     if(!list || !window.supa) return;
     try{
-      var pair = await Promise.all([
+      var q = await Promise.all([
         window.supa.from('az_day_money')
-          .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,orders,direct_cost,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
+          .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,orders,direct_cost,items_total,cash_out,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
           .order('day', { ascending: false }).limit(500),
-        window.supa.from('az_day_division')
-          .select('day,division,rang,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,profit')
-          .order('day', { ascending: false }).limit(2000)
+        window.supa.from('az_service_bookings')
+          .select('id,customer_name,service,status,rush,preferred_date,next_action_date,dropped_off_at,scheduled_at,item_location,total_cad,blade_detail,notes')
+          .in('status', ['new','scheduled','in_shop','at_risk']),
+        window.supa.from('calendar_events')
+          .select('id,summary,description,location,start_time,all_day,html_link')
+          .gte('start_time', new Date(Date.now() - 14*3600e3).toISOString())
+          .order('start_time', { ascending: true }).limit(40)
       ]);
-      var r = pair[0];
-      if(r.error) throw r.error;
-      if(pair[1].error) throw pair[1].error;
-      D.days = r.data || [];
-      D.div = {};
-      (pair[1].data||[]).forEach(function(x){
-        var k = mKey(x.day), b = D.div[k] || (D.div[k] = {});
-        var a = b[x.division] || (b[x.division] = { sold:0, cost:0, wages:0, oh:0, profit:0, lines:0, costed:0, uncosted:0 });
-        a.sold += Number(x.rang||0);        a.cost   += Number(x.cost_known||0);
-        a.wages += Number(x.wages_share||0); a.oh     += Number(x.overhead_share||0);
-        a.profit+= Number(x.profit||0);      a.lines  += Number(x.lines||0);
-        a.costed+= Number(x.lines_costed||0);a.uncosted += Number(x.rang_uncosted||0);
-      });
-      if(!D.days.length){ list.innerHTML = '<div class="db-empty">No sale days recorded yet.</div>'; return; }
-      var months = {};
-      D.days.forEach(function(d){
-        var k = mKey(d.day);
-        var m = months[k] || (months[k] = { k:k, cal:0, sold:0, orders:0, rang:0, cogs:0, out:0,
-                                            oh:0, wages:0, mins:0, gst:0, tips:0, best:0,
-                                            retail:0, service:0, courses:0, supplies:0, other:0 });
-        m.cal++; if(d.rang_today) m.sold++;
-        m.orders += Number(d.orders||0);
-        m.rang   += Number(d.rang||0);
-        m.cogs   += Number(d.direct_cost||0);
-        m.out    += Number(d.cash_out||0);
-        m.oh     += Number(d.overhead||0);
-        m.wages  += Number(d.wages||0);
-        m.mins   += Number(d.logged_minutes||0);
-        m.gst    += Number(d.gst||0);
-        m.tips   += Number(d.tips||0);
-        m.best   += Number(d.true_profit||0);
-        DB_DIVS.forEach(function(x){ m[x.k] += Number(d[x.k+'_rang']||0); });
-      });
-      D.months = months;
-      var keys = Object.keys(months).sort().reverse();
-      var top = Math.max.apply(null, keys.map(function(k){ return months[k].rang; })) || 1;
-      var yr = keys.reduce(function(a,k){ a.rang+=months[k].rang; a.best+=months[k].best; a.orders+=months[k].orders; return a; }, {rang:0,best:0,orders:0});
-      el('db-year-count').textContent = money(yr.rang) + ' · ' + yr.orders + ' orders';
-      if(!D.month) D.month = keys[0];
-      list.innerHTML = keys.map(function(k){
-        var m = months[k];
-        return '<div class="db-row'+(k===D.month?' on':'')+'" data-m="'+k+'" onclick="dbPickMonth(this)">'
-          + '<div class="db-row__main"><div class="db-row__name">'+esc(mName(k))+'</div>'
-          + '<div class="db-row__sub">'+m.sold+' selling day'+(m.sold===1?'':'s')+' · '+m.orders+' orders</div>'
-          + '<div class="db-bar"><i style="width:'+Math.round(m.rang/top*100)+'%"></i></div></div>'
-          + '<div class="db-row__val">'+money(m.rang)
-          + '<div class="'+(m.best>=0?'good':'bad')+'">'+money(m.best)+'</div></div></div>';
-      }).join('');
-      dbPaintMonth();
+      if(q[0].error) throw q[0].error;
+      D.days = q[0].data || [];
+      D.jobs = (q[1].data || []);
+      D.cal  = (q[2].data || []);
+      buildNeeds();
+      paintNeeds();
+      dbPaintDetail();
       dbLoadBus();
-    }catch(e){ list.innerHTML = '<div class="db-empty">Could not read the year: '+esc(e.message||String(e))+'</div>'; }
+    }catch(e){ list.innerHTML = '<div class="db-empty">Could not read the shop: '+esc(e.message||String(e))+'</div>'; }
   };
 
-  window.dbPickMonth = function(row){ D.month = row.dataset.m; window.renderDashboard(); };
+  /* Everything that wants Alessio, most urgent first. Nothing finished, nothing
+     archived, nothing he has already dealt with — done work leaves the screen. */
+  function buildNeeds(){
+    var today = iso(new Date()), items = [];
+    var seenCal = {};
 
-  function dbPaintMonth(){
-    var box = el('db-detail'); if(!box || !D.month) return;
-    var m = D.months[D.month];
-    var days = D.days.filter(function(d){ return mKey(d.day)===D.month; })
-                     .sort(function(a,b){ return a.day < b.day ? 1 : -1; });
-    var sold = days.filter(function(d){ return d.rang_today; });
-    var best = sold.slice().sort(function(a,b){ return Number(b.rang)-Number(a.rang); })[0];
-    var worst = sold.slice().sort(function(a,b){ return Number(a.rang)-Number(b.rang); })[0];
-    var uncosted = Object.keys(D.div[D.month]||{}).reduce(function(a,k){ return a + D.div[D.month][k].uncosted; }, 0);
-    var bar   = (m.oh + m.wages) / Math.max(m.cal,1);
-    var cleared = sold.filter(function(d){ return Number(d.rang) >= bar; }).length;
-    box.innerHTML = '<div class="db-big">'+money(m.rang)+'</div>'
-      + '<div class="db-sub">'+esc(mName(D.month))+' · '+m.sold+' selling day'+(m.sold===1?'':'s')+' of '+m.cal+' · '+m.orders+' orders</div>'
-      + '<div class="db-sec">The month, honestly</div>'
-      + '<div class="db-line"><span>Ours to keep</span><span>'+money(m.rang)+'</span></div>'
-      + '<div class="db-line"><span>Cost of goods sold</span><span>'+dbCost(m.cogs)+'</span></div>'
-      + '<div class="db-line"><span>Money out</span><span>'+dbCost(m.out)+'</span></div>'
-      + '<div class="db-line"><span>Wages — '+m.cal+' days</span><span>-'+money(m.wages)+'</span></div>'
-      + '<div class="db-line"><span>Rent — '+m.cal+' days</span><span>-'+money(m.oh)+'</span></div>'
-      + '<div class="db-line" style="border-bottom:0"><span><b>Profit</b></span><span class="'+(m.best>=0?'good':'bad')+'"><b>'+money(m.best)+'</b></span></div>'
-      + '<div class="db-note">GST '+money(m.gst)+' and tips '+money(m.tips)+' were charged on top of that and are not counted: the tax belongs to the government, the tips are not the business\u2019s to keep.</div>'
-      /* WHERE it came from — this is what the Dashboard is for. The Till next door
-         answers the other question: WHAT sold, line by line. */
-      + '<div class="db-sec">Where it came from — and what each side kept</div>'
-      + DB_DIVS.map(function(x){
-          if(!(m[x.k] > 0)) return '';
-          var pc = Math.round(m[x.k] / Math.max(m.rang,0.01) * 100);
-          var a  = (D.div[D.month]||{})[x.k];
-          var pr = a ? '<span class="'+(a.profit>=0?'good':'bad')+'"> '+money(a.profit)+'</span>' : '';
-          return '<div class="db-line"><span>'+esc(x.label)+'</span><span>'+money(m[x.k])+' · '+pc+'%'+pr+'</span></div>';
+    (D.cal || []).forEach(function(c){
+      var d = String(c.start_time).slice(0,10);
+      var k = (c.summary||'') + '|' + d;
+      if(seenCal[k]) return;                          // the sync duplicates some events
+      seenCal[k] = 1;
+      var days = Math.round((new Date(d+'T00:00:00') - new Date(today+'T00:00:00'))/86400000);
+      if(days < 0 || days > 13) return;
+      items.push({ kind:'cal', id:'cal-'+c.id, urg: days<=0?0:(days===1?1:3),
+        title: c.summary || '(no title)',
+        sub: (days<=0?'Today':days===1?'Tomorrow':dName(d)) + (c.all_day?'':' · '+clock(c.start_time)),
+        when: d, row: c });
+    });
+
+    (D.jobs || []).forEach(function(j){
+      var due = j.preferred_date || j.next_action_date || null;
+      var days = due ? Math.round((new Date(due+'T00:00:00') - new Date(today+'T00:00:00'))/86400000) : null;
+      var urg, sub;
+      if(j.status === 'at_risk' || j.rush){ urg = 0; sub = j.rush ? 'RUSH' : 'At risk'; }
+      else if(due && days <= 0){ urg = 0; sub = days === 0 ? 'Due today' : Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' overdue'; }
+      else if(j.status === 'new'){ urg = 1; sub = 'Never answered'; }
+      else if(due && days <= 7){ urg = 2; sub = 'Due '+dName(due); }
+      else if(j.status === 'in_shop'){ urg = 2; sub = 'On the bench'; }
+      else { urg = 4; sub = due ? dName(due) : 'Scheduled'; }
+      if(j.item_location) sub += ' · ' + j.item_location;
+      items.push({ kind:'job', id:'job-'+j.id, urg:urg, title:j.customer_name || '(no name)',
+        sub:sub, when: due || '', row:j });
+    });
+
+    items.sort(function(a,b){ return a.urg - b.urg || String(a.when).localeCompare(String(b.when)); });
+    D.items = items;
+  }
+
+  var KIND_TAG = { cal:'calendar', job:'bench' };
+  function paintNeeds(){
+    var box = el('db-need'); if(!box) return;
+    var hot = D.items.filter(function(x){ return x.urg === 0; }).length;
+    el('db-need-count').textContent = D.items.length
+      ? D.items.length + (hot ? ' · ' + hot + ' today' : '')
+      : 'nothing';
+    /* Where we stand sits at the top of the list on purpose: it is the one row he
+       should be able to read without picking anything. */
+    var head = '<div class="db-row'+(D.pick==='stand'?' on':'')+'" data-k="stand" onclick="dbPick(this)">'
+      + '<div class="db-row__main"><div class="db-row__name">Where we stand</div>'
+      + '<div class="db-row__sub">today · this week · this month</div></div>'
+      + '<div class="db-row__val">'+standTail()+'</div></div>';
+    box.innerHTML = head + (D.items.length
+      ? D.items.map(function(x){
+          return '<div class="db-row'+(D.pick===x.id?' on':'')+'" data-k="'+esc(x.id)+'" onclick="dbPick(this)">'
+            + '<div class="db-row__main"><div class="db-row__name">'+esc(x.title)+'</div>'
+            + '<div class="db-row__sub">'+esc(x.sub)+'</div></div>'
+            + '<div class="db-row__val"><span style="color:var(--text-xs)">'+esc(KIND_TAG[x.kind]||'')+'</span>'
+            + (x.urg===0?'<div class="bad">now</div>':'')+'</div></div>';
         }).join('')
-      + '<div class="db-note">Each side carries its own share of the rent and wages — the same share of the money it brings in. The five add back to the profit above exactly. '
-        + (uncosted > 0 ? money(uncosted)+' of this month has no cost of goods on record, so every one of these reads better than it is.' : '')+'</div>'
-      + '<div class="db-sec">How the days went</div>'
-      + '<div class="db-line"><span>Days that cleared '+money(bar)+'</span><span>'+cleared+' of '+m.cal+'</span></div>'
-      + (best  ? '<div class="db-line"><span>Best day — '+esc(dName(best.day))+'</span><span>'+money(best.rang)+'</span></div>' : '')
-      + (worst ? '<div class="db-line"><span>Quietest selling day — '+esc(dName(worst.day))+'</span><span>'+money(worst.rang)+'</span></div>' : '')
-      + '<div class="db-line" style="border-bottom:0"><span>Average selling day</span><span>'+money(m.rang/Math.max(m.sold,1))+'</span></div>'
-      + '<div class="db-note">Rent and wages cost '+money(bar)+' every day, sold or not, so a day under that loses money before a single other cost. '
-        + (m.mins ? 'Logged work: '+(m.mins/60).toFixed(1)+' h. ' : 'No hours logged this month yet. ')
-        + 'Day-by-day detail and what actually sold live in Retail \u2192 Till.</div>';
+      : '<div class="db-empty">Nothing is waiting on you. The bench is clear and the next two weeks are empty.</div>');
+  }
+
+  window.dbPick = function(row){ D.pick = row.dataset.k; paintNeeds(); dbPaintDetail(); };
+
+  /* today / this week / this month, each against the bar it has to clear */
+  function standing(){
+    var today = iso(new Date()), wk = new Date(), mo = today.slice(0,7);
+    wk.setDate(wk.getDate() - ((wk.getDay()+6)%7));    // Monday
+    var weekStart = iso(wk);
+    function roll(pred){
+      return (D.days||[]).filter(pred).reduce(function(a,r){
+        a.cal++; if(r.rang_today) a.sold++;
+        a.rang += Number(r.rang||0); a.orders += Number(r.orders||0);
+        a.bar  += Number(r.day_costs||0); a.profit += Number(r.true_profit||0);
+        a.tips += Number(r.tips||0);
+        return a;
+      }, { cal:0, sold:0, rang:0, orders:0, bar:0, profit:0, tips:0 });
+    }
+    return {
+      today: roll(function(r){ return r.day === today; }),
+      week:  roll(function(r){ return r.day >= weekStart && r.day <= today; }),
+      month: roll(function(r){ return mKey(r.day) === mo && r.day <= today; }),
+      year:  roll(function(r){ return r.day.slice(0,4) === today.slice(0,4); }),
+      weekStart: weekStart, todayIso: today
+    };
+  }
+  function standTail(){
+    var s = standing(), t = s.today;
+    return '<span class="'+(t.rang >= t.bar ? 'good' : 'bad')+'">'+money(t.rang)+'</span>';
+  }
+  function barRow(label, r){
+    var over = r.rang - r.bar;
+    return '<div class="db-line"><span>'+label+'</span><span>'+money(r.rang)+' of '+money(r.bar)
+      + ' <span class="'+(over>=0?'good':'bad')+'">'+(over>=0?'+':'')+money(over)+'</span></span></div>';
+  }
+
+  function dbPaintDetail(){
+    var box = el('db-detail'), head = el('db-detail-head'); if(!box) return;
+    var it = D.items.filter(function(x){ return x.id === D.pick; })[0];
+    if(D.pick !== 'stand' && it) return paintItem(box, head, it);
+    if(head) head.textContent = 'Where we stand';
+
+    var s = standing(), t = s.today, w = s.week, m = s.month, y = s.year;
+    var perDay = t.bar || (m.cal ? m.bar/m.cal : 0);
+    box.innerHTML = '<div class="db-big">'+money(t.rang)+'</div>'
+      + '<div class="db-sub">Today · '+dName(s.todayIso)+' · '+t.orders+(t.orders===1?' order':' orders')+'</div>'
+      + '<div class="db-sec">Against the bar</div>'
+      + barRow('Today', t)
+      + barRow('This week — since '+dName(s.weekStart), w)
+      + barRow('This month so far', m)
+      + '<div class="db-line" style="border-bottom:0"><span>The year</span><span>'+money(y.rang)
+        + ' <span class="'+(y.profit>=0?'good':'bad')+'">'+money(y.profit)+'</span></span></div>'
+      + '<div class="db-note">The bar is '+money(perDay)+' a day — rent plus wages — before a single sale. '
+        + 'Anything under it loses money. Days, weeks, months and what actually sold live in Retail → Till; this screen only says where we stand now.</div>'
+      + '<div class="db-sec">The bench</div>'
+      + '<div class="db-line"><span>Waiting on you — never answered</span><span>'+D.items.filter(function(x){return x.sub==='Never answered';}).length+'</span></div>'
+      + '<div class="db-line"><span>In the shop</span><span>'+(D.jobs||[]).filter(function(j){return j.status==='in_shop';}).length+'</span></div>'
+      + '<div class="db-line" style="border-bottom:0"><span>Needs you today</span><span>'+D.items.filter(function(x){return x.urg===0;}).length+'</span></div>';
+  }
+
+  function paintItem(box, head, it){
+    if(head) head.textContent = it.kind === 'cal' ? 'On the calendar' : 'On the bench';
+    var r = it.row;
+    if(it.kind === 'cal'){
+      box.innerHTML = '<div class="db-big" style="font-size:20px;line-height:1.3">'+esc(it.title)+'</div>'
+        + '<div class="db-sub">'+esc(it.sub)+'</div>'
+        + (r.location ? '<div class="db-line"><span>Where</span><span>'+esc(r.location)+'</span></div>' : '')
+        + (r.description ? '<div class="db-sec">Detail</div><div class="db-msg__body">'+esc(String(r.description).slice(0,1200))+'</div>' : '')
+        + (r.html_link ? '<div class="db-note"><a href="'+esc(r.html_link)+'" target="_blank" rel="noopener">Open in Google Calendar</a></div>' : '');
+      return;
+    }
+    box.innerHTML = '<div class="db-big" style="font-size:20px;line-height:1.3">'+esc(r.customer_name||'(no name)')+'</div>'
+      + '<div class="db-sub">'+esc(it.sub)+'</div>'
+      + '<div class="db-sec">The job</div>'
+      + '<div class="db-line"><span>What</span><span style="text-align:right;max-width:60%">'+esc(r.service||'—')+'</span></div>'
+      + '<div class="db-line"><span>Status</span><span>'+esc(r.status)+(r.rush?' · RUSH':'')+'</span></div>'
+      + (r.preferred_date ? '<div class="db-line"><span>Wanted by</span><span>'+esc(dName(r.preferred_date))+'</span></div>' : '')
+      + (r.dropped_off_at ? '<div class="db-line"><span>Dropped off</span><span>'+esc(dName(String(r.dropped_off_at).slice(0,10)))+'</span></div>' : '')
+      + (r.item_location ? '<div class="db-line"><span>Where the item is</span><span>'+esc(r.item_location)+'</span></div>' : '')
+      + (r.total_cad ? '<div class="db-line"><span>Quoted</span><span>'+money(r.total_cad)+'</span></div>' : '')
+      + (r.blade_detail ? '<div class="db-sec">Blades</div><div class="db-msg__body">'+esc(r.blade_detail)+'</div>' : '')
+      + (r.notes ? '<div class="db-sec">Notes</div><div class="db-msg__body">'+esc(String(r.notes).slice(0,1200))+'</div>' : '')
+      + '<div class="db-note">Move it along in Service → Queue. It leaves this screen the moment it is done.</div>';
   }
 
   async function dbLoadBus(){
@@ -4769,12 +4828,13 @@ window.openActiveRun = function() {
         a.dlines  += Number(d.lines||0);
         a.dcosted += Number(d.lines_costed||0);
         a.duncost += Number(d.rang_uncosted||0);
+        a.dtips   += Number(d.tips||0);
       }
       return a;
     }, { cal:0, sold:0, orders:0, all:0, retail:0, service:0, courses:0, supplies:0,
          other:0, cogs:0, rcost:0, costed:0, lines:0, out:0, oh:0, wages:0, mins:0,
          gst:0, tips:0, best:0,
-         dcost:0, dwages:0, doh:0, dspend:0, dprofit:0, dlines:0, dcosted:0, duncost:0 });
+         dcost:0, dwages:0, doh:0, dspend:0, dprofit:0, dlines:0, dcosted:0, duncost:0, dtips:0 });
     /* .rang is whatever the chosen pill is looking at; .all is always the whole shop. */
     a.rang = S.division === 'all' ? a.all : a[S.division];
     a.share = a.all > 0 ? a[S.division] / a.all : 0;
@@ -4818,7 +4878,7 @@ window.openActiveRun = function() {
         /* Each side of the shop carrying its own costs. Rent and wages are shared
            out by each side's slice of revenue — see az_day_division. */
         window.supa.from('az_day_division')
-          .select('day,division,rang,share_of_revenue,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,spend_share,profit')
+          .select('day,division,rang,tips,share_of_revenue,cost_known,lines,lines_costed,rang_uncosted,overhead_share,wages_share,spend_share,profit')
           .order('day',{ascending:false}).limit(2000)
       ]);
       var r = both[0];
@@ -4970,6 +5030,7 @@ window.openActiveRun = function() {
       var one = grain === 'day';
       var h2 = '<div class="rt-sec">'+esc(dv.label)+(one?', honestly':'')+'</div>'
         + '<div class="rt-line"><span>Sold</span><span>'+money(t.rang)+'</span></div>'
+        + (t.dtips > 0 ? '<div class="rt-line"><span>— of that, tips earned here</span><span>'+money(t.dtips)+'</span></div>' : '')
         + '<div class="rt-line"><span>What those goods cost us'
           + (t.dcosted && t.dcosted < t.dlines ? ' <span class="rt-tag">'+t.dcosted+' of '+t.dlines+' lines</span>' : '')
           + '</span><span>'+costCell(t.dcost, t.dlines)+'</span></div>'
@@ -4993,6 +5054,7 @@ window.openActiveRun = function() {
       + DIVS.map(function(d){
           return t[d.k] > 0 ? '<div class="rt-line"><span>— of that, '+d.line+'</span><span>'+money(t[d.k])+'</span></div>' : '';
         }).join('')
+      + (t.tips > 0 ? '<div class="rt-line"><span>— of that, tips</span><span>'+money(t.tips)+'</span></div>' : '')
       + '<div class="rt-line"><span>Cost of goods sold</span><span>'+costCell(t.cogs, t.lines)+'</span></div>'
       + '<div class="rt-line"><span>Money out</span><span>'+costCell(t.out, true)+'</span></div>'
       + '<div class="rt-line"><span>'+wageLine+'</span><span>-'+money(t.wages)+'</span></div>'
@@ -5000,7 +5062,7 @@ window.openActiveRun = function() {
       + '<div class="rt-line" style="border-bottom:0"><span><b>Profit</b></span><span><b class="'+(t.best>=0?'rt-good':'rt-bad')+'">'+money(t.best)+'</b></span></div>'
       + '<div class="rt-note">The bar is '+money((t.oh+t.wages)/Math.max(t.cal,1))+' a day — rent plus wages — before a single sale. '
         + (t.mins ? 'Logged work: '+(t.mins/60).toFixed(1)+' h. ' : 'No hours logged for this period yet — tell any Forge session when a job starts and finishes and it lands here. ')
-        + 'GST '+money(t.gst)+' and tips '+money(t.tips)+' were charged on top and are NOT in the number above: the tax is the government\u2019s and the tips are not the business\u2019s to keep.</div>';
+        + 'Tips of '+money(t.tips)+' are IN the number above \u2014 the owners keep them, so they are income. GST of '+money(t.gst)+' is not: that one belongs to the government.</div>';
     if(outs && outs.length){
       h += '<div class="rt-sec">Where the money went</div>'
         + outs.map(function(o){ return '<div class="rt-line"><span>'+esc(o.paid_to||o.category||'—')+(o.what?' · '+esc(o.what):'')+'</span><span>-'+money(o.amount_cad)+'</span></div>'; }).join('');
@@ -5252,7 +5314,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 /* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
    nothing pretends to be live until phase 3 moves the real tab in. */
 const LANES = [
-  ['dashboard','DASHBOARD','The business at a glance — the year in money.','LIVE 2026-08-12: reads az_day_money over every calendar day; revenue excludes GST and tips, and the sides of the shop are split by what sold. WHERE the money came from lives here; WHAT sold lives in Retail \u2192 Till. Static section below; buildShell skips it.'],
+  ['dashboard','DASHBOARD','Where we stand right now — what needs you today.','LIVE 2026-08-12: the STATE, not the record. Today/week/month against the daily bar, the bench, the next two weeks of calendar. Days, weeks, months, the year and what sold all live in Retail \u2192 Till and must never be duplicated here. Static section below; buildShell skips it.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','LIVE — ported 2026-08-05 (port 6/6, string complete). Static section below; buildShell skips it.'],
   ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
