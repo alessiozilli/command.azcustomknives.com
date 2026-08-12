@@ -4379,7 +4379,7 @@ window.openActiveRun = function() {
     { k:'service',  label:'Service — the bench'   },
     { k:'courses',  label:'Courses'               },
     { k:'supplies', label:'Supplies'              },
-    { k:'other',    label:'Uncategorised'         }
+    { k:'other',    label:'Not a sale — gift cards, untitled amounts' }
   ];
   function el(id){ return document.getElementById(id); }
   function money(v){ var n=Number(v||0); return (n<0?'-$':'$') + Math.abs(n).toFixed(2); }
@@ -4714,7 +4714,7 @@ window.openActiveRun = function() {
     { k:'service',  label:'Service',  line:'the bench'      },
     { k:'courses',  label:'Courses',  line:'courses'        },
     { k:'supplies', label:'Supplies', line:'supplies'       },
-    { k:'other',    label:'Other',    line:'uncategorised'  }
+    { k:'other',    label:'Not a sale', line:'gift cards and untitled amounts' }
   ];
   function rollup(rows){
     var a = rows.reduce(function(a, r){
@@ -4725,6 +4725,8 @@ window.openActiveRun = function() {
       DIVS.forEach(function(d){ a[d.k] += Number(r[d.k+'_rang']||0); });
       a.cogs   += Number(r.direct_cost||0);
       a.rcost  += Number(r.retail_cost||0);
+      a.costed += Number(r.items_costed||0);
+      a.lines  += Number(r.items_total||0);
       a.out    += Number(r.cash_out||0);
       a.oh     += Number(r.overhead||0);
       a.wages  += Number(r.wages||0);
@@ -4734,11 +4736,17 @@ window.openActiveRun = function() {
       a.best   += Number(r.true_profit||0);
       return a;
     }, { cal:0, sold:0, orders:0, all:0, retail:0, service:0, courses:0, supplies:0,
-         other:0, cogs:0, rcost:0, out:0, oh:0, wages:0, mins:0, gst:0, tips:0, best:0 });
+         other:0, cogs:0, rcost:0, costed:0, lines:0, out:0, oh:0, wages:0, mins:0,
+         gst:0, tips:0, best:0 });
     /* .rang is whatever the chosen pill is looking at; .all is always the whole shop. */
     a.rang = S.division === 'all' ? a.all : a[S.division];
     return a;
   }
+
+  /* A row's takings for whichever pill is on. Used everywhere a "best day" or a
+     "did this period sell anything" question is asked, so a Courses view never
+     quotes a whole-shop figure. */
+  function dv(r){ return S.division === 'all' ? Number(r.rang||0) : Number(r[S.division+'_rang']||0); }
 
   window.rtDivision = function(btn){
     document.querySelectorAll('[data-lane="retail"] .rt-chip[data-div]').forEach(function(b){ b.classList.toggle('on', b===btn); });
@@ -4787,7 +4795,9 @@ window.openActiveRun = function() {
        computed from the calendar days inside the periods that do show, and the year
        row counts all 213 days whether they rang or not. Hiding a $0 row is honest;
        hiding its cost would not be. */
-    order = order.filter(function(k){ return groups[k].some(function(r){ return r.rang_today; }); });
+    order = order.filter(function(k){
+      return groups[k].some(function(r){ return S.division==='all' ? r.rang_today : dv(r) > 0; });
+    });
     S.groups = groups; S.order = order;
     if(!S.tillDay || order.indexOf(S.tillDay) === -1) S.tillDay = order[0];
 
@@ -4846,13 +4856,15 @@ window.openActiveRun = function() {
       var h = '<div class="rt-big">'+money(t.rang)+'</div>'
         + '<div class="rt-sub">'+esc(day(S.tillDay))+' · '+t.orders+(t.orders===1?' order':' orders')+'</div>';
       if(S.division==='all' && t.retail > 0){
-        var pct = t.retail > 0 ? Math.round((t.retail - t.rcost) / t.retail * 100) : null;
         h += '<div class="rt-sec">What the counter made</div>'
-          + '<div class="rt-line"><span>Sold</span><span>'+money(t.retail)+'</span></div>'
-          + '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(t.rcost)+'</span></div>'
-          + '<div class="rt-line"><span><b>Left on the counter</b></span><span><b>'+money(t.retail - t.rcost)+(pct!==null?' · '+pct+'%':'')+'</b></span></div>';
-        if(m && m.items_total > 0 && m.items_costed < m.items_total){
-          h += '<div class="rt-note">Costed '+m.items_costed+' of '+m.items_total+' lines. The rest are not on the retail shelf, so their cost is left out rather than guessed — the real margin is no better than this.</div>';
+          + '<div class="rt-line"'+(t.costed?'':' style="border-bottom:0"')+'><span>Sold</span><span>'+money(t.retail)+'</span></div>';
+        if(t.costed > 0){
+          var pct = Math.round((t.retail - t.rcost) / t.retail * 100);
+          h += '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(t.rcost)+'</span></div>'
+            +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.retail - t.rcost)+' · '+pct+'%</b></span></div>'
+            +  '<div class="rt-note">Costed '+t.costed+' of '+t.lines+' lines. The rest are not on the retail shelf, so their cost is left out rather than guessed — the real margin is no better than this.</div>';
+        } else {
+          h += '<div class="rt-note">'+NO_COST+'</div>';
         }
       }
       h += rtStack(t, outs, 'day') + rtBasket(basket);
@@ -4863,7 +4875,11 @@ window.openActiveRun = function() {
   /* Every line that sold, tagged with the side of the shop it belongs to — so a
      Shun santoku on the service register still reads Retail, and he can see WHY a
      sale landed where it did instead of taking my word for it. */
-  var DIV_LABEL = { retail:'retail', service:'service', courses:'course', supplies:'supplies', other:'?' };
+  var DIV_LABEL = { retail:'retail', service:'service', courses:'course', supplies:'supplies', other:'not a sale' };
+  /* A blank cost is not a 100% margin. Say what is actually true: the shelf in
+     az_retail_inventory only carries the Wuben stock so far, so nothing else that
+     sells has a cost on record and no margin can be shown for it. */
+  var NO_COST = 'No margin shown: none of these lines has a cost on record. The shelf only carries the Wuben stock so far — the rest of what sells has never been costed, and a guess would be worse than a blank.';
   function rtBasket(rows){
     rows = (rows||[]).filter(function(r){ return S.division==='all' || r.division===S.division; });
     if(!rows.length){
@@ -4884,9 +4900,11 @@ window.openActiveRun = function() {
       var dv = DIVS.filter(function(d){ return d.k===S.division; })[0] || DIVS[0];
       var h2 = '<div class="rt-sec">'+esc(dv.label)+'</div>'
         + '<div class="rt-line"><span>Sold</span><span>'+money(t.rang)+'</span></div>';
-      if(S.division==='retail'){
+      if(S.division==='retail' && t.costed > 0){
         h2 += '<div class="rt-line"><span>What those goods cost us</span><span>-'+money(t.rcost)+'</span></div>'
            +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.rang - t.rcost)+'</b></span></div>';
+      } else if(S.division==='retail'){
+        h2 += '<div class="rt-note">'+NO_COST+'</div>';
       }
       return h2 + '<div class="rt-note">One side of the shop on its own. Rent, wages and profit are not shown here: '
         + money(t.cal ? (t.oh+t.wages)/t.cal : 0) + ' a day of rent and wages belongs to the whole business, and nobody has set a rule for splitting it between the sides. Switch to Whole shop for the bottom line.</div>';
@@ -4948,8 +4966,8 @@ window.openActiveRun = function() {
   async function rtPaintPeriod(){
     var box = el('rt-till-detail'); if(!box) return;
     var grain = S.grain, rows = S.groups[S.tillDay] || [], t = rollup(rows);
-    var sold = rows.filter(function(r){ return r.rang_today; });
-    var best = sold.slice().sort(function(a,b){ return Number(b.rang)-Number(a.rang); })[0];
+    var sold = rows.filter(function(r){ return S.division==='all' ? r.rang_today : dv(r) > 0; });
+    var best = sold.slice().sort(function(a,b){ return dv(b)-dv(a); })[0];
     /* Inside a year show its months; inside a week or month show its days. */
     var inner = grain === 'year' ? 'month' : 'day';
     var sub = {}, subOrder = [];
@@ -4960,20 +4978,22 @@ window.openActiveRun = function() {
     });
 
     box.innerHTML = '<div class="rt-big">'+money(t.rang)+'</div>'
-      + '<div class="rt-sub">'+esc(periodName(S.tillDay, grain))+' · '+t.sold+' selling day'+(t.sold===1?'':'s')+' of '+t.cal+' · '+t.orders+' orders</div>'
+      + '<div class="rt-sub">'+esc(periodName(S.tillDay, grain))+' · '+sold.length+' selling day'+(sold.length===1?'':'s')+' of '+t.cal+(S.division==='all'?' · '+t.orders+' orders':'')+'</div>'
       + rtStack(t, null, grain)
-      + (best ? '<div class="rt-note">Best day was '+esc(day(best.day))+' at '+money(best.rang)+'. Across the '+t.sold+' selling day'+(t.sold===1?'':'s')+' that averages '+money(t.rang/Math.max(t.sold,1))+'.</div>' : '')
+      + (best ? '<div class="rt-note">Best day was '+esc(day(best.day))+' at '+money(dv(best))+'. Across the '+sold.length+' selling day'+(sold.length===1?'':'s')+' that averages '+money(t.rang/Math.max(sold.length,1))+'.</div>' : '')
       + '<div class="rt-sec">'+(inner==='month'?'Month by month':'Day by day')+'</div>'
       + subOrder.map(function(k){
           var s2 = rollup(sub[k]);
-          if(inner === 'month' && s2.sold === 0) return '';
+          if(s2.rang === 0) return '';                 // nothing sold on this side
           var tail = S.division === 'all'
             ? ' <span class="'+(s2.best>=0?'rt-good':'rt-bad')+'">'+money(s2.best)+'</span>' : '';
           return '<div class="rt-line"><span>'+esc(periodName(k, inner))
             + (inner==='month' ? ' · '+s2.sold+' day'+(s2.sold===1?'':'s') : ' · '+s2.orders+(s2.orders===1?' order':' orders'))+'</span>'
             + '<span>'+money(s2.rang)+tail+'</span></div>';
         }).join('')
-      + '<div class="rt-note">Profit = what we kept, minus cost of goods, minus wages, minus rent. Wages are charged every day because the shop is staffed every day, logged job or not. Quiet days carry both costs — that is why the header says '+t.sold+' of '+t.cal+'.</div>';
+      + (S.division === 'all'
+          ? '<div class="rt-note">Profit = what we kept, minus cost of goods, minus wages, minus rent. Wages are charged every day because the shop is staffed every day, logged job or not. Quiet days carry both costs — that is why the header says '+t.sold+' of '+t.cal+'.</div>'
+          : '');
 
     /* the basket for the whole period, loaded after the arithmetic is on screen */
     rtPeriodBasket().then(function(b){
@@ -5156,7 +5176,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 /* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
    nothing pretends to be live until phase 3 moves the real tab in. */
 const LANES = [
-  ['dashboard','DASHBOARD','The business at a glance — the year in money.','LIVE 2026-08-12: reads az_day_money over every calendar day. Static section below; buildShell skips it.'],
+  ['dashboard','DASHBOARD','The business at a glance — the year in money.','LIVE 2026-08-12: reads az_day_money over every calendar day; revenue excludes GST and tips, and the sides of the shop are split by what sold. WHERE the money came from lives here; WHAT sold lives in Retail \u2192 Till. Static section below; buildShell skips it.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','LIVE — ported 2026-08-05 (port 6/6, string complete). Static section below; buildShell skips it.'],
   ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
