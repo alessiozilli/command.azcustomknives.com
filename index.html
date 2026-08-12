@@ -4368,7 +4368,7 @@ window.openActiveRun = function() {
    Reads az_day_money — the view that does the workbook's DAY arithmetic over every
    CALENDAR day, so a quiet Sunday still carries its rent. Nothing here is stored;
    it is all computed from Square, the retail shelf costs and az_money_out at read
-   time. "Best case" is the honest name: labour is not in it yet. ═══ */
+   time. Wages and rent are both charged on every calendar day. ═══ */
 (function(){
   'use strict';
   var D = { days: [], month: null };
@@ -4389,7 +4389,7 @@ window.openActiveRun = function() {
     if(!list || !window.supa) return;
     try{
       var r = await window.supa.from('az_day_money')
-        .select('day,rang,retail_rang,service_rang,orders,direct_cost,cash_out,spend_lines,overhead,true_profit,rang_today')
+        .select('day,rang,retail_rang,service_rang,orders,direct_cost,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
         .order('day', { ascending: false }).limit(500);
       if(r.error) throw r.error;
       D.days = r.data || [];
@@ -4397,13 +4397,15 @@ window.openActiveRun = function() {
       var months = {};
       D.days.forEach(function(d){
         var k = mKey(d.day);
-        var m = months[k] || (months[k] = { k:k, cal:0, sold:0, orders:0, rang:0, cogs:0, out:0, oh:0, best:0 });
+        var m = months[k] || (months[k] = { k:k, cal:0, sold:0, orders:0, rang:0, cogs:0, out:0, oh:0, wages:0, mins:0, best:0 });
         m.cal++; if(d.rang_today) m.sold++;
         m.orders += Number(d.orders||0);
         m.rang   += Number(d.rang||0);
         m.cogs   += Number(d.direct_cost||0);
         m.out    += Number(d.cash_out||0);
         m.oh     += Number(d.overhead||0);
+        m.wages  += Number(d.wages||0);
+        m.mins   += Number(d.logged_minutes||0);
         m.best   += Number(d.true_profit||0);
       });
       D.months = months;
@@ -4441,16 +4443,17 @@ window.openActiveRun = function() {
       + '<div class="db-line"><span>Rang</span><span>'+money(m.rang)+'</span></div>'
       + '<div class="db-line"><span>Cost of goods sold</span><span>-'+money(m.cogs)+'</span></div>'
       + '<div class="db-line"><span>Money out</span><span>-'+money(m.out)+'</span></div>'
-      + '<div class="db-line"><span>Overhead — '+m.cal+' days of rent</span><span>-'+money(m.oh)+'</span></div>'
-      + '<div class="db-line" style="border-bottom:0"><span><b>Best case</b></span><span class="'+(m.best>=0?'good':'bad')+'"><b>'+money(m.best)+'</b></span></div>'
-      + (best ? '<div class="db-note">Best day was '+esc(dName(best.day))+' at '+money(best.rang)+'. Average across the '+m.sold+' selling day'+(m.sold===1?'':'s')+': '+money(m.rang/Math.max(m.sold,1))+'. Rent alone costs '+money(m.oh/m.cal)+' a day, so a day under that loses money before anything else is counted.</div>' : '')
+      + '<div class="db-line"><span>Wages — '+m.cal+' days</span><span>-'+money(m.wages)+'</span></div>'
+      + '<div class="db-line"><span>Rent — '+m.cal+' days</span><span>-'+money(m.oh)+'</span></div>'
+      + '<div class="db-line" style="border-bottom:0"><span><b>Profit</b></span><span class="'+(m.best>=0?'good':'bad')+'"><b>'+money(m.best)+'</b></span></div>'
+      + (best ? '<div class="db-note">Best day was '+esc(dName(best.day))+' at '+money(best.rang)+'. Average across the '+m.sold+' selling day'+(m.sold===1?'':'s')+': '+money(m.rang/Math.max(m.sold,1))+'. Rent and wages together cost '+money((m.oh+m.wages)/m.cal)+' a day, so anything under that loses money before a single other cost. '+(m.mins?('Logged work: '+(m.mins/60).toFixed(1)+' h.'):'No hours logged this month yet.')+'</div>' : '')
       + '<div class="db-sec">Day by day</div>'
       + sold.map(function(d){
           var p = Number(d.true_profit);
           return '<div class="db-line"><span>'+esc(dName(d.day))+' · '+d.orders+(Number(d.orders)===1?' order':' orders')+'</span>'
             + '<span>'+money(d.rang)+' <span class="'+(p>=0?'good':'bad')+'">'+money(p)+'</span></span></div>';
         }).join('')
-      + '<div class="db-note">Best case = rang minus cost of goods, minus labour, minus rent. Labour is still zero in it because nobody logs minutes against a sale, so the real month cannot be better than this — only worse. Quiet days carry rent too; that is why the day count above says '+m.sold+' of '+m.cal+'.</div>';
+      + '<div class="db-note">Profit = rang minus cost of goods, minus wages, minus rent. Wages are charged on every calendar day because the shop is staffed whether it sells or not — that was missing until 2026-08-12 and made every month read better than it was. Quiet days carry both costs; that is why the count says '+m.sold+' of '+m.cal+'.</div>';
   }
 
   async function dbLoadBus(){
@@ -4687,9 +4690,11 @@ window.openActiveRun = function() {
       a.cogs   += Number(r.direct_cost||0);
       a.out    += Number(r.cash_out||0);
       a.oh     += Number(r.overhead||0);
+      a.wages  += Number(r.wages||0);
+      a.mins   += Number(r.logged_minutes||0);
       a.best   += Number(r.true_profit||0);
       return a;
-    }, { cal:0, sold:0, orders:0, rang:0, retail:0, service:0, cogs:0, out:0, oh:0, best:0 });
+    }, { cal:0, sold:0, orders:0, rang:0, retail:0, service:0, cogs:0, out:0, oh:0, wages:0, mins:0, best:0 });
   }
 
   window.rtDivision = function(btn){
@@ -4713,7 +4718,7 @@ window.openActiveRun = function() {
       /* EVERY calendar day, not only the ones that rang — the quiet days carry
          the rent that makes a week or a month honest. */
       var r = await window.supa.from('az_day_money')
-        .select('day,rang,retail_rang,service_rang,orders,direct_cost,items_costed,items_total,cash_out,spend_lines,overhead,true_profit,rang_today')
+        .select('day,rang,retail_rang,service_rang,orders,direct_cost,items_costed,items_total,cash_out,spend_lines,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
         .order('day',{ascending:false}).limit(500);
       if(r.error) throw r.error;
       S.all = r.data || [];
@@ -4756,7 +4761,7 @@ window.openActiveRun = function() {
       var sub = grain === 'day'
         ? t.orders + (t.orders===1?' order':' orders') + (t.retail>0 ? ' <span class="rt-tag">retail '+money(t.retail)+'</span>' : '')
         : t.sold + ' selling day' + (t.sold===1?'':'s') + ' of ' + t.cal + ' · ' + t.orders + ' orders';
-      /* Best case is a WHOLE-SHOP number — it has the rent in it. Showing it beside a
+      /* Profit is a WHOLE-SHOP number — it has rent and wages in it. Showing it beside a
          single division's takings would read as that division's profit, which it is
          not. On a division view the row shows what that till rang, and nothing else. */
       var bottom = S.division === 'all'
@@ -4845,19 +4850,23 @@ window.openActiveRun = function() {
         h2 += '<div class="rt-line"><span>Cost of goods sold</span><span>-'+money(t.cogs)+'</span></div>'
            +  '<div class="rt-line" style="border-bottom:0"><span><b>Left on the counter</b></span><span><b>'+money(t.rang - t.cogs)+'</b></span></div>';
       }
-      return h2 + '<div class="rt-note">One division on its own. Rent and best case are not shown here: $'
-        + (t.cal ? (t.oh/t.cal).toFixed(2) : '0.00') + ' a day of overhead belongs to the whole business, and nobody has set a rule for splitting it between the two. Switch to Whole shop for the honest bottom line.</div>';
+      return h2 + '<div class="rt-note">One division on its own. Rent, wages and profit are not shown here: $'
+        + (t.cal ? ((t.oh+t.wages)/t.cal).toFixed(2) : '0.00') + ' a day of rent and wages belongs to the whole business, and nobody has set a rule for splitting it between the divisions. Switch to Whole shop for the bottom line.</div>';
     }
-    var rentLine = grain === 'day' ? 'Overhead — rent never sleeps'
-                 : 'Overhead — ' + t.cal + ' days of rent';
-    var h = '<div class="rt-sec">'+(grain==='day'?'The whole day, honestly':'Honestly')+'</div>'
+    var oneDay = grain === 'day';
+    var rentLine = oneDay ? 'Rent — it never sleeps'      : 'Rent — ' + t.cal + ' days';
+    var wageLine = oneDay ? 'Wages — the shop is staffed' : 'Wages — ' + t.cal + ' days';
+    var h = '<div class="rt-sec">'+(oneDay?'The whole day, honestly':'Honestly')+'</div>'
       + '<div class="rt-line"><span>Everything rang (both tills)</span><span>'+money(t.rang)+'</span></div>'
       + (t.retail > 0 ? '<div class="rt-line"><span>— of that, the counter</span><span>'+money(t.retail)+'</span></div>' : '')
       + (t.service > 0 ? '<div class="rt-line"><span>— of that, service side</span><span>'+money(t.service)+'</span></div>' : '')
       + '<div class="rt-line"><span>Cost of goods sold</span><span>-'+money(t.cogs)+'</span></div>'
       + '<div class="rt-line"><span>Money out</span><span>-'+money(t.out)+'</span></div>'
+      + '<div class="rt-line"><span>'+wageLine+'</span><span>-'+money(t.wages)+'</span></div>'
       + '<div class="rt-line"><span>'+rentLine+'</span><span>-'+money(t.oh)+'</span></div>'
-      + '<div class="rt-line" style="border-bottom:0"><span><b>Best case</b></span><span><b class="'+(t.best>=0?'rt-good':'rt-bad')+'">'+money(t.best)+'</b></span></div>';
+      + '<div class="rt-line" style="border-bottom:0"><span><b>Profit</b></span><span><b class="'+(t.best>=0?'rt-good':'rt-bad')+'">'+money(t.best)+'</b></span></div>'
+      + '<div class="rt-note">The bar is '+money((t.oh+t.wages)/Math.max(t.cal,1))+' a day — rent plus wages — before a single sale. '
+        + (t.mins ? 'Logged work: '+(t.mins/60).toFixed(1)+' h.' : 'No hours logged for this period yet — tell any Forge session when a job starts and finishes and it lands here.')+'</div>';
     if(outs && outs.length){
       h += '<div class="rt-sec">Where the money went</div>'
         + outs.map(function(o){ return '<div class="rt-line"><span>'+esc(o.paid_to||o.category||'—')+(o.what?' · '+esc(o.what):'')+'</span><span>-'+money(o.amount_cad)+'</span></div>'; }).join('');
@@ -4882,7 +4891,7 @@ window.openActiveRun = function() {
     box.innerHTML = '<div class="rt-big">'+money(t.rang)+'</div>'
       + '<div class="rt-sub">'+esc(periodName(S.tillDay, grain))+' · '+t.sold+' selling day'+(t.sold===1?'':'s')+' of '+t.cal+' · '+t.orders+' orders</div>'
       + rtStack(t, null, grain)
-      + (best ? '<div class="rt-note">Best day was '+esc(day(best.day))+' at '+money(best.rang)+'. Across the '+t.sold+' selling day'+(t.sold===1?'':'s')+' that averages '+money(t.rang/Math.max(t.sold,1))+'. Rent alone costs '+money(t.oh/Math.max(t.cal,1))+' a day, so anything under that loses money before a single other cost is counted.</div>' : '')
+      + (best ? '<div class="rt-note">Best day was '+esc(day(best.day))+' at '+money(best.rang)+'. Across the '+t.sold+' selling day'+(t.sold===1?'':'s')+' that averages '+money(t.rang/Math.max(t.sold,1))+'.</div>' : '')
       + '<div class="rt-sec">'+(inner==='month'?'Month by month':'Day by day')+'</div>'
       + subOrder.map(function(k){
           var s2 = rollup(sub[k]);
@@ -4893,7 +4902,7 @@ window.openActiveRun = function() {
             + (inner==='month' ? ' · '+s2.sold+' day'+(s2.sold===1?'':'s') : ' · '+s2.orders+(s2.orders===1?' order':' orders'))+'</span>'
             + '<span>'+money(s2.rang)+tail+'</span></div>';
         }).join('')
-      + '<div class="rt-note">Best case = rang minus cost of goods, minus labour, minus rent. Labour is still zero in it — nobody logs minutes against a sale — so the real figure cannot be better than this, only worse. Quiet days are counted in the rent above, which is why the header says '+t.sold+' of '+t.cal+'.</div>';
+      + '<div class="rt-note">Profit = rang minus cost of goods, minus wages, minus rent. Wages are charged every day because the shop is staffed every day, logged job or not. Quiet days carry both costs — that is why the header says '+t.sold+' of '+t.cal+'.</div>';
   }
 
   /* ── STOCK ───────────────────────────────────────────────────────────── */
