@@ -4378,7 +4378,20 @@ window.openActiveRun = function() {
      columns. A dashboard is the STATE: am I above the line today, what needs me,
      what is about to hurt. The RECORD — days, weeks, months, the year, what sold —
      lives next door in Retail -> Till and does not belong here twice. ═══ */
-  var D = { days: [], div: {}, items: [], pick: 'stand' };
+  var D = { days: [], divRows: [], items: [], pick: 'stand' };
+  /* The four sides of the shop plus the leftover bucket. He asked, in his words:
+     "I wanna know how much the service costs me, what the retail cost me, what the
+     courses cost me, what the supplies cost me" — so every one of these gets the
+     same cost stack the whole shop gets, not just a takings line. */
+  var SIDES = [
+    { k:'retail',   label:'Retail — the counter' },
+    { k:'service',  label:'Service — the bench'  },
+    { k:'courses',  label:'Courses'              },
+    { k:'supplies', label:'Supplies'             },
+    { k:'other',    label:'Not a sale'           }
+  ];
+  var SIDE_LABEL = {};
+  SIDES.forEach(function(x){ SIDE_LABEL[x.k] = x.label; });
   function el(id){ return document.getElementById(id); }
   function money(v){ var n=Number(v||0); return (n<0?'-$':'$') + Math.abs(n).toFixed(2); }
   function mKey(d){ return String(d).slice(0,7); }
@@ -4408,12 +4421,18 @@ window.openActiveRun = function() {
         window.supa.from('calendar_events')
           .select('id,summary,description,location,start_time,all_day,html_link')
           .gte('start_time', new Date(Date.now() - 14*3600e3).toISOString())
-          .order('start_time', { ascending: true }).limit(40)
+          .order('start_time', { ascending: true }).limit(40),
+        /* Each side of the shop with its OWN costs — the thing he keeps asking for. */
+        window.supa.from('az_day_division')
+          .select('day,division,rang,tips,cost_known,lines,lines_costed,rang_uncosted,share_of_revenue,overhead_share,wages_share,spend_share,profit')
+          .order('day', { ascending: false }).limit(2000)
       ]);
       if(q[0].error) throw q[0].error;
       D.days = q[0].data || [];
       D.jobs = (q[1].data || []);
       D.cal  = (q[2].data || []);
+      if(q[3].error) throw q[3].error;
+      D.divRows = q[3].data || [];
       buildNeeds();
       paintNeeds();
       dbPaintDetail();
@@ -4471,7 +4490,18 @@ window.openActiveRun = function() {
     var head = '<div class="db-row'+(D.pick==='stand'?' on':'')+'" data-k="stand" onclick="dbPick(this)">'
       + '<div class="db-row__main"><div class="db-row__name">Where we stand</div>'
       + '<div class="db-row__sub">today · this week · this month</div></div>'
-      + '<div class="db-row__val">'+standTail()+'</div></div>';
+      + '<div class="db-row__val">'+standTail()+'</div></div>'
+      /* Every side of the shop, with what it made and what it kept, one click from
+         its full cost stack. */
+      + SIDES.map(function(x){
+          var y = sideRoll(x.k, 'year');
+          if(!(y.sold > 0)) return '';
+          return '<div class="db-row'+(D.pick==='side:'+x.k?' on':'')+'" data-k="side:'+x.k+'" onclick="dbPick(this)">'
+            + '<div class="db-row__main"><div class="db-row__name">'+esc(x.label)+'</div>'
+            + '<div class="db-row__sub">what it made, what it cost, what it kept</div></div>'
+            + '<div class="db-row__val">'+money(y.sold)
+            + '<div class="'+(y.profit>=0?'good':'bad')+'">'+money(y.profit)+'</div></div></div>';
+        }).join('');
     box.innerHTML = head + (D.items.length
       ? D.items.map(function(x){
           return '<div class="db-row'+(D.pick===x.id?' on':'')+'" data-k="'+esc(x.id)+'" onclick="dbPick(this)">'
@@ -4507,6 +4537,31 @@ window.openActiveRun = function() {
       weekStart: weekStart, todayIso: today
     };
   }
+  /* One side of the shop over one period. Same arithmetic the whole shop gets. */
+  function sideRoll(side, period){
+    var today = iso(new Date()), mo = today.slice(0,7);
+    var wk = new Date(); wk.setDate(wk.getDate() - ((wk.getDay()+6)%7));
+    var from = period==='today' ? today
+             : period==='week'  ? iso(wk)
+             : period==='month' ? mo + '-01'
+             : today.slice(0,4) + '-01-01';
+    return (D.divRows||[]).reduce(function(a, r){
+      if(r.division !== side || r.day < from || r.day > today) return a;
+      a.sold   += Number(r.rang||0);
+      a.tips   += Number(r.tips||0);
+      a.cogs   += Number(r.cost_known||0);
+      a.wages  += Number(r.wages_share||0);
+      a.rent   += Number(r.overhead_share||0);
+      a.spend  += Number(r.spend_share||0);
+      a.profit += Number(r.profit||0);
+      a.lines  += Number(r.lines||0);
+      a.costed += Number(r.lines_costed||0);
+      a.uncost += Number(r.rang_uncosted||0);
+      a.share   = Number(r.share_of_revenue||a.share);
+      return a;
+    }, { sold:0, tips:0, cogs:0, wages:0, rent:0, spend:0, profit:0, lines:0, costed:0, uncost:0, share:0 });
+  }
+
   function standTail(){
     var s = standing(), t = s.today;
     return '<span class="'+(t.rang >= t.bar ? 'good' : 'bad')+'">'+money(t.rang)+'</span>';
@@ -4519,6 +4574,7 @@ window.openActiveRun = function() {
 
   function dbPaintDetail(){
     var box = el('db-detail'), head = el('db-detail-head'); if(!box) return;
+    if(String(D.pick).indexOf('side:') === 0) return paintSide(box, head, D.pick.slice(5));
     var it = D.items.filter(function(x){ return x.id === D.pick; })[0];
     if(D.pick !== 'stand' && it) return paintItem(box, head, it);
     if(head) head.textContent = 'Where we stand';
@@ -4539,6 +4595,50 @@ window.openActiveRun = function() {
       + '<div class="db-line"><span>Waiting on you — never answered</span><span>'+D.items.filter(function(x){return x.sub==='Never answered';}).length+'</span></div>'
       + '<div class="db-line"><span>In the shop</span><span>'+(D.jobs||[]).filter(function(j){return j.status==='in_shop';}).length+'</span></div>'
       + '<div class="db-line" style="border-bottom:0"><span>Needs you today</span><span>'+D.items.filter(function(x){return x.urg===0;}).length+'</span></div>';
+  }
+
+  /* WHAT THIS SIDE COSTS ME. Sold, cost of goods, its share of wages and rent,
+     everything it cost, what it kept — over the year and over today, this week
+     and this month. The same four periods the whole shop gets. */
+  function paintSide(box, head, side){
+    if(head) head.textContent = SIDE_LABEL[side] || side;
+    var y  = sideRoll(side, 'year');
+    var pc = Math.round((y.share||0) * 100);
+    var allIn = y.cogs + y.spend + y.wages + y.rent;
+    function costCell(v, anyLines){
+      return (Number(v) > 0 || !anyLines) ? '-'+money(v) : '<span style="color:var(--text-xs)">not recorded</span>';
+    }
+    var periods = [
+      ['Today','today'], ['This week','week'], ['This month','month'], ['The year','year']
+    ];
+    box.innerHTML = '<div class="db-big">'+money(y.sold)+'</div>'
+      + '<div class="db-sub">'+esc(SIDE_LABEL[side]||side)+' · sold this year'
+        + (y.tips>0 ? ' · includes '+money(y.tips)+' of tips it earned' : '')+'</div>'
+
+      + '<div class="db-sec">What it costs me — this year</div>'
+      + '<div class="db-line"><span>Cost of the goods it sold'
+        + (y.costed && y.costed < y.lines ? ' <span style="color:var(--text-xs)">('+y.costed+' of '+y.lines+' lines)</span>' : '')
+        + '</span><span>'+costCell(y.cogs, y.lines)+'</span></div>'
+      + (y.spend > 0 ? '<div class="db-line"><span>Money out — '+pc+'% share</span><span>-'+money(y.spend)+'</span></div>' : '')
+      + '<div class="db-line"><span>Wages — '+pc+'% share</span><span>-'+money(y.wages)+'</span></div>'
+      + '<div class="db-line"><span>Rent — '+pc+'% share</span><span>-'+money(y.rent)+'</span></div>'
+      + '<div class="db-line"><span><b>Everything it cost me</b></span><span><b>-'+money(allIn)+'</b></span></div>'
+      + '<div class="db-line" style="border-bottom:0"><span><b>What it kept</b></span><span class="'+(y.profit>=0?'good':'bad')+'"><b>'+money(y.profit)+'</b></span></div>'
+      + '<div class="db-note">This side brings in '+pc+'% of the money, so it carries '+pc+'% of the rent and wages — every calendar day, sold or not. '
+        + 'The sides add back to the whole shop exactly.</div>'
+      + (y.uncost > 0
+          ? '<div class="db-note">'+money(y.uncost)+' of what it sold has NO cost of goods on record, so the number above is kinder than the truth. Only the Wuben stock has a real unit cost on file.</div>'
+          : '')
+
+      + '<div class="db-sec">Over time</div>'
+      + periods.map(function(pr){
+          var r = sideRoll(side, pr[1]);
+          if(!(r.sold > 0) && pr[1] !== 'year') return '<div class="db-line"><span>'+pr[0]+'</span><span style="color:var(--text-xs)">nothing sold</span></div>';
+          return '<div class="db-line"><span>'+pr[0]+'</span><span>'+money(r.sold)
+            + ' · cost -'+money(r.cogs + r.spend + r.wages + r.rent)
+            + ' <span class="'+(r.profit>=0?'good':'bad')+'">'+money(r.profit)+'</span></span></div>';
+        }).join('')
+      + '<div class="db-note">What actually sold, line by line, is in Retail → Till with this same side selected.</div>';
   }
 
   function paintItem(box, head, it){
