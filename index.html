@@ -777,6 +777,12 @@ window.renderKeyPartners = function() {
       </div>
       </div>
     </div>
+    <div class="cc-subpane" data-subtab="email">
+      <!-- The email studio moved here from Reanna's face in the 2026-08-12 slim
+           (her Email tab retired; business email lives on the business face). -->
+      <style>[data-lane="comms"] .cc-email-frame{display:block;width:100%;height:calc(100vh - 220px);min-height:480px;border:1px solid var(--border);background:#fff}</style>
+      <iframe class="cc-email-frame" src="assets/email/email-studio.html?theme=dark" title="AZCK Email Studio" loading="lazy" onload="try{this.contentWindow.postMessage({type:'theme',theme:'dark'},'*')}catch(e){}"></iframe>
+    </div>
     <script>
 window.sendBusDispatch = async function() {
   const ta = document.getElementById('co-bus-input');
@@ -4298,6 +4304,97 @@ window.openActiveRun = function() {
 };
     </script>
   </section>
+
+  <section class="lane faces-tokens cc-lane" id="lane-retail" data-lane="retail">
+    <style>
+      [data-lane="retail"] .ret-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; align-items:start; }
+      [data-lane="retail"] .ret-num { font-family:var(--mono); font-size:22px; color:var(--amber); margin:4px 0 2px; }
+      [data-lane="retail"] .ret-row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-dim); }
+      [data-lane="retail"] .ret-row:last-child { border-bottom:0; }
+      [data-lane="retail"] .ret-chip { display:inline-block; padding:2px 8px; border:1px solid var(--border); border-radius:3px; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-right:6px; }
+      [data-lane="retail"] .ret-chip.rush { border-color:var(--amber); color:var(--amber); }
+      [data-lane="retail"] .ret-note { font-size:11px; color:var(--text-xs); margin-top:8px; }
+      [data-lane="retail"] table { width:100%; border-collapse:collapse; font-size:12px; }
+      [data-lane="retail"] th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-xs); padding:4px 6px; border-bottom:1px solid var(--border); }
+      [data-lane="retail"] td { padding:5px 6px; border-bottom:1px solid var(--border); color:var(--text-dim); }
+    </style>
+    <div class="cc-lane__head">
+      <span class="cc-lane__bracket">[</span>
+      <span class="cc-lane__title">Retail</span>
+      <span class="cc-lane__bracket">]</span>
+      <span class="cc-lane__count" id="ret-count">…</span>
+    </div>
+    <div class="ret-grid">
+      <div class="cc-card">
+        <div class="cc-card__label">Till — retail division</div>
+        <div class="cc-card__title" id="ret-till-today">…</div>
+        <div class="cc-card__sub" id="ret-till-days">Loading…</div>
+        <div class="ret-note">Live from Square (square_sales_daily, location retail) — synced nightly on the beast.</div>
+      </div>
+      <div class="cc-card">
+        <div class="cc-card__label">Counter — open jobs</div>
+        <div class="cc-card__title" id="ret-queue-chips">…</div>
+        <div class="cc-card__sub" id="ret-queue-list">Loading…</div>
+        <button class="cc-card__btn" type="button" onclick="switchLane('services')">Full board → Services</button>
+      </div>
+      <div class="cc-card">
+        <div class="cc-card__label">Stock — retail shelf</div>
+        <div class="cc-card__sub" id="ret-inv">Loading…</div>
+        <div class="ret-note">Master ledger: AZCK_Money.xlsx INVENTORY tab · Square is the till truth this mirrors.</div>
+      </div>
+    </div>
+    <script>
+/* RETAIL lane (2026-08-12) — her side of the business. Three windows, zero copies:
+   till = square_sales_daily (location retail), counter = az_shop_queue (the view over
+   az_service_bookings), stock = az_retail_inventory (fills when the Square stock sync
+   lands — bus #4735). Reads run signed-in; RLS backs every table. */
+window.renderRetail = async function(){
+  const money = v => '$' + Number(v||0).toFixed(2);
+  const el = id => document.getElementById(id);
+  try{
+    const r = await window.supa.from('square_sales_daily')
+      .select('sale_date,orders,gross_dollars').eq('location','retail')
+      .order('sale_date',{ascending:false}).limit(14);
+    if(r.error) throw r.error;
+    const days = r.data||[];
+    const total = days.reduce((s,d)=>s+Number(d.gross_dollars||0),0);
+    el('ret-till-today').textContent = days.length
+      ? days[0].sale_date+' — '+money(days[0].gross_dollars)+' ('+days[0].orders+' order'+(days[0].orders===1?'':'s')+')'
+      : 'No retail sale days yet';
+    el('ret-till-days').innerHTML = days.length
+      ? '<div class="ret-num">'+money(total)+'</div><div class="ret-note">across the last '+days.length+' retail sale day'+(days.length===1?'':'s')+'</div>'
+        + days.slice(0,7).map(d=>'<div class="ret-row"><span>'+d.sale_date+'</span><span>'+d.orders+' · '+money(d.gross_dollars)+'</span></div>').join('')
+      : 'The till writes one row per sale day — quiet shelf so far.';
+  }catch(e){ el('ret-till-days').textContent = 'Till read failed: '+(e.message||e); }
+  try{
+    const q = await window.supa.from('az_shop_queue')
+      .select('customer_name,item_summary,quantity,promised_date,promised_time,rush,status,picked_up_at')
+      .in('status',['new','scheduled','in_shop','done'])
+      .order('promised_date',{ascending:true}).limit(30);
+    if(q.error) throw q.error;
+    const rows = q.data||[];
+    const open = rows.filter(x=>!(x.status==='done'&&x.picked_up_at));
+    const ready = rows.filter(x=>x.status==='done'&&!x.picked_up_at);
+    el('ret-count').textContent = open.length+' open';
+    el('ret-queue-chips').innerHTML =
+      '<span class="ret-chip">new '+rows.filter(x=>x.status==='new').length+'</span>'+
+      '<span class="ret-chip">in shop '+rows.filter(x=>x.status==='in_shop').length+'</span>'+
+      '<span class="ret-chip">ready '+ready.length+'</span>';
+    el('ret-queue-list').innerHTML = open.length
+      ? open.slice(0,8).map(x=>'<div class="ret-row"><span>'+esc(x.customer_name||'—')+' · '+esc(x.item_summary||'')+(x.quantity>1?' ×'+x.quantity:'')+'</span><span>'+(x.rush?'<span class="ret-chip rush">rush</span>':'')+esc(x.promised_date||'no date')+(x.promised_time?' '+esc(x.promised_time):'')+'</span></div>').join('')
+      : 'Counter is clear.';
+  }catch(e){ el('ret-queue-list').textContent = 'Queue read failed: '+(e.message||e); }
+  try{
+    const inv = await window.supa.from('az_retail_inventory')
+      .select('item,sku,qty,price_cad,updated_at').order('item');
+    if(inv.error) throw inv.error;
+    el('ret-inv').innerHTML = (inv.data||[]).length
+      ? '<table><tr><th>Item</th><th>Qty</th><th>Price</th></tr>'+inv.data.map(i=>'<tr><td>'+esc(i.item)+'</td><td>'+i.qty+'</td><td>'+(i.price_cad!=null?money(i.price_cad):'—')+'</td></tr>').join('')+'</table>'
+      : 'No stock rows yet — the Square stock sync is dispatched (bus #4735). This card fills itself when the first sync lands.';
+  }catch(e){ el('ret-inv').textContent = 'Stock read failed: '+(e.message||e); }
+};
+    </script>
+  </section>
   </main>
   <footer>AZ Custom Knives Ltd — one office. Truth lives in the database; this page is a window.</footer>
 </div>
@@ -4330,6 +4427,7 @@ const LANES = [
   ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
+  ['retail','RETAIL','Her side of the business — till, counter, stock.','LIVE 2026-08-12 — till + counter read the database; stock fills when the Square sync lands (bus #4735). Static section below; buildShell skips it.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
 
@@ -4379,6 +4477,9 @@ function switchLane(id){
     if((document.querySelector('#lane-shop .cc-subpane.active')||{dataset:{}}).dataset.subtab==='after-hours')
       setTimeout(()=>{ try{ window.renderShopAfterHours && window.renderShopAfterHours(); }catch(e){} }, 60);
   }
+  if(id==='retail'){
+    (function retry(n){ if(window.supa && window.renderRetail){ try{ window.renderRetail(); }catch(e){ console.warn('[retail] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
+  }
 }
 
 /* ── subnav: per-lane subtabs. Services first; later phase-3 lanes add rows here.
@@ -4401,6 +4502,7 @@ const SUBNAV = {
   comms: [
     { id:'bus',  label:'Bus'  },
     { id:'chat', label:'Chat' },
+    { id:'email', label:'Email' },
   ],
   services: [
     { id:'calendar', label:'Calendar' },
