@@ -37,7 +37,8 @@
     { sel: '.ht4',                 key: 'cc.ht.cols',   stack: 1100 }, // Shop > Heat Treat (steel | procs | phases | detail+bus)
     { sel: '.ah4',                 key: 'cc.ah.cols',   stack: 1100 }, // Shop > After-Hours (days | steps | viewer | bus)
     { sel: '.scx-3col',            key: 'cc.scx.cols'   }, // Services > Queue scheduling module (nav | job | bus) — 2026-08-08
-    { sel: '.svsc-3col',           key: 'cc.svsched.cols' } // Services > Schedule (hours | blocks | bus) — 2026-08-09
+    { sel: '.svsc-3col',           key: 'cc.svsched.cols' }, // Services > Schedule (hours | blocks | bus) — 2026-08-09
+    { sel: '.rt-3col',             key: 'cc.retail.cols' }  // Retail > Till/Counter/Stock (nav | info | bus) — 2026-08-12; all three subtabs share one width memory
   ];
 
   var DEFAULT_STACK = 700;
