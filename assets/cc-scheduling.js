@@ -130,9 +130,15 @@
   ];
   const SVQ_ENG_PIECE  = 15;
   const SVQ_ENG_EXTRAS = [ { key:'engrush', label:'Rush order', cad:25, flag:true } ];
-  const SVQ_ENG_ITEMS = [
-    { key:'knife', label:'Knife' }, { key:'board', label:'Cutting board' },
-    { key:'sheath', label:'Sheath' }, { key:'other', label:'Other' } ];
+  /* What came in — ENGRAVING intake (Reanna, bus #4351 2026-08-08): the property
+     on the counter, separate from what kind of engraving it gets. Optional on
+     purpose — it labels the line, it never blocks the add. */
+  const SVQ_ENG_CAME = [
+    { key:'knife',  label:'Knife' },
+    { key:'board',  label:'Cutting board' },
+    { key:'sheath', label:'Sheath' },
+    { key:'other',  label:'Other' }
+  ];
   const SVQ_ALL_EXTRAS = SVQ_EXTRAS.concat(SVQ_ENG_EXTRAS);
   const SVQ_SHEATHS = {
     kydex:     { label:'Custom Kydex', variantLabel:'Option', variants: [
@@ -302,7 +308,7 @@
     tab: 'board', rows: null, claims: [], attendees: [], hours: [], gcal: [],
     sel: null, editing: null, busy: false, err: null, host: null, opts: {},
     // composer
-    formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, eitem:null,
+    formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null
   };
 
@@ -1100,14 +1106,16 @@
         }).join('');
       }
     } else if(mode === 'engraving'){
-      kl.textContent = 'What kind of engraving — price shown is the first piece';
+      /* What came in first, then the engraving options (Square's Engraving
+         variations, flattened to first-piece prices). Never the Size row —
+         both rows are engraving-only (Reanna, bus #4351). */
+      kl.textContent = 'What came in';
+      el('scx-kind').innerHTML = SVQ_ENG_CAME.map(c => chip('ecame:'+c.key, c.label, S.ecame===c.key)).join('');
+      vw.hidden = false;
+      el('scx-variant-lbl').textContent = 'What kind of engraving — price shown is the first piece';
       const eg = SVQ_ENGRAVING.find(x => x.key === S.ekind);
       ql.textContent = eg ? ('How many pieces — each after the first is $' + (eg.piece || SVQ_ENG_PIECE)) : 'How many pieces';
-      el('scx-kind').innerHTML = SVQ_ENGRAVING.map(g => chip('ekind:'+g.key, g.label, S.ekind===g.key, g.first)).join('');
-      /* the variant row doubles as "What came in" here — engraving has no variants (bus #4351) */
-      vw.hidden = false;
-      el('scx-variant-lbl').textContent = 'What came in';
-      el('scx-variant').innerHTML = SVQ_ENG_ITEMS.map(t => chip('eitem:'+t.key, t.label, S.eitem===t.key)).join('');
+      el('scx-variant').innerHTML = SVQ_ENGRAVING.map(g => chip('ekind:'+g.key, g.label, S.ekind===g.key, g.first)).join('');
       sw.hidden = true;
     } else {
       ql.textContent = 'How many';
@@ -1143,7 +1151,7 @@
   }
 
   function typeChanged(){
-    S.variant = null; S.size = null; S.ekind = null; S.eitem = null; S.qty = 1; S.addons = {};
+    S.variant = null; S.size = null; S.ekind = null; S.ecame = null; S.qty = 1; S.addons = {};
     const cat = SVQ_CATALOGS[scxType()];
     if(cat) S.kind = Object.keys(cat)[0];
     // classes are sessions by default; teambuilding course kind is an event
@@ -1157,12 +1165,12 @@
     if(mode === 'engraving'){
       if(!S.ekind){ alert('Pick what kind of engraving first.'); return; }
       const g = SVQ_ENGRAVING.find(x => x.key === S.ekind);
-      const it = SVQ_ENG_ITEMS.find(x => x.key === S.eitem);
       const cad = g.first + (S.qty - 1) * (g.piece || SVQ_ENG_PIECE);
-      S.lines.push({ kind:'engraving',
-                     label: S.qty+' × '+g.label.toLowerCase()+' engraving'+(it ? ' — '+it.label.toLowerCase() : ''),
+      const came = SVQ_ENG_CAME.find(c => c.key === S.ecame);
+      S.lines.push({ kind:'engraving', came: came ? came.key : null,
+                     label: S.qty+' × '+g.label.toLowerCase()+' engraving'+(came ? ' — '+came.label.toLowerCase() : ''),
                      qty:S.qty, unit_cad:g.first, line_cad:cad });
-      S.ekind = null; S.eitem = null; S.qty = 1; paintBuilder(); return;
+      S.ekind = null; S.ecame = null; S.qty = 1; paintBuilder(); return;
     }
     const manLbl = document.getElementById('scx-man-label');
     if(mode === 'manual' || (SVQ_MANUAL_TOO[scxType()] && manLbl && manLbl.value.trim())){
@@ -1273,7 +1281,7 @@
       }
     } catch(e){ unlock(); alert('Could not add it: '+(e && e.message || e)); return; }
     unlock();
-    Object.assign(S, { lines:[], extras:{}, size:null, qty:1, loc:null, formOpen:false, cWork:'job' });
+    Object.assign(S, { lines:[], extras:{}, size:null, qty:1, ekind:null, ecame:null, loc:null, formOpen:false, cWork:'job' });
     load();
   }
 
@@ -1377,7 +1385,7 @@
       const v = el.dataset.scxc, k = v.slice(0, v.indexOf(':')), val = v.slice(v.indexOf(':')+1);
       if(k==='kind'){ S.kind = val; S.variant = null; S.size = null; S.addons = {}; }
       else if(k==='ekind'){ S.ekind = (S.ekind===val ? null : val); }
-      else if(k==='eitem'){ S.eitem = (S.eitem===val ? null : val); }
+      else if(k==='ecame'){ S.ecame = (S.ecame===val ? null : val); }
       else if(k==='var'){ S.variant = (S.variant===val ? null : val); S.addons = {}; }
       else if(k==='ad'){
         const gi = val.indexOf(':'), gr = val.slice(0, gi), mk = val.slice(gi+1);
@@ -1432,7 +1440,8 @@
   window.CCScheduling = {
     mount: mount,
     refresh: load,
-    setTab: function(t){ S.tab = t; paint(); }
+    setTab: function(t){ S.tab = t; paint(); },
+    openForm: function(){ S.formOpen = true; paint(); }
   };
   // every face's existing lane-enter hook keeps working:
   window.renderQueue = function(){ if(S.host) load(); };
