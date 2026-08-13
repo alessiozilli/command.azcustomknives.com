@@ -576,9 +576,103 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
        Live source: public.contacts (RLS authenticated). KP_HIDE privacy rule rides inside
        kpFetchContacts. Sender identity comes from the session — never hardcoded. ════════ -->
   <section class="lane faces-tokens" id="lane-keypartners" data-lane="keypartners">
-    <div style="padding:4px 2px;height:calc(100vh - 210px);min-height:420px;display:flex;flex-direction:column;">
+    <div style="padding:4px 2px;height:calc(100vh - 210px);min-height:420px;display:flex;flex-direction:column;gap:10px;">
+      <!-- ADD PARTNER (2026-08-12, Reanna's ask on bus #4941). Twin of the azck-faces
+           block — edit both. contacts was authenticated-SELECT only, so the directory
+           was read-only for every signed-in human; RLS now allows insert/update. -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:0 0 auto;">
+        <button type="button" id="kp-add" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">+ Add partner</button>
+        <span id="kp-msg" style="margin-left:auto;font-size:11px;color:var(--ink-dim,#7a7a7a);"></span>
+      </div>
+      <div id="kp-form" style="display:none;flex:0 0 auto;border:1px solid var(--border,#2a2a2a);border-radius:6px;padding:12px;background:var(--raised,#1a1a1a);">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Name<input id="kp-f-name" type="text" placeholder="Jane Smith" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Company<input id="kp-f-org" type="text" placeholder="Acme Steel" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Their job<input id="kp-f-title" type="text" placeholder="Owner" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Which business<select id="kp-f-area" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"><option value="both">Both</option><option value="azck">AZCK</option><option value="quadfang">QuadFang</option></select></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">What they are to us<select id="kp-f-rel" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"><option value="supplier">Supplier</option><option value="partner">Partner</option><option value="referrer">Referrer</option><option value="advisor">Advisor</option><option value="gov_program">Government / program</option><option value="media">Media</option><option value="investor">Investor</option><option value="press">Press</option><option value="other" selected>Other</option></select></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Email<input id="kp-f-email" type="email" placeholder="jane@acme.com" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Phone<input id="kp-f-phone" type="tel" placeholder="780-555-0100" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+          <label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">Notes<input id="kp-f-notes" type="text" placeholder="Met at the Edmonton show" style="display:block;width:100%;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button type="button" id="kp-save" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Save</button>
+          <button type="button" id="kp-cancel" style="background:transparent;color:var(--ink-dim,#999);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Cancel</button>
+        </div>
+      </div>
       <div id="kp-mount" style="flex:1 1 auto;min-height:0;"><div style="padding:24px;color:var(--ink-dim);font-size:12px;">Loading partners…</div></div>
     </div>
+
+    <script>
+    // KEY PARTNERS — add a partner. Reanna's ask, bus #4941. Twin of the azck-faces
+    // block — edit both. Writes public.contacts directly (RLS: authenticated insert).
+    (function kpAddPartner(){
+      var el = function(id){ return document.getElementById(id); };
+      function msg(t, bad){
+        var m = el('kp-msg'); if (!m) return;
+        m.textContent = t || '';
+        m.style.color = bad ? '#f85149' : 'var(--ink-dim,#7a7a7a)';
+        if (t && !bad) setTimeout(function(){ if (m.textContent === t) m.textContent = ''; }, 4000);
+      }
+      function slugify(name){
+        return String(name).toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g,'')
+          .trim().replace(/[\s_]+/g,'-').replace(/-+/g,'-').slice(0,48) || 'partner';
+      }
+      function openForm(open){
+        var f = el('kp-form'); if (!f) return;
+        f.style.display = open ? 'block' : 'none';
+        if (open) { var n = el('kp-f-name'); if (n) n.focus(); }
+      }
+      function clearForm(){
+        ['kp-f-name','kp-f-org','kp-f-title','kp-f-email','kp-f-phone','kp-f-notes']
+          .forEach(function(id){ var i = el(id); if (i) i.value = ''; });
+      }
+      async function save(){
+        if (!window.supa) { msg('Not signed in yet — give it a second.', true); return; }
+        var name = (el('kp-f-name') || {}).value;
+        name = (name || '').trim();
+        if (!name) { msg('A name is the one thing I need.', true); var n = el('kp-f-name'); if (n) n.focus(); return; }
+        var base = slugify(name), slug = base;
+        var row = {
+          display_name: name,
+          organization: ((el('kp-f-org')||{}).value || '').trim() || null,
+          title: ((el('kp-f-title')||{}).value || '').trim() || null,
+          email: ((el('kp-f-email')||{}).value || '').trim() || null,
+          phone: ((el('kp-f-phone')||{}).value || '').trim() || null,
+          notes: ((el('kp-f-notes')||{}).value || '').trim() || null,
+          topic_area: (el('kp-f-area')||{}).value || 'both',
+          relationship_type: (el('kp-f-rel')||{}).value || 'other',
+          status: 'active'
+        };
+        msg('Saving…');
+        for (var i = 1; i <= 25; i++) {
+          row.slug = slug;
+          var r = await window.supa.from('contacts').insert(row);
+          if (!r.error) {
+            clearForm(); openForm(false); msg('Added ' + name + '.');
+            if (window.renderKeyPartners) window.renderKeyPartners();
+            return;
+          }
+          if (r.error.code === '23505') { slug = base + '-' + (i + 1); continue; }
+          msg('Could not save: ' + r.error.message, true);
+          return;
+        }
+        msg('Could not save: too many partners with that name.', true);
+      }
+      function boot(n){
+        var add = el('kp-add');
+        if (!add) { if ((n||0) < 60) setTimeout(function(){ boot((n||0)+1); }, 250); return; }
+        add.addEventListener('click', function(){
+          openForm(el('kp-form').style.display === 'none');
+        });
+        var c = el('kp-cancel'); if (c) c.addEventListener('click', function(){ clearForm(); openForm(false); msg(''); });
+        var s = el('kp-save');   if (s) s.addEventListener('click', save);
+        var f = el('kp-form');
+        if (f) f.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); save(); } });
+      }
+      boot(0);
+    })();
+    </script>
     <script>
 window.KP_BUSINESSES = [
   { id:'azck',     title:'AZCK',     sub:'AZ Custom Knives' },
