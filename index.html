@@ -263,6 +263,145 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
       <div id="cc-scheduling-host" data-default-tab="board"></div>
     </div>
 
+    <!-- ═══ TEXTS subpane — the pickup text, drafted for him, sent only by him.
+         Twin of the azck-faces copy - edit both. Marking a job done writes a DRAFT
+         (trigger trg_az_draft_pickup_sms). The sender drains ONLY approved rows;
+         Send is the one thing that flips draft -> approved. 2026-08-14. ═══ -->
+    <div class="cc-subpane" data-subtab="texts">
+      <div style="padding:var(--sp-12) var(--sp-16);display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span class="cc-subnav__hint" style="padding:0;">Marking a job done writes the text here. Nothing goes out until you press Send.</span>
+          <button type="button" class="cc-subtab" id="sms-refresh" style="margin-left:auto;">Refresh</button>
+        </div>
+        <div id="sms-msg" style="font-size:11px;color:var(--text-xs,#7a7a7a);min-height:14px;"></div>
+        <div id="sms-drafts"><div class="cc-stub">Loading…</div></div>
+      </div>
+    </div>
+
+    <script>
+    // TEXTS — draft in, Send out. Twin of the azck-faces block - edit both.
+    (function smsDrafts(){
+      var SEND_URL = 'https://twrlvnfszohyrmivdhre.supabase.co/functions/v1/client-sms/run';
+      var el = function(id){ return document.getElementById(id); };
+      var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+      function msg(t, bad){
+        var m = el('sms-msg'); if (!m) return;
+        m.textContent = t || '';
+        m.style.color = bad ? '#f85149' : 'var(--text-xs,#7a7a7a)';
+        if (t && !bad) setTimeout(function(){ if (m.textContent === t) m.textContent = ''; }, 6000);
+      }
+      function ago(ts){
+        if (!ts) return '';
+        var mins = Math.floor((Date.now() - new Date(ts).getTime())/60000);
+        if (mins < 60) return mins + ' min ago';
+        if (mins < 1440) return Math.floor(mins/60) + ' h ago';
+        return Math.floor(mins/1440) + ' d ago';
+      }
+
+      window.renderSmsDrafts = async function(){
+        var host = el('sms-drafts'); if (!host) return;
+        if (!window.supa) { host.innerHTML = '<div class="cc-stub">Waiting for sign-in…</div>'; return; }
+        var r = await window.supa.from('az_sms_log')
+          .select('id,to_name,to_phone,body,status,created_at,sent_at,error,booking_id')
+          .eq('direction','outbound').in('status',['draft','failed'])
+          .order('created_at', { ascending: false });
+        if (r.error) { host.innerHTML = '<div class="cc-stub" style="color:#f85149;">Could not load: ' + esc(r.error.message) + '</div>'; return; }
+        var rows = r.data || [];
+        if (!rows.length) { host.innerHTML = '<div class="cc-stub">Nothing waiting. Mark a job done and its text lands here.</div>'; return; }
+
+        host.innerHTML = rows.map(function(x){
+          var failed = x.status === 'failed';
+          return '<div style="border:1px solid ' + (failed ? '#f85149' : 'var(--border,#2a2a2a)') + ';border-radius:6px;padding:12px;margin-bottom:10px;background:var(--surface,#151515);">'
+            + '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px;">'
+            +   '<strong style="font-size:13px;color:var(--text,#fff);">' + esc(x.to_name || 'Unknown') + '</strong>'
+            +   '<span style="font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#7a7a7a);">' + esc(x.to_phone || '') + '</span>'
+            +   '<span style="font-size:10px;color:var(--text-xs,#7a7a7a);margin-left:auto;">' + esc(ago(x.created_at)) + '</span>'
+            + '</div>'
+            + (failed ? '<div style="font-size:11px;color:#f85149;margin-bottom:6px;">Last try failed: ' + esc(x.error || '') + '</div>' : '')
+            + '<textarea data-sms-body="' + esc(x.id) + '" rows="4" style="width:100%;box-sizing:border-box;background:var(--bg,#111);color:var(--text,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:8px;font-size:12.5px;line-height:1.5;font-family:inherit;resize:vertical;">' + esc(x.body) + '</textarea>'
+            + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'
+            +   '<button type="button" data-sms-send="' + esc(x.id) + '" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:7px 16px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Send</button>'
+            +   '<button type="button" data-sms-save="' + esc(x.id) + '" style="background:transparent;color:var(--text-dim,#999);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:7px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Save for later</button>'
+            +   '<button type="button" data-sms-drop="' + esc(x.id) + '" style="background:transparent;color:var(--text-xs,#7a7a7a);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:7px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Don\'t send</button>'
+            + '</div></div>';
+        }).join('');
+
+        host.querySelectorAll('[data-sms-save]').forEach(function(b){
+          b.addEventListener('click', function(){ saveBody(b.dataset.smsSave, true); });
+        });
+        host.querySelectorAll('[data-sms-drop]').forEach(function(b){
+          b.addEventListener('click', function(){ drop(b.dataset.smsDrop); });
+        });
+        host.querySelectorAll('[data-sms-send]').forEach(function(b){
+          b.addEventListener('click', function(){ send(b.dataset.smsSend, b); });
+        });
+      };
+
+      function bodyOf(id){
+        var t = document.querySelector('[data-sms-body="' + id + '"]');
+        return t ? t.value.trim() : '';
+      }
+
+      async function saveBody(id, tell){
+        var body = bodyOf(id);
+        if (!body) { msg('There is nothing written to save.', true); return false; }
+        var r = await window.supa.from('az_sms_log').update({ body: body }).eq('id', id);
+        if (r.error) { msg('Could not save: ' + r.error.message, true); return false; }
+        if (tell) msg('Saved. It still has not gone anywhere.');
+        return true;
+      }
+
+      async function drop(id){
+        if (!confirm('Throw this text away? The job stays done, the customer just does not get a message.')) return;
+        var r = await window.supa.from('az_sms_log').update({ status: 'cancelled', error: 'dropped by Alessio' }).eq('id', id);
+        if (r.error) { msg('Could not drop it: ' + r.error.message, true); return; }
+        msg('Dropped.');
+        window.renderSmsDrafts();
+      }
+
+      async function send(id, btn){
+        var body = bodyOf(id);
+        if (!body) { msg('There is nothing written to send.', true); return; }
+        if (body.indexOf('$____') !== -1 && !confirm('The total is still blank ($____). Send it anyway?')) return;
+        if (!confirm('This goes to their phone now:\n\n' + body + '\n\nSend it?')) return;
+
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          if (!(await saveBody(id, false))) { btn.disabled = false; btn.textContent = 'Send'; return; }
+          // The ONE line that arms it. Everything before this is reversible.
+          var up = await window.supa.from('az_sms_log')
+            .update({ status: 'approved', approved_by: 'alessio', approved_at: new Date().toISOString() }).eq('id', id);
+          if (up.error) throw new Error(up.error.message);
+
+          await fetch(SEND_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+
+          // Trust the row, not the call. Read back what actually happened.
+          await new Promise(function(r){ setTimeout(r, 1500); });
+          var chk = await window.supa.from('az_sms_log').select('status,error').eq('id', id).maybeSingle();
+          var st = chk.data ? chk.data.status : null;
+          if (st === 'sent')        msg('Sent.');
+          else if (st === 'failed') msg('It did not go through: ' + (chk.data.error || 'unknown'), true);
+          else                      msg('Handed to the sender, still going. Hit Refresh in a moment.');
+        } catch (e) {
+          msg('Could not send: ' + e.message, true);
+        }
+        btn.disabled = false; btn.textContent = 'Send';
+        window.renderSmsDrafts();
+      }
+
+      function boot(n){
+        var r = el('sms-refresh');
+        if (!r) { if ((n||0) < 60) setTimeout(function(){ boot((n||0)+1); }, 250); return; }
+        r.addEventListener('click', function(){ window.renderSmsDrafts(); });
+        setInterval(function(){
+          var pane = document.querySelector('.cc-subpane[data-subtab="texts"]');
+          if (pane && pane.classList.contains('active')) window.renderSmsDrafts();
+        }, 30000);
+      }
+      boot(0);
+    })();
+    </script>
+
     <!-- ═══ SCHEDULE subpane — weekly template + blocked time ═══ -->
     <div class="cc-subpane" data-subtab="schedule">
     <style>
@@ -4505,6 +4644,9 @@ const SUBNAV = {
     // old deep-links fall back cleanly.
     { id:'schedule', label:'Schedule' },
     { id:'queue',    label:'Queue'    },
+    // Texts (2026-08-14): marking a job done writes a DRAFT; nothing reaches a
+    // customer until Alessio presses Send. Twin of the azck-faces subpane.
+    { id:'texts',    label:'Texts'    },
   ],
 };
 function renderSubnav(lane){
@@ -4529,6 +4671,8 @@ function switchSubtab(lane,target){
   try{ localStorage.setItem('azck_command_subtab_'+lane,target); }catch(e){}
   try{ const want='#'+lane+'/'+target; if(location.hash!==want) history.replaceState(null,'',want); }catch(e){}
   if(lane==='services') svcRender(target);
+  if(lane==='services' && target==='texts' && window.renderSmsDrafts)
+    (function retry(n){ if(window.supa){ try{ window.renderSmsDrafts(); }catch(e){ console.warn('[texts] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   if(lane==='comms' && target==='bus' && window.renderBusRecent) window.renderBusRecent();
   if(lane==='shop' && target==='after-hours' && window.renderShopAfterHours)
     setTimeout(()=>{ try{ window.renderShopAfterHours(); }catch(e){ console.warn('[shop-ah] render failed',e); } }, 50);
