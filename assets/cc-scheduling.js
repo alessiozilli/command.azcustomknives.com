@@ -320,7 +320,7 @@
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null,
     // the pickup text — one row of az_sms_log per job, shown inside the job window
-    sms: [], smsMsg: null, smsBad: false, smsLater: null, smsWhen: null, smsForce: false
+    sms: [], smsMsg: null, smsBad: false, smsLater: null, smsWhen: null, smsForce: false, tick: null
   };
 
   const TABS = [
@@ -374,8 +374,19 @@
   }
 
   /* ══════════════ WRITES — timestamps, never status (two pass-throughs) ══ */
-  async function write(id, patch, okThen){
-    if(!window.supa || S.busy) return;
+  async function write(id, patch, okThen, onFail){
+    if(!window.supa) return;
+    /* NEVER DROP WORK SILENTLY (fixed 2026-08-15). This used to be a bare
+       `return` on S.busy. saveEdit clears S.editing BEFORE calling write, so a
+       busy bail threw the whole Edit form away — the corrected phone number
+       simply vanished, with no error and no repaint, because S.busy is held for
+       several seconds across a send (two updates, the Twilio round trip, a
+       1500ms settle and a poll). Say so instead. */
+    if(S.busy){
+      alert('Still finishing the last thing — give it a second and try again.');
+      if(onFail) onFail();
+      return;
+    }
     S.busy = true;
     let err = null;
     try { const r = await window.supa.from('az_service_bookings').update(patch).eq('id', id); err = r.error; }
@@ -386,6 +397,7 @@
       alert(m.indexOf('TIME_TAKEN') !== -1
         ? 'That time is already firmly booked — pick another slot, or make the other one tentative first.'
         : 'Could not save that: ' + m);
+      if(onFail) onFail();          // hand the form back rather than eat it
       return;
     }
     if(okThen) okThen();
@@ -551,6 +563,29 @@
       + '</div>'
       + '<div id="scx-body"></div>';
     host.addEventListener('click', function(e){ try{ onClick(e); }catch(err){ console.warn('[scheduling] click', err); } });
+
+    /* THE PANEL NEEDS ITS OWN CLOCK (2026-08-15).
+       "Going out today 4:15 PM" and its Call it back button were painted once
+       and never revisited. Leave the job window open across the armed moment
+       and the screen keeps offering to recall a text that has already reached
+       the customer. Every 30 seconds, if anything armed is on screen and he is
+       not mid-typing, go and ask the database what really happened. */
+    if(!S.tick){
+      S.tick = setInterval(function(){
+        if(S.busy || S.editing || S.formOpen) return;
+        if(document.hidden) return;
+        const armed = (S.sms || []).some(x => x.status === 'approved');
+        if(!armed) return;
+        const box = document.getElementById('scx-sms-body');
+        if(box && box.value !== (box.dataset.scxbase || '')) return;   // he is writing
+        load();
+      }, 30000);
+      /* coming back to the phone is the moment the screen is most likely stale */
+      document.addEventListener('visibilitychange', function(){
+        if(document.hidden || S.busy || S.editing) return;
+        if((S.sms || []).some(x => x.status === 'approved')) load();
+      });
+    }
     host.addEventListener('input', function(e){
       if(!e.target) return;
       if(e.target.id === 'scx-name') searchCustomers(e.target.value);
@@ -983,17 +1018,96 @@
   const SMS_SEND_URL = 'https://twrlvnfszohyrmivdhre.supabase.co/functions/v1/client-sms/run';
   const GST = 0.05;
 
-  /* the job's own money: priced lines first, the stored total behind them */
+  /* THE JOB'S MONEY — the exact mirror of az_job_money() in the database.
+     Corrected 2026-08-15 after an adversarial pass caught two ways this quoted
+     a customer the wrong number:
+
+     1. IT MULTIPLIED A TOTAL IT COULD NOT PROVE WAS PRE-TAX. Some total_cad
+        values are the pre-GST sum from intake (Randy: 104 -> 109.20, right).
+        Others were typed by hand ALREADY INCLUDING GST (Ralph: 86.10, whose own
+        note reads "$82 + GST = $86.10"). Multiplying Ralph quotes 90.41 for a
+        job he was already charged 86.10 for. Nothing on the row records which
+        kind it is, so the honest answer is: no lines, no number. A gap he can
+        see beats a figure he finds out about at the till.
+     2. IT COULD NOT READ HALF HIS HISTORY. Older jobs store lines as
+        {cad, item}, not {line_cad, label}. The old reduce saw 0 and fell through
+        to the untrustworthy total. Both shapes are read now.
+
+     And lines that already carry their own GST line (Shell's invoice does) are
+     FINAL — adding 5% on top double-taxes a three-thousand-dollar job. */
+  const TAXY = /(^|[^a-z])(gst|hst|pst|tax)([^a-z]|$)/i;
   function moneyOf(r){
-    let sub = null;
-    if(r.line_items && r.line_items.length){
-      sub = r.line_items.reduce((a,l) => a + (Number(l.line_cad) || 0), 0);
-    }
-    if(!(sub > 0) && r.total_cad != null) sub = Number(r.total_cad);
-    if(!(sub > 0)) return null;
-    return { sub: sub, gst: Math.round(sub * GST * 100) / 100, total: Math.round(sub * (1 + GST) * 100) / 100 };
+    const lines = (r && r.line_items && r.line_items.length) ? r.line_items : null;
+    if(!lines) return { known:false, onFile: (r && r.total_cad != null) ? Number(r.total_cad) : null,
+      why: (r && r.total_cad != null)
+        ? 'a price is on the job, but nothing records whether it already includes GST'
+        : 'no price on this job at all' };
+    let sub = 0, taxed = false;
+    lines.forEach(l => {
+      const v = (l.line_cad != null) ? Number(l.line_cad) : Number(l.cad);
+      if(isFinite(v)) sub += v;
+      if(l.incl_gst === true || TAXY.test(String(l.label || l.item || ''))) taxed = true;
+    });
+    if(!(sub > 0)) return { known:false, onFile: r.total_cad != null ? Number(r.total_cad) : null,
+      why: 'the lines on this job add up to nothing' };
+    const round2 = n => Math.round(n * 100) / 100;
+    return taxed
+      ? { known:true, sub: round2(sub), gst: 0, total: round2(sub), gstAdded:false }
+      : { known:true, sub: round2(sub), gst: round2(sub * GST), total: round2(sub * (1 + GST)), gstAdded:true };
   }
   function cad(n){ return '$' + Number(n).toFixed(2); }
+
+  /* why the text carries no total, in words he can act on */
+  function cannotPrice(m){
+    if(m.onFile != null)
+      return 'There is ' + cad(m.onFile) + ' on this job, but nothing says whether that already '
+        + 'includes GST — so I left the total out rather than quote the wrong one. '
+        + 'Tap Edit, retype the price and say which it is.';
+    return 'No price on this job, so the text carries no total. Tap Edit and put one in.';
+  }
+
+  /* ── DOES THE WRITTEN TEXT STILL MATCH THE JOB? ──
+     The body is frozen the moment it is drafted. The job keeps moving: the
+     knives get carried to the Blue Building, a phone number gets corrected, a
+     price gets fixed. Every one of those used to leave a text that reads
+     confidently and wrongly, with nothing on screen disagreeing. */
+  function bodyTotal(body){
+    const m = /Total is \$([0-9][0-9,]*\.?[0-9]*)/.exec(String(body || ''));
+    return m ? Number(m[1].replace(/,/g,'')) : null;
+  }
+  function digitsOf(p){ return String(p||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,''); }
+  function bodyPlace(body){
+    const s = String(body || '');
+    if(/Blue Building/i.test(s)) return 'Blue Building';
+    if(/9602 115 Street/i.test(s)) return 'Shop';
+    return null;
+  }
+  /* one red block listing every fact that has drifted since the words were written */
+  function driftWarn(r, row){
+    if(!row || !row.body) return '';
+    const out = [];
+
+    if(row.to_phone && r.customer_phone && digitsOf(row.to_phone) !== digitsOf(r.customer_phone))
+      out.push('It is addressed to ' + esc(row.to_phone) + ', but this job now says '
+             + esc(r.customer_phone) + '. Sending it would text the old number.');
+
+    const said = bodyTotal(row.body), m = moneyOf(r);
+    if(said != null && m.known && Math.abs(said - m.total) > 0.005)
+      out.push('It says ' + cad(said) + ', but the job now prices at ' + cad(m.total) + '.');
+    if(said != null && !m.known)
+      out.push('It says ' + cad(said) + ', but the job no longer has a price I can prove.');
+
+    const wrote = bodyPlace(row.body);
+    const here  = r.item_location === 'Blue Building' ? 'Blue Building'
+                : (r.item_location === 'Shop' || r.item_location === "Alessio's bench") ? 'Shop' : null;
+    if(wrote && here && wrote !== here)
+      out.push('It sends them to the ' + (wrote === 'Blue Building' ? 'Blue Building' : 'shop')
+             + ', but the knives are at the ' + (here === 'Blue Building' ? 'Blue Building' : 'shop') + ' now.');
+
+    if(!out.length) return '';
+    return '<div class="scx-sms__money bad">This text no longer matches the job.<br>'
+      + out.join('<br>') + '<br>Press <b>Write it again</b>, or fix the words yourself.</div>';
+  }
 
   /* ── THE TIMER (2026-08-14, "build it") ──
      A text can be armed for later. status='approved' is still the only armed
@@ -1083,9 +1197,12 @@
       + '</div>';
 
     /* the money, spelled out, so he never has to do the arithmetic himself */
-    const priced = m
-      ? '<div class="scx-sms__money">'+cad(m.sub)+' + '+cad(m.gst)+' GST = <b>'+cad(m.total)+'</b></div>'
-      : '<div class="scx-sms__money bad">No price on this job — tap Edit and add the lines, then Write the text again.</div>';
+    const priced = m.known
+      ? '<div class="scx-sms__money">'
+        + (m.gstAdded ? cad(m.sub)+' + '+cad(m.gst)+' GST = <b>'+cad(m.total)+'</b>'
+                      : '<b>'+cad(m.total)+'</b> — the lines already carry the tax')
+        + '</div>'
+      : '<div class="scx-sms__money bad">'+esc(cannotPrice(m))+'</div>';
 
     if(!r.customer_phone){
       return '<div class="scx-sms">'+head
@@ -1115,6 +1232,7 @@
           + '<div class="scx-sms__timer">⏱ Going out '+esc(whenWords(row.send_after))+'</div>'
           /* the words were true when he armed it — are they still true on arrival? */
           + staleWarn(row.body, row.send_after, row.approved_at || row.created_at)
+          + driftWarn(r, row)
           + '<div class="scx-acts">'
           +   '<button type="button" class="scx-act" data-scxsms="unschedule" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Call it back</button>'
           + '</div>'
@@ -1130,6 +1248,7 @@
     return '<div class="scx-sms">'+head
       + (row.status === 'failed' ? '<div class="scx-sms__money bad">'+esc(row.error||'It did not go through.')+'</div>' : '')
       + priced
+      + driftWarn(r, row)
       + '<textarea class="scx-sms__body" id="scx-sms-body" data-scxsmsid="'+row.id+'" data-scxbase="'+esc(row.body||'')+'" rows="5">'+esc(row.body||'')+'</textarea>'
       + '<div class="scx-sms__to">to '+esc(row.to_name||r.customer_name||'')+' · '+esc(row.to_phone||r.customer_phone||'')+'</div>'
       + '<div class="scx-acts">'
@@ -1177,14 +1296,25 @@
       S.smsMsg = null; paintDetail(); return;
     }
 
-    /* CALL IT BACK — the escape hatch. Straight to draft, clock cleared, and
-       because only 'approved' is armed the text has not gone anywhere. */
+    /* CALL IT BACK — the escape hatch.
+       GUARDED (2026-08-15). This panel has no clock of its own, so after the
+       armed moment passes the screen still shows "Going out today 4:15 PM" and
+       this button even though the text has already gone. Unguarded, tapping it
+       dragged a SENT row back to draft — the ledger then denied a message that
+       was on the customer's phone, and the obvious next tap sent it twice.
+       The update now only matches a row that is still armed and unsent, and we
+       READ BACK what it matched instead of announcing success. */
     if(what === 'unschedule'){
       S.busy = true;
       const up = await window.supa.from('az_sms_log')
-        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null }).eq('id', smsId);
+        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null })
+        .eq('id', smsId).eq('status','approved').is('sent_at', null).select('id');
       S.busy = false;
       if(up.error){ smsSay('Could not call it back: '+up.error.message, true); return; }
+      if(!up.data || !up.data.length){
+        S.smsMsg = 'Too late — that one already went out. It cannot be called back.'; S.smsBad = true;
+        load(); return;
+      }
       S.smsMsg = 'Called back. It is a draft again and nothing was sent.'; S.smsBad = false;
       load(); return;
     }
@@ -1211,12 +1341,20 @@
       try{
         const sv = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
         if(sv.error) throw new Error(sv.error.message);
-        /* armed, but held: the sender skips it until send_after has passed */
+        /* armed, but held: the sender skips it until send_after has passed.
+           GUARDED — only a row still sitting as a draft (or a failed retry) may
+           be armed. Without this, a second window, or a screen painted before
+           someone else sent it, could re-arm an already-sent text. */
         const up = await window.supa.from('az_sms_log').update({
           status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(),
           send_after: when.toISOString()
-        }).eq('id', smsId);
+        }).eq('id', smsId).in('status',['draft','failed']).select('id');
         if(up.error) throw new Error(up.error.message);
+        if(!up.data || !up.data.length){
+          S.busy = false;
+          S.smsMsg = 'That one is not a draft any more — it has already gone or is on its way.';
+          S.smsBad = true; load(); return;
+        }
         S.busy = false; S.smsLater = null;
         S.smsMsg = 'Timer set — it goes out '+whenWords(when.toISOString())+'. You can still call it back.';
         S.smsBad = false;
@@ -1246,14 +1384,27 @@
           smsSay('Rewritten from the job. It still has not gone anywhere.');
           return;
         }
+        /* One text per job. The database trigger enforces this on its own path;
+           this one used to check nothing, so a second tap during the reload
+           window (or a stale screen that had not seen the trigger's draft) made
+           a twin. The job window only ever shows the newest, so the orphan sat
+           in the Texts tab and could be sent to a customer already told. */
+        const dupe = await window.supa.from('az_sms_log').select('id')
+          .eq('booking_id', bookingId).eq('direction','outbound')
+          .in('status',['draft','approved','sent']).limit(1);
+        if(dupe.error) throw new Error(dupe.error.message);
+        if(dupe.data && dupe.data.length){
+          S.busy = false; S.smsMsg = 'There is already a text on this job.'; S.smsBad = false;
+          await load(); return;
+        }
         const ins = await window.supa.from('az_sms_log').insert({
           direction:'outbound', to_phone:r.customer_phone, to_name:r.customer_name,
           body: body, status:'draft', booking_id: bookingId,
           ref: 'pickup-' + new Date().toISOString().slice(0,10), created_by: 'queue-window'
         });
         if(ins.error) throw new Error(ins.error.message);
-        S.busy = false; S.smsMsg = 'Written. Read it, then press Send.'; S.smsBad = false;
-        load(); return;
+        S.smsMsg = 'Written. Read it, then press Send.'; S.smsBad = false;
+        await load(); S.busy = false; return;
       }catch(e){ S.busy = false; smsSay('Could not write it: '+(e.message||e), true); return; }
     }
 
@@ -1286,25 +1437,40 @@
       if(/\$_+/.test(body)){ smsSay('That still has a blank where the total goes. Write it again, or type the number.', true); return; }
       if(!confirm('This goes to their phone now:\n\n'+body+'\n\nSend it?')) return;
       S.busy = true;
+      const btns = document.querySelectorAll('.scx-sms [data-scxsms]');
+      btns.forEach(b => { b.disabled = true; });    // a dead control must look dead
       try{
-        const sv = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
+        const sv = await window.supa.from('az_sms_log').update({ body: body })
+          .eq('id', smsId).in('status',['draft','failed']).select('id');
         if(sv.error) throw new Error(sv.error.message);
-        /* THE ONE LINE THAT ARMS IT. Everything before this is reversible. */
+        /* THE ONE LINE THAT ARMS IT. Everything before this is reversible.
+           GUARDED (2026-08-15): only a draft may be armed. Without the status
+           condition a second tap during the reload window — or a second window
+           painted before this one sent — re-armed an already-sent row and the
+           customer got the same text twice, with sent_at overwritten so the
+           first delivery left no trace. */
         const up = await window.supa.from('az_sms_log')
-          .update({ status:'approved', approved_by:'alessio', approved_at:new Date().toISOString() }).eq('id', smsId);
+          .update({ status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(), send_after:null })
+          .eq('id', smsId).in('status',['draft','failed']).select('id');
         if(up.error) throw new Error(up.error.message);
+        if(!up.data || !up.data.length){
+          S.busy = false;
+          S.smsMsg = 'Nothing sent — that text had already gone out.'; S.smsBad = true;
+          await load(); return;
+        }
         await fetch(SMS_SEND_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
         /* trust the ROW, not the call */
         await new Promise(z => setTimeout(z, 1500));
         const chk = await window.supa.from('az_sms_log').select('status,error').eq('id', smsId).maybeSingle();
         const st = chk.data ? chk.data.status : null;
-        S.busy = false;
         S.smsMsg = st === 'sent'   ? 'Sent.'
                  : st === 'failed' ? 'It did not go through: '+(chk.data.error||'unknown')
                  : 'Handed to the sender, still going. Hit the reload arrow in a moment.';
         S.smsBad = st === 'failed';
-        load(); return;
-      }catch(e){ S.busy = false; smsSay('Could not send it: '+(e.message||e), true); return; }
+        /* stay busy until the repaint lands, or the old screen is live again */
+        await load(); S.busy = false; return;
+      }catch(e){ S.busy = false; btns.forEach(b => { b.disabled = false; });
+        smsSay('Could not send it: '+(e.message||e), true); return; }
     }
   }
 
@@ -1415,8 +1581,30 @@
       item_location: g('item_location') || null,
       notes: g('notes') || null
     };
+
+    /* THE PRICE FIELD MUST ACTUALLY MOVE THE PRICE (fixed 2026-08-15).
+       Both the text and the money line read the LINES first and only fall back
+       to this number, so on any job that has lines, typing here changed the
+       "Price" row on screen and nothing else — the panel then showed two
+       different prices at once and the customer was texted the old one.
+       Typing a price now rewrites the lines to say exactly that, and he says
+       whether the figure already includes GST, because nothing on the row ever
+       recorded that and guessing it is what quoted Ralph $90.41 for an $86.10
+       job. Untouched price, untouched lines. */
+    const r = (S.rows || []).find(x => x.id === id);
+    const oldMoney = moneyOf(r || {});
+    const typed = price === '' ? null : Number(price);
+    const oldShown = oldMoney.known ? oldMoney.sub : (r && r.total_cad != null ? Number(r.total_cad) : null);
+    if(typed != null && (oldShown == null || Math.abs(typed - oldShown) > 0.005)){
+      const inclusive = confirm('Is ' + cad(typed) + ' the price WITH GST already in it?\n\n'
+        + 'OK = yes, that is the final number.\nCancel = no, add GST on top.');
+      patch.line_items = [{ kind:'manual', label:'Quoted price', qty:1,
+                            unit_cad: typed, line_cad: typed, incl_gst: inclusive }];
+    }
+
+    const det2 = det;
     S.editing = null;
-    write(id, patch);
+    write(id, patch, null, () => { S.editing = id; if(det2) delete det2.dataset.scxEditing; paintDetail(); });
   }
 
   /* ══════════════ COMPOSER — + New job (writes the base table) ══════════ */

@@ -37,7 +37,7 @@
 
   var S = {
     host: null, rows: null, bookings: [], sel: null, err: null,
-    busy: false, msg: null, bad: false, later: null, when: null, force: false,
+    busy: false, msg: null, bad: false, later: null, when: null, force: false, tick: null,
     folded: {}    // group key -> true when shut
   };
 
@@ -118,17 +118,67 @@
       + 'Fix the wording, or send it today.</div>';
   }
 
-  /* the job's own money: priced lines first, the stored total behind them.
-     Mirrors az_pickup_draft_text exactly — if one changes, change both. */
+  /* THE JOB'S MONEY — the exact mirror of az_job_money() in the database.
+     Corrected 2026-08-15. It used to multiply total_cad by 1.05 whatever that
+     number was, but some are the pre-GST sum from intake and others were typed
+     in ALREADY INCLUDING GST — multiplying the second kind quoted a customer
+     more than he had charged them. And it only read {line_cad}, so older jobs
+     stored as {cad, item} looked unpriced and fell through to that same
+     untrustworthy total. Lines that carry their own GST line are FINAL. */
+  var TAXY = /(^|[^a-z])(gst|hst|pst|tax)([^a-z]|$)/i;
   function moneyOf(b){
-    if(!b) return null;
-    var sub = null;
-    if(b.line_items && b.line_items.length){
-      sub = b.line_items.reduce(function(a,l){ return a + (Number(l.line_cad) || 0); }, 0);
-    }
-    if(!(sub > 0) && b.total_cad != null) sub = Number(b.total_cad);
-    if(!(sub > 0)) return null;
-    return { sub: sub, gst: Math.round(sub*GST*100)/100, total: Math.round(sub*(1+GST)*100)/100 };
+    if(!b) return { known:false, onFile:null, why:'no job behind this text' };
+    var lines = (b.line_items && b.line_items.length) ? b.line_items : null;
+    if(!lines) return { known:false, onFile: b.total_cad != null ? Number(b.total_cad) : null,
+      why: b.total_cad != null
+        ? 'a price is on the job, but nothing records whether it already includes GST'
+        : 'no price on this job at all' };
+    var sub = 0, taxed = false;
+    lines.forEach(function(l){
+      var v = (l.line_cad != null) ? Number(l.line_cad) : Number(l.cad);
+      if(isFinite(v)) sub += v;
+      if(l.incl_gst === true || TAXY.test(String(l.label || l.item || ''))) taxed = true;
+    });
+    if(!(sub > 0)) return { known:false, onFile: b.total_cad != null ? Number(b.total_cad) : null,
+      why:'the lines on this job add up to nothing' };
+    function round2(n){ return Math.round(n*100)/100; }
+    return taxed
+      ? { known:true, sub:round2(sub), gst:0, total:round2(sub), gstAdded:false }
+      : { known:true, sub:round2(sub), gst:round2(sub*GST), total:round2(sub*(1+GST)), gstAdded:true };
+  }
+
+  /* what the text ACTUALLY says, so the live figure and the frozen words can be
+     compared instead of sitting ten pixels apart contradicting each other */
+  function bodyTotal(body){
+    var m = /Total is \$([0-9][0-9,]*\.?[0-9]*)/.exec(String(body || ''));
+    return m ? Number(m[1].replace(/,/g,'')) : null;
+  }
+  function bodyPlace(body){
+    var s = String(body || '');
+    if(/Blue Building/i.test(s)) return 'Blue Building';
+    if(/9602 115 Street/i.test(s)) return 'Shop';
+    return null;
+  }
+  /* every fact that has drifted since the words were written */
+  function driftWarn(b, r){
+    if(!b || !r || !r.body) return '';
+    var out = [];
+    if(r.to_phone && b.customer_phone && digits(r.to_phone) !== digits(b.customer_phone))
+      out.push('It is addressed to ' + esc(r.to_phone) + ', but the job now says ' + esc(b.customer_phone) + '.');
+    var said = bodyTotal(r.body), m = moneyOf(b);
+    if(said != null && m.known && Math.abs(said - m.total) > 0.005)
+      out.push('It says ' + cad(said) + ', but the job now prices at ' + cad(m.total) + '.');
+    if(said != null && !m.known)
+      out.push('It says ' + cad(said) + ', but the job no longer has a price I can prove.');
+    var wrote = bodyPlace(r.body);
+    var here  = b.item_location === 'Blue Building' ? 'Blue Building'
+              : (b.item_location === 'Shop' || b.item_location === "Alessio's bench") ? 'Shop' : null;
+    if(wrote && here && wrote !== here)
+      out.push('It sends them to the ' + (wrote === 'Blue Building' ? 'Blue Building' : 'shop')
+             + ', but the knives are at the ' + (here === 'Blue Building' ? 'Blue Building' : 'shop') + ' now.');
+    if(!out.length) return '';
+    return '<div class="txm-money bad">This text no longer matches the job.<br>'
+      + out.join('<br>') + '<br>Press <b>Write it again</b>, or fix the words yourself.</div>';
   }
   function bookingOf(r){
     if(!r || !r.booking_id) return null;
@@ -331,12 +381,22 @@
       if(shut) return;
       html += list.map(function(r){
         var b = bookingOf(r);
-        var m = r.direction === 'outbound' ? moneyOf(b) : null;
+        /* A SENT row is history: label it with the number the message actually
+           carried, never with what the job would price at today. This column
+           used to stamp a live figure on delivered texts, so Ralph's sent
+           message — which quoted nothing — was filed under a price. */
+        var out = r.direction === 'outbound';
+        var settled = out && (r.status === 'sent' || r.status === 'approved');
+        var said = settled ? bodyTotal(r.body) : null;
+        var m = (out && !settled) ? moneyOf(b) : null;
+        var moneyBit = settled ? (said != null ? ' · '+cad(said) : '')
+                     : (m && m.known ? ' · '+cad(m.total)
+                        : (out && r.booking_id ? ' · no price' : ''));
         return '<div class="txm-item'+(S.sel===r.id?' on':'')+'" data-txmid="'+esc(r.id)+'">'
           + '<div class="txm-item__n">'+esc(r.to_name || r.to_phone || 'Unknown')+'</div>'
           + '<div class="txm-item__s">'
           +   (isWaiting(r) ? '⏱ '+esc(whenWords(r.send_after)) : esc(ago(r.created_at)))
-          +   (m ? ' · '+cad(m.total) : (r.direction==='outbound' && r.booking_id && !m ? ' · no price' : ''))
+          +   moneyBit
           +   (r.direction !== 'outbound' ? ' · inbound' : '')+'</div>'
           + '<div class="txm-item__p">'+esc(String(r.body||'').slice(0,120))+'</div>'
           + '</div>';
@@ -396,12 +456,28 @@
       job = row('About', esc(r.ref));
     }
 
-    var money = out
-      ? (m ? '<div class="txm-money">'+cad(m.sub)+' + '+cad(m.gst)+' GST = <b>'+cad(m.total)+'</b>'
-           + ' <span class="txm-tag">from the job\'s own lines</span></div>'
-           : (b ? '<div class="txm-money bad">This job has no priced lines, so the text carries no total. '
-                + 'Price it in the Queue, then press Write it again.</div>' : ''))
-      : '';
+    /* A settled text is history — show the number IT carried, not today's.
+       Only a draft still on his desk gets the live breakdown. */
+    var settled = out && (r.status === 'sent' || r.status === 'approved');
+    var said = settled ? bodyTotal(r.body) : null;
+    var money = !out ? ''
+      : settled
+        ? (said != null
+            ? '<div class="txm-money">This text quoted <b>'+cad(said)+'</b></div>'
+            : '<div class="txm-money">This text carried no total.</div>')
+      : (m && m.known
+          ? '<div class="txm-money">'
+            + (m.gstAdded ? cad(m.sub)+' + '+cad(m.gst)+' GST = <b>'+cad(m.total)+'</b>'
+                          : '<b>'+cad(m.total)+'</b> — the lines already carry the tax')
+            + ' <span class="txm-tag">from the job\'s own lines</span></div>'
+          : (b ? '<div class="txm-money bad">'
+               + (m.onFile != null
+                   ? 'There is '+cad(m.onFile)+' on this job, but nothing says whether that already '
+                     + 'includes GST — so the text carries no total rather than the wrong one. '
+                     + 'Retype the price in the Queue and say which it is.'
+                   : 'This job has no price, so the text carries no total. Price it in the Queue, '
+                     + 'then press Write it again.')
+               + '</div>' : ''));
 
     var bodyBlock = editable
       ? '<div class="txm-label">The words</div>'
@@ -438,7 +514,7 @@
     var err = (out && r.status === 'failed' && r.error)
       ? '<div class="txm-money bad">'+esc(r.error)+'</div>' : '';
 
-    mid.innerHTML = head + job + money + err + bodyBlock + note + threadHtml(r);
+    mid.innerHTML = head + job + money + driftWarn(b, r) + err + bodyBlock + note + threadHtml(r);
   }
 
   /* everything ever said to and from that number, newest last */
@@ -541,15 +617,24 @@
       S.msg = null; paintMid(); return;
     }
 
-    /* CALL IT BACK — straight to draft, clock cleared. Only 'approved' is armed,
-       so the text has not gone anywhere and cannot. */
+    /* CALL IT BACK — GUARDED (2026-08-15). This surface has no clock of its own,
+       so after the armed moment passes it can still be showing the countdown and
+       this button while the text is already on the customer's phone. Unguarded,
+       tapping it dragged a SENT row back to draft: the ledger then denied a
+       delivered message and the obvious next tap sent it twice. Only a row still
+       armed and unsent may be recalled, and we read back what actually matched. */
     if(what === 'unschedule'){
       S.busy = true;
       window.supa.from('az_sms_log')
-        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null }).eq('id', r.id)
+        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null })
+        .eq('id', r.id).eq('status','approved').is('sent_at', null).select('id')
         .then(function(up){
           S.busy = false;
           if(up.error){ say('Could not call it back: '+up.error.message, true); return; }
+          if(!up.data || !up.data.length){
+            S.msg = 'Too late — that one already went out. It cannot be called back.'; S.bad = true;
+            load(); return;
+          }
           S.msg = 'Called back. It is a draft again and nothing was sent.'; S.bad = false;
           load();
         });
@@ -577,13 +662,19 @@
       S.busy = true;
       window.supa.from('az_sms_log').update({ body: text }).eq('id', r.id).then(function(sv){
         if(sv.error) throw new Error(sv.error.message);
-        /* armed, but held: the sender skips it until send_after has passed */
+        /* armed, but held. GUARDED: only a draft may be armed, so a stale second
+           window can never re-arm a text that has already gone. */
         return window.supa.from('az_sms_log').update({
           status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(),
           send_after: when.toISOString()
-        }).eq('id', r.id);
+        }).eq('id', r.id).in('status',['draft','failed']).select('id');
       }).then(function(up){
         if(up.error) throw new Error(up.error.message);
+        if(!up.data || !up.data.length){
+          S.busy = false;
+          S.msg = 'That one is not a draft any more — it has already gone or is on its way.';
+          S.bad = true; load(); return;
+        }
         S.busy = false; S.later = null;
         S.msg = 'Timer set — it goes out '+whenWords(when.toISOString())+'. You can still call it back.';
         S.bad = false;
@@ -635,14 +726,27 @@
       if(/\$_+/.test(body)){ say('That still has a blank where the total goes. Press Write it again, or type the number.', true); return; }
       if(!confirm('This goes to their phone now:\n\n'+body+'\n\nSend it?')) return;
       S.busy = true;
-      window.supa.from('az_sms_log').update({ body: body }).eq('id', r.id).then(function(sv){
+      var btns = document.querySelectorAll('#txm-mid [data-txmact]');
+      btns.forEach(function(x){ x.disabled = true; });   // a dead control must look dead
+      window.supa.from('az_sms_log').update({ body: body })
+        .eq('id', r.id).in('status',['draft','failed']).select('id').then(function(sv){
         if(sv.error) throw new Error(sv.error.message);
-        /* THE ONE LINE THAT ARMS IT. Everything before this is reversible. */
+        /* THE ONE LINE THAT ARMS IT. Everything before this is reversible.
+           GUARDED (2026-08-15): only a draft may be armed. Without the status
+           condition, a second window painted before this one sent — or a second
+           tap through the reload window — re-armed an already-sent row and the
+           customer got the same text twice, with sent_at overwritten so the
+           first delivery left no trace. */
         return window.supa.from('az_sms_log')
-          .update({ status:'approved', approved_by:'alessio', approved_at:new Date().toISOString() })
-          .eq('id', r.id);
+          .update({ status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(), send_after:null })
+          .eq('id', r.id).in('status',['draft','failed']).select('id');
       }).then(function(up){
         if(up.error) throw new Error(up.error.message);
+        if(!up.data || !up.data.length){
+          S.busy = false;
+          S.msg = 'Nothing sent — that text had already gone out.'; S.bad = true;
+          load(); return Promise.reject({ handled:true });
+        }
         return fetch(SEND_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
       }).then(function(){
         return new Promise(function(z){ setTimeout(z, 1500); });
@@ -658,7 +762,10 @@
         S.bad = st === 'failed';
         load();
       }).catch(function(e){
-        S.busy = false; say('Could not send it: '+(e.message||e), true);
+        if(e && e.handled) return;         // already reported and reloading
+        S.busy = false;
+        btns.forEach(function(x){ x.disabled = false; });
+        say('Could not send it: '+(e.message||e), true);
       });
       return;
     }
@@ -701,6 +808,21 @@
           var box  = document.getElementById('txm-body');
           if(warn) warn.innerHTML = staleWarn(box ? box.value : '', whenIsoOf(S.when), Date.now());
         });
+        /* THIS SURFACE NEEDS ITS OWN CLOCK TOO. A countdown painted once keeps
+           offering "Call it back" long after the text has reached the customer. */
+        if(!S.tick){
+          S.tick = setInterval(function(){
+            if(S.busy || document.hidden) return;
+            if(!(S.rows || []).some(function(x){ return x.status === 'approved'; })) return;
+            var box = document.getElementById('txm-body');
+            if(box && box.value !== (box.dataset.txmbase || '')) return;   // he is writing
+            load();
+          }, 30000);
+          document.addEventListener('visibilitychange', function(){
+            if(document.hidden || S.busy) return;
+            if((S.rows || []).some(function(x){ return x.status === 'approved'; })) load();
+          });
+        }
         window.addEventListener('resize', fitCols);
       }
       if(!S.rows) host.innerHTML = '<div class="txm-empty">Loading…</div>';
