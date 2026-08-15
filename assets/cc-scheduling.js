@@ -1076,10 +1076,17 @@
     return m ? Number(m[1].replace(/,/g,'')) : null;
   }
   function digitsOf(p){ return String(p||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,''); }
+  /* Which ONE place does this text send them to?
+     Brian's says "until 11 AM at the shop, from 12 on at the Blue Building" —
+     a handover message that names both ON PURPOSE and is true wherever the
+     knives currently sit. Naming both means no answer, not the first match.
+     A warning that cries wolf on a correct text is worse than no warning. */
   function bodyPlace(body){
     const s = String(body || '');
-    if(/Blue Building/i.test(s)) return 'Blue Building';
-    if(/9602 115 Street/i.test(s)) return 'Shop';
+    const bb = /Blue Building/i.test(s), shop = /9602 115 Street/i.test(s);
+    if(bb && shop) return null;
+    if(bb) return 'Blue Building';
+    if(shop) return 'Shop';
     return null;
   }
   /* one red block listing every fact that has drifted since the words were written */

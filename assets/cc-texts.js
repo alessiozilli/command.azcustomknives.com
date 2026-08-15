@@ -153,10 +153,17 @@
     var m = /Total is \$([0-9][0-9,]*\.?[0-9]*)/.exec(String(body || ''));
     return m ? Number(m[1].replace(/,/g,'')) : null;
   }
+  /* Which ONE place does this text send them to? A message that names both
+     ("until 11 AM at the shop, from 12 on at the Blue Building") is a handover
+     and is true wherever the knives currently sit — naming both means no
+     answer, not the first match. Crying wolf on a correct text is worse than
+     saying nothing. */
   function bodyPlace(body){
     var s = String(body || '');
-    if(/Blue Building/i.test(s)) return 'Blue Building';
-    if(/9602 115 Street/i.test(s)) return 'Shop';
+    var bb = /Blue Building/i.test(s), shop = /9602 115 Street/i.test(s);
+    if(bb && shop) return null;
+    if(bb) return 'Blue Building';
+    if(shop) return 'Shop';
     return null;
   }
   /* every fact that has drifted since the words were written */
