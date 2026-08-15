@@ -320,7 +320,7 @@
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null,
     // the pickup text — one row of az_sms_log per job, shown inside the job window
-    sms: [], smsMsg: null, smsBad: false, smsLater: null
+    sms: [], smsMsg: null, smsBad: false, smsLater: null, smsWhen: null, smsForce: false
   };
 
   const TABS = [
@@ -552,7 +552,18 @@
       + '<div id="scx-body"></div>';
     host.addEventListener('click', function(e){ try{ onClick(e); }catch(err){ console.warn('[scheduling] click', err); } });
     host.addEventListener('input', function(e){
-      if(e.target && e.target.id === 'scx-name') searchCustomers(e.target.value);
+      if(!e.target) return;
+      if(e.target.id === 'scx-name') searchCustomers(e.target.value);
+      /* remember the time he picked, and re-check the wording against it live */
+      /* Remember the time he picked, and re-check the wording against it live.
+         Surgical on purpose: a full repaint here would tear the date picker out
+         from under his thumb mid-scroll. Only the warning line is touched. */
+      if(e.target.id === 'scx-sms-when'){
+        S.smsWhen = e.target.value;
+        const warn = document.getElementById('scx-sms-rot');
+        const box  = document.getElementById('scx-sms-body');
+        if(warn) warn.innerHTML = staleWarn(box ? box.value : '', whenIsoOf(S.smsWhen), Date.now());
+      }
     });
     host.addEventListener('focusin', function(e){
       if(e.target && e.target.id === 'scx-name') paintCustomers(e.target.value);
@@ -888,10 +899,18 @@
   /* ── DETAIL — the product, plus the actions that move it ── */
   function paintDetail(){
     const det = document.getElementById('scx-detail'); if(!det) return;
-    /* never eat half-typed words: whatever is in the text box outranks what the
-       DB last handed us, so a repaint (or a reload) cannot swallow his edit */
-    const typing = det.querySelector('[data-scxsmsid]');
-    if(typing) smsPatchLocal(typing.dataset.scxsmsid, { body: typing.value });
+    /* Never eat half-typed words — but never eat a REWRITE either.
+       The box carries the text it was painted with (data-scxbase). Only when what
+       is in it differs from that does he have unsaved typing worth protecting.
+       Untouched box = let the fresh text through, which is what "Write it again"
+       needs; it wrote new words to the database and asked for a repaint, and the
+       old version of this guard shovelled the stale ones straight back over them.
+       smsForce is the explicit override for the case where he HAS typed and then
+       presses Write it again anyway — he asked for the machine's words, he gets them. */
+    const typing = det.querySelector('#scx-sms-body');
+    if(typing && !S.smsForce && typing.value !== (typing.dataset.scxbase || ''))
+      smsPatchLocal(typing.dataset.scxsmsid, { body: typing.value });
+    S.smsForce = false;
     const r = (S.rows||[]).find(x => x.id === S.sel);
     if(S.editing === S.sel && r){ paintEdit(det, r); return; }
     delete det.dataset.scxEditing;
@@ -992,6 +1011,11 @@
     const d = new Date(); d.setDate(d.getDate()+1); d.setHours(9,0,0,0);
     return localStamp(d);
   }
+  /* the box speaks local time; everything downstream speaks ISO */
+  function whenIsoOf(stamp){
+    const d = new Date(stamp);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
   /* how a human says a moment: "today 4:15 PM", "tomorrow 9:00 AM", "Aug 18, 9:00 AM" */
   function whenWords(iso){
     if(!iso) return '';
@@ -1005,6 +1029,37 @@
     return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+', '+clock;
   }
   const isWaiting = r => !!r.send_after && new Date(r.send_after).getTime() > Date.now();
+
+  /* ── WORDS THAT GO STALE (Alessio, 2026-08-14) ──
+     He wrote Brian "ready for pickup TOMORROW", then set the timer for tomorrow
+     9 AM. Delivered, it would have read wrong. Anything anchored to the day it
+     was WRITTEN rots the moment the text is held overnight.
+     Weekday names are deliberately NOT in here: "open Wednesday and Friday" is
+     recurring shop hours, true whenever it lands. Only relative words rot. */
+  const DAY_WORDS = /\b(today|tonight|tomorrow|yesterday|this (?:morning|afternoon|evening))\b/gi;
+  function stalePhrases(body){
+    const hits = String(body || '').match(DAY_WORDS);
+    if(!hits) return [];
+    const seen = {}, out = [];
+    hits.forEach(h => { const k = h.toLowerCase(); if(!seen[k]){ seen[k] = 1; out.push(k); } });
+    return out;
+  }
+  function sameDay(a, b){
+    const x = new Date(a), y = new Date(b);
+    if(isNaN(x.getTime()) || isNaN(y.getTime())) return true;   // unknown: do not cry wolf
+    return x.getFullYear()===y.getFullYear() && x.getMonth()===y.getMonth() && x.getDate()===y.getDate();
+  }
+  /* the warning line, or '' when the words will still be true on arrival */
+  function staleWarn(body, whenIso, writtenIso){
+    if(!whenIso) return '';
+    const hits = stalePhrases(body);
+    if(!hits.length) return '';
+    if(sameDay(writtenIso || Date.now(), whenIso)) return '';
+    const list = hits.map(h => '"'+h+'"').join(' and ');
+    return '<div class="scx-sms__money bad">This says '+esc(list)+', but it does not land until '
+      + esc(whenWords(whenIso)) + ' — by then those words mean the wrong day. '
+      + 'Fix the wording, or send it today.</div>';
+  }
 
   /* the live text row for a job — the newest one that still matters */
   function smsOf(id){
@@ -1058,6 +1113,8 @@
         return '<div class="scx-sms">'+head
           + '<div class="scx-sms__done">'+esc(row.body)+'</div>'
           + '<div class="scx-sms__timer">⏱ Going out '+esc(whenWords(row.send_after))+'</div>'
+          /* the words were true when he armed it — are they still true on arrival? */
+          + staleWarn(row.body, row.send_after, row.approved_at || row.created_at)
           + '<div class="scx-acts">'
           +   '<button type="button" class="scx-act" data-scxsms="unschedule" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Call it back</button>'
           + '</div>'
@@ -1073,7 +1130,7 @@
     return '<div class="scx-sms">'+head
       + (row.status === 'failed' ? '<div class="scx-sms__money bad">'+esc(row.error||'It did not go through.')+'</div>' : '')
       + priced
-      + '<textarea class="scx-sms__body" id="scx-sms-body" data-scxsmsid="'+row.id+'" rows="5">'+esc(row.body||'')+'</textarea>'
+      + '<textarea class="scx-sms__body" id="scx-sms-body" data-scxsmsid="'+row.id+'" data-scxbase="'+esc(row.body||'')+'" rows="5">'+esc(row.body||'')+'</textarea>'
       + '<div class="scx-sms__to">to '+esc(row.to_name||r.customer_name||'')+' · '+esc(row.to_phone||r.customer_phone||'')+'</div>'
       + '<div class="scx-acts">'
       +   '<button type="button" class="scx-act send" data-scxsms="send" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send</button>'
@@ -1083,9 +1140,14 @@
       +   '<button type="button" class="scx-act" data-scxsms="drop" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Don\'t send</button>'
       + '</div>'
       + (S.smsLater === row.id
+          /* the chosen time lives in state, not in the DOM — a repaint used to
+             throw it away and snap back to tomorrow 9 AM under his thumb */
           ? '<div class="scx-sms__when">'
-            + '<input type="datetime-local" id="scx-sms-when" value="'+tomorrow9()+'">'
+            + '<input type="datetime-local" id="scx-sms-when" value="'+esc(S.smsWhen || tomorrow9())+'">'
             + '<button type="button" class="scx-act send" data-scxsms="schedule" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Set the timer</button>'
+            + '</div>'
+            + '<div id="scx-sms-rot">'
+            +   staleWarn(row.body, whenIsoOf(S.smsWhen || tomorrow9()), Date.now())
             + '</div>'
           : '')
       + note + '</div>';
@@ -1109,7 +1171,9 @@
 
     /* open/close the little clock row — no write, just the panel */
     if(what === 'later'){
-      S.smsLater = (S.smsLater === smsId) ? null : smsId;
+      const opening = S.smsLater !== smsId;
+      S.smsLater = opening ? smsId : null;
+      if(opening) S.smsWhen = tomorrow9();      // the prefill happens ONCE, on open
       S.smsMsg = null; paintDetail(); return;
     }
 
@@ -1127,7 +1191,7 @@
 
     if(what === 'schedule'){
       const box = document.getElementById('scx-sms-when');
-      const val = box ? box.value : '';
+      const val = (box && box.value) || S.smsWhen || '';
       if(!val){ smsSay('Pick a day and a time first.', true); return; }
       const when = new Date(val);
       if(isNaN(when.getTime())){ smsSay('That time did not make sense to me.', true); return; }
@@ -1135,6 +1199,13 @@
       const body = smsTyped();
       if(!body){ smsSay('There is nothing written to send.', true); return; }
       if(/\$_+/.test(body)){ smsSay('That still has a blank where the total goes. Write it again, or type the number.', true); return; }
+      /* the trap he fell into: words that were true today, delivered on another day */
+      const rot = stalePhrases(body);
+      if(rot.length && !sameDay(Date.now(), when)){
+        if(!confirm('Careful — this says ' + rot.map(h=>'"'+h+'"').join(' and ')
+          + ', but it does not land until ' + whenWords(when.toISOString())
+          + '.\n\nBy then those words mean the wrong day.\n\nSet the timer anyway?')) return;
+      }
       if(!confirm('This goes to their phone '+whenWords(when.toISOString())+', on its own:\n\n'+body+'\n\nSet the timer?')) return;
       S.busy = true;
       try{
@@ -1161,10 +1232,18 @@
         const body = t.data;
         if(!body) throw new Error('That job did not give me enough to write with.');
         if(smsId){
+          const cur = (S.sms || []).find(x => x.id === smsId);
+          const typedNow = smsTyped();
+          /* his own wording is worth more than mine — never swap it silently */
+          if(typedNow && typedNow !== body && !confirm(
+              'Replace what is written with the standard wording from the job?\n\nIt becomes:\n\n'
+              + body + '\n\nYour own words are lost.')){ S.busy = false; return; }
           const up = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
           if(up.error) throw new Error(up.error.message);
           smsPatchLocal(smsId, { body: body });
-          S.busy = false; smsSay('Rewritten from the job. It still has not gone anywhere.');
+          S.busy = false;
+          S.smsForce = true;                     // his words are gone on purpose; let the new ones paint
+          smsSay('Rewritten from the job. It still has not gone anywhere.');
           return;
         }
         const ins = await window.supa.from('az_sms_log').insert({

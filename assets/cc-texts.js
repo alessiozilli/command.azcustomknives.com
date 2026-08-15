@@ -37,7 +37,7 @@
 
   var S = {
     host: null, rows: null, bookings: [], sel: null, err: null,
-    busy: false, msg: null, bad: false, later: null,
+    busy: false, msg: null, bad: false, later: null, when: null, force: false,
     folded: {}    // group key -> true when shut
   };
 
@@ -84,6 +84,39 @@
     return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+', '+clock;
   }
   function isWaiting(r){ return !!r.send_after && new Date(r.send_after).getTime() > Date.now(); }
+  function whenIsoOf(stamp){
+    var d = new Date(stamp);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  /* ── WORDS THAT GO STALE (Alessio, 2026-08-14) ──
+     He wrote Brian "ready for pickup TOMORROW", then set the timer for tomorrow
+     9 AM. Delivered, it would have read wrong. Weekday names are deliberately
+     NOT in here: "open Wednesday and Friday" is recurring shop hours, true
+     whenever it lands. Only words anchored to the writing day rot. */
+  var DAY_WORDS = /\b(today|tonight|tomorrow|yesterday|this (?:morning|afternoon|evening))\b/gi;
+  function stalePhrases(body){
+    var hits = String(body || '').match(DAY_WORDS);
+    if(!hits) return [];
+    var seen = {}, out = [];
+    hits.forEach(function(h){ var k = h.toLowerCase(); if(!seen[k]){ seen[k] = 1; out.push(k); } });
+    return out;
+  }
+  function sameDay(a, b){
+    var x = new Date(a), y = new Date(b);
+    if(isNaN(x.getTime()) || isNaN(y.getTime())) return true;   // unknown: do not cry wolf
+    return x.getFullYear()===y.getFullYear() && x.getMonth()===y.getMonth() && x.getDate()===y.getDate();
+  }
+  function staleWarn(body, whenIso, writtenIso){
+    if(!whenIso) return '';
+    var hits = stalePhrases(body);
+    if(!hits.length) return '';
+    if(sameDay(writtenIso || Date.now(), whenIso)) return '';
+    var list = hits.map(function(h){ return '"'+h+'"'; }).join(' and ');
+    return '<div class="txm-money bad">This says '+esc(list)+', but it does not land until '
+      + esc(whenWords(whenIso)) + ' — by then those words mean the wrong day. '
+      + 'Fix the wording, or send it today.</div>';
+  }
 
   /* the job's own money: priced lines first, the stored total behind them.
      Mirrors az_pickup_draft_text exactly — if one changes, change both. */
@@ -318,9 +351,15 @@
   function paintMid(){
     var mid = document.getElementById('txm-mid'); if(!mid) return;
 
-    /* never eat half-typed words on a repaint */
+    /* Never eat half-typed words — but never eat a REWRITE either. The box carries
+       the text it was painted with (data-txmbase); only a difference means he has
+       unsaved typing worth protecting. An untouched box lets fresh text through,
+       which is exactly what "Write it again" needs. S.force is the override for
+       when he HAS typed and presses Write it again anyway. */
     var typing = mid.querySelector('#txm-body');
-    if(typing) patchLocal(typing.dataset.txmid, { body: typing.value });
+    if(typing && !S.force && typing.value !== (typing.dataset.txmbase || ''))
+      patchLocal(typing.dataset.txmid, { body: typing.value });
+    S.force = false;
 
     var r = S.rows.find(function(x){ return x.id === S.sel; });
     if(!r){ mid.innerHTML = '<div class="txm-empty">Pick someone on the left.</div>'; return; }
@@ -366,7 +405,7 @@
 
     var bodyBlock = editable
       ? '<div class="txm-label">The words</div>'
-        + '<textarea class="txm-body" id="txm-body" data-txmid="'+esc(r.id)+'" rows="6">'+esc(r.body||'')+'</textarea>'
+        + '<textarea class="txm-body" id="txm-body" data-txmid="'+esc(r.id)+'" data-txmbase="'+esc(r.body||'')+'" rows="6">'+esc(r.body||'')+'</textarea>'
         + '<div class="txm-len">'+String(r.body||'').length+' characters</div>'
         + '<div class="txm-acts">'
         +   '<button type="button" class="txm-act send" data-txmact="send">Send</button>'
@@ -376,15 +415,20 @@
         +   '<button type="button" class="txm-act" data-txmact="drop">Don\'t send</button>'
         + '</div>'
         + (S.later === r.id
+            /* the chosen time lives in state, not the DOM — a repaint used to throw
+               it away and snap back to tomorrow 9 AM under his thumb */
             ? '<div class="txm-when">'
-              + '<input type="datetime-local" id="txm-whenbox" value="'+tomorrow9()+'">'
+              + '<input type="datetime-local" id="txm-whenbox" value="'+esc(S.when || tomorrow9())+'">'
               + '<button type="button" class="txm-act send" data-txmact="schedule">Set the timer</button>'
               + '</div>'
+              + '<div id="txm-rot">'+staleWarn(r.body, whenIsoOf(S.when || tomorrow9()), Date.now())+'</div>'
             : '')
       : '<div class="txm-label">'+(out ? 'The words' : 'What they wrote')+'</div>'
         + '<div class="txm-frozen">'+esc(r.body||'')+'</div>'
         + (out && r.status === 'approved' && isWaiting(r)
             ? '<div class="txm-timer">⏱ Going out '+esc(whenWords(r.send_after))+'</div>'
+              /* the words were true when he armed it — still true on arrival? */
+              + staleWarn(r.body, r.send_after, r.approved_at || r.created_at)
               + '<div class="txm-acts"><button type="button" class="txm-act" data-txmact="unschedule">Call it back</button></div>'
             : '')
         + (r.status === 'cancelled'
@@ -473,10 +517,17 @@
       window.supa.rpc('az_pickup_draft_text', { p_booking: r.booking_id }).then(function(t){
         if(t.error) throw new Error(t.error.message);
         if(!t.data) throw new Error('That job did not give me enough to write with.');
+        /* his own wording is worth more than mine — never swap it silently */
+        var typedNow = typed();
+        if(typedNow && typedNow !== t.data && !confirm(
+            'Replace what is written with the standard wording from the job?\n\nIt becomes:\n\n'
+            + t.data + '\n\nYour own words are lost.')){ S.busy = false; return; }
         return window.supa.from('az_sms_log').update({ body: t.data }).eq('id', r.id).then(function(up){
           if(up.error) throw new Error(up.error.message);
           patchLocal(r.id, { body: t.data });
-          S.busy = false; say('Rewritten from the job. It still has not gone anywhere.');
+          S.busy = false;
+          S.force = true;                        // his words are gone on purpose; let the new ones paint
+          say('Rewritten from the job. It still has not gone anywhere.');
         });
       }).catch(function(e){ S.busy = false; say('Could not write it: '+(e.message||e), true); });
       return;
@@ -484,7 +535,9 @@
 
     /* open/close the little clock row — no write, just the panel */
     if(what === 'later'){
-      S.later = (S.later === r.id) ? null : r.id;
+      var opening = S.later !== r.id;
+      S.later = opening ? r.id : null;
+      if(opening) S.when = tomorrow9();          // the prefill happens ONCE, on open
       S.msg = null; paintMid(); return;
     }
 
@@ -505,7 +558,7 @@
 
     if(what === 'schedule'){
       var box = document.getElementById('txm-whenbox');
-      var val = box ? box.value : '';
+      var val = (box && box.value) || S.when || '';
       if(!val){ say('Pick a day and a time first.', true); return; }
       var when = new Date(val);
       if(isNaN(when.getTime())){ say('That time did not make sense to me.', true); return; }
@@ -513,6 +566,13 @@
       var text = typed();
       if(!text){ say('There is nothing written to send.', true); return; }
       if(/\$_+/.test(text)){ say('That still has a blank where the total goes. Press Write it again, or type the number.', true); return; }
+      /* the trap he fell into: words true today, delivered on another day */
+      var rot = stalePhrases(text);
+      if(rot.length && !sameDay(Date.now(), when)){
+        if(!confirm('Careful — this says ' + rot.map(function(h){ return '"'+h+'"'; }).join(' and ')
+          + ', but it does not land until ' + whenWords(when.toISOString())
+          + '.\n\nBy then those words mean the wrong day.\n\nSet the timer anyway?')) return;
+      }
       if(!confirm('This goes to their phone '+whenWords(when.toISOString())+', on its own:\n\n'+text+'\n\nSet the timer?')) return;
       S.busy = true;
       window.supa.from('az_sms_log').update({ body: text }).eq('id', r.id).then(function(sv){
@@ -614,7 +674,7 @@
       paintLeft(); return;
     }
     if(el = e.target.closest('[data-txmid]')){
-      if(el.classList.contains('txm-item')){ S.sel = el.dataset.txmid; S.msg = null; S.later = null; paintLeft(); paintMid(); return; }
+      if(el.classList.contains('txm-item')){ S.sel = el.dataset.txmid; S.msg = null; S.later = null; S.when = null; paintLeft(); paintMid(); return; }
     }
     if(el = e.target.closest('[data-txmact]')){ act(el.dataset.txmact); return; }
     if(e.target.closest('#txm-reload')){ load(); return; }
@@ -630,6 +690,16 @@
         host.dataset.txmWired = '1';
         host.addEventListener('click', function(e){
           try{ onClick(e); }catch(err){ console.warn('[texts] click', err); }
+        });
+        /* Remember the time he picked, and re-check the wording against it live.
+           Surgical on purpose: a full repaint here would tear the date picker out
+           from under his thumb mid-scroll. Only the warning line is touched. */
+        host.addEventListener('input', function(e){
+          if(!e.target || e.target.id !== 'txm-whenbox') return;
+          S.when = e.target.value;
+          var warn = document.getElementById('txm-rot');
+          var box  = document.getElementById('txm-body');
+          if(warn) warn.innerHTML = staleWarn(box ? box.value : '', whenIsoOf(S.when), Date.now());
         });
         window.addEventListener('resize', fitCols);
       }
