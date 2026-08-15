@@ -4415,14 +4415,17 @@ window.openActiveRun = function() {
     </script>
   </section>
 
-  <!-- ═══ DASHBOARD — the business at a glance, and the year's money.
-       This lane stopped being a placeholder on 2026-08-12: the Square backfill put
-       every 2026 selling day in the database, and the Till only ever shows the RETAIL
-       till, so 128 service days had nowhere to be seen. This is where they live.
-       Same nav | info | comms shape as Services > Queue and Retail. ═══ -->
+  <!-- ═══ DASHBOARD — what needs Alessio, and nothing else.
+       Rebuilt 2026-08-13 on his order. The 2026-08-12 version was "just another till"
+       (his words) — money screens duplicating the record that lives in STORE → Till.
+       A dashboard is the assistant's answer to one question: what am I working on
+       today, this week, this month. Three picks, his list, open tasks, coming up.
+       Every number read live at render time — forge_tasks, the bus human-action
+       lane, az_service_bookings, calendar_events. Nothing hardcoded, nothing stored
+       here. The money record stays in STORE → Till and is never duplicated here. ═══ -->
   <section class="lane faces-tokens cc-lane" id="lane-dashboard" data-lane="dashboard">
     <style>
-      [data-lane="dashboard"] .db-3col { display:grid; grid-template-columns:1.25fr 2.3fr 1.45fr; gap:var(--sp-10); align-items:stretch; position:relative; margin:var(--sp-12) var(--sp-16); }
+      [data-lane="dashboard"] .db-3col { display:grid; grid-template-columns:1.45fr 2.1fr 1.45fr; gap:var(--sp-10); align-items:stretch; position:relative; margin:var(--sp-12) var(--sp-16); }
       #lane-dashboard .db-3col { flex:0 0 auto; height:calc(100vh - 165px); min-height:420px; }
       [data-lane="dashboard"] .db-col { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:var(--sp-10); display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
       [data-lane="dashboard"] .db-col__head { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; flex-shrink:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -4440,17 +4443,20 @@ window.openActiveRun = function() {
       [data-lane="dashboard"] .db-row__name { font-size:12px; color:var(--text); }
       [data-lane="dashboard"] .db-row__sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:2px; }
       [data-lane="dashboard"] .db-row__val { font-family:var(--mono); font-size:11px; white-space:nowrap; text-align:right; }
+      [data-lane="dashboard"] .db-row__kick { font-family:var(--display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber); margin-bottom:2px; }
+      [data-lane="dashboard"] .db-three .db-row__name { font-size:13px; }
+      [data-lane="dashboard"] .db-act { display:inline-block; margin-top:10px; padding:6px 12px; border:1px solid var(--amber); border-radius:4px; background:transparent; color:var(--amber); font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+      [data-lane="dashboard"] .db-act:hover { background:var(--raised); }
       [data-lane="dashboard"] .db-big { font-family:var(--mono); font-size:26px; color:var(--amber); line-height:1.1; }
       [data-lane="dashboard"] .db-sub { font-family:var(--mono); font-size:10px; color:var(--text-xs); margin-top:3px; }
-      [data-lane="dashboard"] .db-sec { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border); }
+      [data-lane="dashboard"] .db-sec { font-family:var(--display); font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim); margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border); display:flex; }
+      [data-lane="dashboard"] .db-sec small { margin-left:auto; font-family:var(--mono); font-weight:400; text-transform:none; letter-spacing:0.04em; color:var(--text-xs); }
       [data-lane="dashboard"] .db-line { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--text-dim); padding:4px 0; border-bottom:1px solid var(--border); }
       [data-lane="dashboard"] .db-line:last-child { border-bottom:0; }
       [data-lane="dashboard"] .db-note { font-size:11px; color:var(--text-xs); line-height:1.5; margin-top:8px; }
       [data-lane="dashboard"] .db-empty { font-size:12px; color:var(--text-xs); line-height:1.6; padding:var(--sp-12); border:1px dashed var(--border); border-radius:4px; }
       [data-lane="dashboard"] .good { color:var(--green); }
       [data-lane="dashboard"] .bad  { color:var(--red); }
-      [data-lane="dashboard"] .db-bar { height:3px; background:var(--border); border-radius:2px; margin-top:4px; overflow:hidden; }
-      [data-lane="dashboard"] .db-bar i { display:block; height:100%; background:var(--amber); }
       [data-lane="dashboard"] .db-msg { padding:6px 9px; border:1px solid var(--border); border-radius:3px; background:var(--raised); margin-bottom:6px; }
       [data-lane="dashboard"] .db-msg__head { display:flex; gap:6px; align-items:baseline; font-family:var(--mono); font-size:9px; color:var(--text-xs); margin-bottom:3px; flex-wrap:wrap; }
       [data-lane="dashboard"] .db-msg__from { color:var(--amber); }
@@ -4460,341 +4466,285 @@ window.openActiveRun = function() {
 
     <div class="db-3col">
       <div class="db-col">
-        <div class="db-col__head">Needs you <span class="db-col__count" id="db-need-count">…</span></div>
-        <div class="db-col__body" id="db-need">Loading…</div>
+        <div class="db-col__head">The three <span class="db-col__count" id="db-three-note">…</span></div>
+        <div class="db-col__body" id="db-left">Loading…</div>
       </div>
       <div class="db-col">
-        <div class="db-col__head" id="db-detail-head">Where we stand</div>
+        <div class="db-col__head" id="db-detail-head">Today</div>
         <div class="db-col__body" id="db-detail">Loading…</div>
       </div>
       <div class="db-col">
-        <div class="db-col__head">Business bus <span class="db-col__count" id="db-bus-count">…</span></div>
-        <div class="db-col__body" id="db-bus">Loading…</div>
+        <div class="db-col__head">Coming up <span class="db-col__count" id="db-up-count">…</span></div>
+        <div class="db-col__body" id="db-up">Loading…</div>
       </div>
     </div>
 
     <script>
-/* ═══ DASHBOARD money view (2026-08-12).
-   Reads az_day_money — the view that does the workbook's DAY arithmetic over every
-   CALENDAR day, so a quiet Sunday still carries its rent. Nothing here is stored;
-   it is all computed from Square, the retail shelf costs and az_money_out at read
-   time. Wages and rent are both charged on every calendar day. ═══ */
+/* ═══ DASHBOARD — the assistant's board (2026-08-13).
+   Alessio, tonight: "I need a dashboard where I see what's on my task list. What am
+   I actually working on today, this week, this month. When there's a bus called
+   HUMAN ACTION, it needs to auto load in my to do list. You're not just holding a
+   poster up — you need to act on it."
+
+   So this screen does three things and refuses to be a ledger:
+   1. THE THREE — one priority per window, picked live by one mechanism (below).
+   2. YOUR LIST — every open HUMAN ACTION addressed to him on the bus, auto-loaded,
+      each clearable right here (the click writes status=read back to the bus).
+   3. OPEN TASKS + COMING UP — the whole open board and the next two weeks, live.
+
+   THE MECHANISM (deterministic, no stored state):
+   TODAY  = rush / at-risk / overdue / due-today shop jobs first (oldest due wins),
+            else the longest-waiting urgent task.
+   WEEK   = earliest job due inside 7 days, else the next urgent task in line.
+   MONTH  = earliest job due in 8–31 days, else the oldest open task on the board —
+            the debt that has waited longest.
+   A window never repeats another window's pick. When tasks start carrying
+   scheduled_for dates, dated tasks join the same ranking automatically. ═══ */
 (function(){
   'use strict';
-  /* ═══ DASHBOARD — where we stand RIGHT NOW.
-     Alessio, 2026-08-12: "Why is the dashboard a year of our income and then the
-     month of our income? What do you think the difference between till and
-     dashboard is?" He was right — this screen was the Till again with fewer
-     columns. A dashboard is the STATE: am I above the line today, what needs me,
-     what is about to hurt. The RECORD — days, weeks, months, the year, what sold —
-     lives next door in Retail -> Till and does not belong here twice. ═══ */
-  var D = { days: [], divRows: [], items: [], pick: 'stand' };
-  /* The four sides of the shop plus the leftover bucket. He asked, in his words:
-     "I wanna know how much the service costs me, what the retail cost me, what the
-     courses cost me, what the supplies cost me" — so every one of these gets the
-     same cost stack the whole shop gets, not just a takings line. */
-  var SIDES = [
-    { k:'retail',   label:'Retail — the counter' },
-    { k:'service',  label:'Service — the bench'  },
-    { k:'courses',  label:'Courses'              },
-    { k:'supplies', label:'Supplies'             },
-    { k:'other',    label:'Not a sale'           }
-  ];
-  var SIDE_LABEL = {};
-  SIDES.forEach(function(x){ SIDE_LABEL[x.k] = x.label; });
+  var D = { tasks:[], has:[], cal:[], jobs:[], up:[], three:{}, pick:'three:today' };
   function el(id){ return document.getElementById(id); }
-  function money(v){ var n=Number(v||0); return (n<0?'-$':'$') + Math.abs(n).toFixed(2); }
-  function mKey(d){ return String(d).slice(0,7); }
-  function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  function dName(d){
-    try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
-    catch(e){ return d; }
-  }
-  function clock(ts){
-    try{ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; }
-  }
-  function dayCount(from, to){                       // inclusive calendar days
-    return Math.max(1, Math.round((new Date(to+'T00:00:00') - new Date(from+'T00:00:00'))/86400000) + 1);
+  function dstr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function dName(d){ try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }catch(e){ return d; } }
+  function clock(ts){ try{ return new Date(ts).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+  function ageDays(ts){ var n = Math.floor((Date.now() - new Date(ts))/86400000); return n<=0 ? 'today' : n===1 ? '1 day' : n+' days'; }
+  function dayDiff(from, to){ return Math.round((new Date(to+'T00:00:00') - new Date(from+'T00:00:00'))/86400000); }
+  function jobDue(j){ return j.preferred_date || j.next_action_date || (j.scheduled_at ? String(j.scheduled_at).slice(0,10) : null); }
+
+  /* A HUMAN ACTION body usually opens with "HUMAN ACTION - what" or a from:-header
+     line first. Pull the first line that says what the action IS. */
+  function haTitle(b){
+    var lines = String(b||'').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+    for(var i=0;i<lines.length;i++){
+      var ln = lines[i];
+      if(/^from:/i.test(ln)) continue;
+      var m = ln.match(/HUMAN ACTION[\s0-9ofa-z]*[-·—:]\s*(.+)$/i);
+      if(m && m[1]) return m[1];
+      if(/HUMAN ACTION/i.test(ln)){
+        for(var k=i+1;k<lines.length;k++){ if(lines[k] && !/^from:/i.test(lines[k])) return lines[k]; }
+        return ln;
+      }
+    }
+    return (lines[0]||'(empty)').slice(0,90);
   }
 
   window.renderDashboard = async function(){
-    var list = el('db-need');
-    if(!list || !window.supa) return;
+    var box = el('db-left');
+    if(!box || !window.supa) return;
     try{
       var q = await Promise.all([
-        window.supa.from('az_day_money')
-          .select('day,rang,gst,tips,retail_rang,service_rang,courses_rang,supplies_rang,other_rang,orders,direct_cost,items_total,cash_out,overhead,wages,logged_minutes,day_costs,true_profit,rang_today')
-          .order('day', { ascending: false }).limit(500),
-        window.supa.from('az_service_bookings')
-          .select('id,customer_name,service,status,rush,preferred_date,next_action_date,dropped_off_at,scheduled_at,item_location,total_cad,blade_detail,notes')
-          .in('status', ['new','scheduled','in_shop','at_risk']),
+        window.supa.from('forge_tasks')
+          .select('id,title,body,status,priority,project_slug,assigned_to,scheduled_for,created_at,acceptance_criteria,first_step_for_picker,domain')
+          .in('status', ['queued','in_progress','waiting_guidance','parked'])
+          .order('created_at', { ascending: true }).limit(400),
+        window.supa.from('agent_messages')
+          .select('id,from_user,body,created_at')
+          .eq('to_user','alessio').eq('status','sent').ilike('body','%HUMAN ACTION%')
+          .order('created_at', { ascending: false }).limit(40),
         window.supa.from('calendar_events')
           .select('id,summary,description,location,start_time,all_day,html_link')
-          .gte('start_time', new Date(Date.now() - 14*3600e3).toISOString())
-          .order('start_time', { ascending: true }).limit(40),
-        /* Each side of the shop with its OWN costs — the thing he keeps asking for. */
-        ccPagedRead('az_day_division',
-          'day,division,rang,tips,cost_known,lines,lines_costed,rang_uncosted,share_of_revenue,overhead_share,wages_share,spend_share,profit',
-          'day')
+          .gte('start_time', new Date(Date.now() - 4*3600e3).toISOString())
+          .order('start_time', { ascending: true }).limit(60),
+        window.supa.from('az_service_bookings')
+          .select('id,customer_name,service,status,rush,preferred_date,next_action_date,scheduled_at,dropped_off_at,total_cad,blade_detail,notes,item_location')
+          .in('status', ['new','scheduled','in_shop','at_risk'])
       ]);
-      if(q[0].error) throw q[0].error;
-      D.days = q[0].data || [];
-      D.jobs = (q[1].data || []);
-      D.cal  = (q[2].data || []);
-      D.divRows = q[3] || [];
-      buildNeeds();
-      paintNeeds();
-      dbPaintDetail();
-      dbLoadBus();
-    }catch(e){ list.innerHTML = '<div class="db-empty">Could not read the shop: '+esc(e.message||String(e))+'</div>'; }
+      for(var i=0;i<q.length;i++){ if(q[i].error) throw q[i].error; }
+      D.tasks = q[0].data || [];
+      D.has   = q[1].data || [];
+      D.cal   = q[2].data || [];
+      D.jobs  = q[3].data || [];
+      buildThree();
+      buildUp();
+      paintLeft();
+      paintUp();
+      paintDetail();
+    }catch(e){ box.innerHTML = '<div class="db-empty">Could not read the board: '+esc(e.message||String(e))+'</div>'; }
   };
 
-  /* Everything that wants Alessio, most urgent first. Nothing finished, nothing
-     archived, nothing he has already dealt with — done work leaves the screen. */
-  function buildNeeds(){
-    var today = iso(new Date()), items = [];
-    var seenCal = {};
+  /* One pick per window, one mechanism, no repeats. */
+  function buildThree(){
+    var today = dstr(new Date());
+    var used = {};
+    var datedJobs = D.jobs.map(function(j){ return { j:j, due: jobDue(j) }; }).filter(function(x){ return x.due; })
+      .sort(function(a,b){ return a.due < b.due ? -1 : a.due > b.due ? 1 : 0; });
+    var urgent = D.tasks.filter(function(t){ return t.priority === 'urgent'; });      // created_at asc already
+    var openAll = D.tasks;                                                           // created_at asc already
 
-    (D.cal || []).forEach(function(c){
+    function jobPick(x, why){ return { kind:'job', id:'job-'+x.j.id, title:(x.j.customer_name||'(no name)')+' — '+(x.j.service||'job'), why:why, raw:x.j }; }
+    function taskPick(t, why){ return { kind:'task', id:'task-'+t.id, title:t.title, why:why, raw:t }; }
+    function nextTask(list){ for(var i=0;i<list.length;i++){ if(!used['task-'+list[i].id]) return list[i]; } return null; }
+
+    var t = null;
+    var hot = datedJobs.filter(function(x){ return x.j.rush || x.j.status==='at_risk' || dayDiff(today, x.due) <= 0; });
+    if(hot.length){ var h = hot[0], dd = dayDiff(today, h.due);
+      t = jobPick(h, (h.j.rush?'RUSH':h.j.status==='at_risk'?'at risk':dd<0?Math.abs(dd)+' day'+(Math.abs(dd)===1?'':'s')+' overdue':'due today')+' · '+dName(h.due)); }
+    else { var u = nextTask(urgent); if(u) t = taskPick(u, 'urgent · waiting '+ageDays(u.created_at)); }
+    if(!t){ var o = nextTask(openAll); if(o) t = taskPick(o, 'oldest open · since '+ageDays(o.created_at)); }
+    if(t) used[t.id] = 1;
+    D.three.today = t;
+
+    var w = null;
+    var wk = datedJobs.filter(function(x){ var dd = dayDiff(today, x.due); return dd >= 1 && dd <= 7 && !used['job-'+x.j.id]; });
+    if(wk.length) w = jobPick(wk[0], 'due '+dName(wk[0].due));
+    else { var u2 = nextTask(urgent); if(u2) w = taskPick(u2, 'urgent · next in line'); }
+    if(!w){ var o2 = nextTask(openAll); if(o2) w = taskPick(o2, 'next open task'); }
+    if(w) used[w.id] = 1;
+    D.three.week = w;
+
+    var m = null;
+    var mo = datedJobs.filter(function(x){ var dd = dayDiff(today, x.due); return dd >= 8 && dd <= 31 && !used['job-'+x.j.id]; });
+    if(mo.length) m = jobPick(mo[0], 'due '+dName(mo[0].due));
+    else { var o3 = nextTask(openAll); if(o3) m = taskPick(o3, 'longest-waiting open task · '+ageDays(o3.created_at)); }
+    if(m) used[m.id] = 1;
+    D.three.month = m;
+  }
+
+  /* Coming up: the next 14 days — calendar plus dated shop jobs, one river, oldest first. */
+  function buildUp(){
+    var today = dstr(new Date()), seen = {}, out = [];
+    D.cal.forEach(function(c){
       var d = String(c.start_time).slice(0,10);
-      var k = (c.summary||'') + '|' + d;
-      if(seenCal[k]) return;                          // the sync duplicates some events
-      seenCal[k] = 1;
-      var days = Math.round((new Date(d+'T00:00:00') - new Date(today+'T00:00:00'))/86400000);
-      if(days < 0 || days > 13) return;
-      items.push({ kind:'cal', id:'cal-'+c.id, urg: days<=0?0:(days===1?1:3),
-        title: c.summary || '(no title)',
-        sub: (days<=0?'Today':days===1?'Tomorrow':dName(d)) + (c.all_day?'':' · '+clock(c.start_time)),
-        when: d, row: c });
+      var k = (c.summary||'')+'|'+d;
+      if(seen[k]) return; seen[k] = 1;                     // the sync duplicates some events
+      var dd = dayDiff(today, d);
+      if(dd < 0 || dd > 14) return;
+      out.push({ kind:'cal', id:'cal-'+c.id, when:d, sortTs:c.start_time,
+        title:c.summary||'(no title)', sub:(dd<=0?'Today':dd===1?'Tomorrow':dName(d)) + (c.all_day?'':' · '+clock(c.start_time)), raw:c });
     });
-
-    (D.jobs || []).forEach(function(j){
-      var due = j.preferred_date || j.next_action_date || null;
-      var days = due ? Math.round((new Date(due+'T00:00:00') - new Date(today+'T00:00:00'))/86400000) : null;
-      var urg, sub;
-      if(j.status === 'at_risk' || j.rush){ urg = 0; sub = j.rush ? 'RUSH' : 'At risk'; }
-      else if(due && days <= 0){ urg = 0; sub = days === 0 ? 'Due today' : Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' overdue'; }
-      else if(j.status === 'new'){ urg = 1; sub = 'Never answered'; }
-      else if(due && days <= 7){ urg = 2; sub = 'Due '+dName(due); }
-      else if(j.status === 'in_shop'){ urg = 2; sub = 'On the bench'; }
-      else { urg = 4; sub = due ? dName(due) : 'Scheduled'; }
-      if(j.item_location) sub += ' · ' + j.item_location;
-      items.push({ kind:'job', id:'job-'+j.id, urg:urg, title:j.customer_name || '(no name)',
-        sub:sub, when: due || '', row:j });
+    D.jobs.forEach(function(j){
+      var due = jobDue(j); if(!due) return;
+      var dd = dayDiff(today, due);
+      if(dd < 0 || dd > 14) return;
+      out.push({ kind:'job', id:'job-'+j.id, when:due, sortTs:due+'T23:59:59',
+        title:(j.customer_name||'(no name)')+' — '+(j.service||'job'),
+        sub:(dd<=0?'Today':dd===1?'Tomorrow':dName(due)) + ' · ' + (j.rush?'RUSH':j.status), raw:j });
     });
-
-    items.sort(function(a,b){ return a.urg - b.urg || String(a.when).localeCompare(String(b.when)); });
-    D.items = items;
+    out.sort(function(a,b){ return a.sortTs < b.sortTs ? -1 : 1; });
+    D.up = out;
   }
 
-  var KIND_TAG = { cal:'calendar', job:'bench' };
-  function paintNeeds(){
-    var box = el('db-need'); if(!box) return;
-    var hot = D.items.filter(function(x){ return x.urg === 0; }).length;
-    el('db-need-count').textContent = D.items.length
-      ? D.items.length + (hot ? ' · ' + hot + ' today' : '')
-      : 'nothing';
-    /* Where we stand sits at the top of the list on purpose: it is the one row he
-       should be able to read without picking anything. */
-    var head = '<div class="db-row'+(D.pick==='stand'?' on':'')+'" data-k="stand" onclick="dbPick(this)">'
-      + '<div class="db-row__main"><div class="db-row__name">Where we stand</div>'
-      + '<div class="db-row__sub">today · this week · this month</div></div>'
-      + '<div class="db-row__val">'+standTail()+'</div></div>'
-      /* Every side of the shop, with what it made and what it kept, one click from
-         its full cost stack. */
-      + SIDES.map(function(x){
-          var y = sideRoll(x.k, 'year');
-          if(!(y.sold > 0)) return '';
-          return '<div class="db-row'+(D.pick==='side:'+x.k?' on':'')+'" data-k="side:'+x.k+'" onclick="dbPick(this)">'
-            + '<div class="db-row__main"><div class="db-row__name">'+esc(x.label)+'</div>'
-            + '<div class="db-row__sub">what it made, what it cost, what it kept</div></div>'
-            + '<div class="db-row__val">'+money(y.sold)
-            + '<div class="'+(y.profit>=0?'good':'bad')+'">'+money(y.profit)+'</div></div></div>';
-        }).join('');
-    box.innerHTML = head + (D.items.length
-      ? D.items.map(function(x){
-          return '<div class="db-row'+(D.pick===x.id?' on':'')+'" data-k="'+esc(x.id)+'" onclick="dbPick(this)">'
-            + '<div class="db-row__main"><div class="db-row__name">'+esc(x.title)+'</div>'
-            + '<div class="db-row__sub">'+esc(x.sub)+'</div></div>'
-            + '<div class="db-row__val"><span style="color:var(--text-xs)">'+esc(KIND_TAG[x.kind]||'')+'</span>'
-            + (x.urg===0?'<div class="bad">now</div>':'')+'</div></div>';
+  function row(k, kick, name, sub, cls){
+    return '<div class="db-row '+(cls||'')+(D.pick===k?' on':'')+'" data-k="'+esc(k)+'" onclick="dbPick(this)">'
+      + '<div class="db-row__main">'
+      + (kick ? '<div class="db-row__kick">'+esc(kick)+'</div>' : '')
+      + '<div class="db-row__name">'+esc(name)+'</div>'
+      + (sub ? '<div class="db-row__sub">'+esc(sub)+'</div>' : '')
+      + '</div></div>';
+  }
+
+  function paintLeft(){
+    var box = el('db-left'), note = el('db-three-note');
+    if(!box) return;
+    var h = '';
+    h += D.three.today ? row('three:today','Today',D.three.today.title,D.three.today.why,'db-three') : '<div class="db-empty">Nothing open for today.</div>';
+    h += D.three.week  ? row('three:week','This week',D.three.week.title,D.three.week.why,'db-three') : '';
+    h += D.three.month ? row('three:month','This month',D.three.month.title,D.three.month.why,'db-three') : '';
+    h += '<div class="db-sec">Your list — needs your hands <small>'+D.has.length+'</small></div>';
+    h += D.has.length
+      ? D.has.map(function(a){ return row('ha:'+a.id, null, haTitle(a.body), a.from_user+' · '+ageDays(a.created_at)+' · #'+a.id); }).join('')
+      : '<div class="db-empty">Nothing waiting on you. Clear.</div>';
+    h += '<div class="db-sec">Open tasks <small>'+D.tasks.length+'</small></div>';
+    h += D.tasks.length
+      ? D.tasks.slice().sort(function(a,b){
+          var pa = a.priority==='urgent'?0:1, pb = b.priority==='urgent'?0:1;
+          if(pa!==pb) return pa-pb;
+          return a.created_at < b.created_at ? -1 : 1;
+        }).map(function(t){
+          return row('task:'+t.id, null, t.title, (t.assigned_to||'unowned')+' · '+(t.priority||'normal')+' · '+t.status+' · '+ageDays(t.created_at));
         }).join('')
-      : '<div class="db-empty">Nothing is waiting on you. The bench is clear and the next two weeks are empty.</div>');
+      : '<div class="db-empty">The board is empty.</div>';
+    box.innerHTML = h;
+    if(note) note.textContent = 'live';
   }
 
-  window.dbPick = function(row){ D.pick = row.dataset.k; paintNeeds(); dbPaintDetail(); };
+  function paintUp(){
+    var box = el('db-up'), n = el('db-up-count');
+    if(!box) return;
+    box.innerHTML = D.up.length
+      ? D.up.map(function(x){ return row('up:'+x.id, null, x.title, x.sub); }).join('')
+      : '<div class="db-empty">Nothing on the calendar for two weeks.</div>';
+    if(n) n.textContent = D.up.length + ' · 14 days';
+  }
 
-  /* today / this week / this month, each against the bar it has to clear */
-  function standing(){
-    var today = iso(new Date()), wk = new Date(), mo = today.slice(0,7);
-    wk.setDate(wk.getDate() - ((wk.getDay()+6)%7));    // Monday
-    var weekStart = iso(wk);
-    function roll(pred){
-      return (D.days||[]).filter(pred).reduce(function(a,r){
-        a.cal++; if(r.rang_today) a.sold++;
-        a.rang += Number(r.rang||0); a.orders += Number(r.orders||0);
-        a.bar  += Number(r.day_costs||0); a.profit += Number(r.true_profit||0);
-        a.tips += Number(r.tips||0);
-        return a;
-      }, { cal:0, sold:0, rang:0, orders:0, bar:0, profit:0, tips:0 });
+  window.dbPick = function(rowEl){ D.pick = rowEl.dataset.k; paintLeft(); paintUp(); paintDetail(); };
+
+  function findPicked(){
+    var p = D.pick || '';
+    if(p.indexOf('three:') === 0) return D.three[p.slice(6)] || null;
+    if(p.indexOf('ha:') === 0){ var id = p.slice(3); var a = D.has.filter(function(x){ return String(x.id) === id; })[0]; return a ? { kind:'ha', raw:a } : null; }
+    if(p.indexOf('task:') === 0){ var tid = p.slice(5); var t = D.tasks.filter(function(x){ return x.id === tid; })[0]; return t ? { kind:'task', raw:t } : null; }
+    if(p.indexOf('up:') === 0){ var uid = p.slice(3); var u = D.up.filter(function(x){ return x.id === uid; })[0]; return u || null; }
+    return null;
+  }
+
+  function paintDetail(){
+    var box = el('db-detail'), head = el('db-detail-head');
+    if(!box) return;
+    var p = findPicked();
+    if(!p){ if(head) head.textContent = 'Today'; box.innerHTML = '<div class="db-empty">Pick anything on the left.</div>'; return; }
+    var kind = p.kind, r = p.raw;
+    if(kind === 'task'){
+      if(head) head.textContent = 'Task';
+      box.innerHTML = '<div class="db-big" style="font-size:18px;line-height:1.3">'+esc(r.title)+'</div>'
+        + '<div class="db-sub">'+esc((r.assigned_to||'unowned')+' · '+(r.priority||'normal')+' · '+r.status+' · '+(r.project_slug||''))+'</div>'
+        + (p.why ? '<div class="db-sub">'+esc(p.why)+'</div>' : '')
+        + (r.first_step_for_picker ? '<div class="db-sec">First step</div><div class="db-msg__body">'+esc(r.first_step_for_picker)+'</div>' : '')
+        + (r.body ? '<div class="db-sec">The task</div><div class="db-msg__body">'+esc(String(r.body).slice(0,2000))+'</div>' : '')
+        + (r.acceptance_criteria ? '<div class="db-sec">Done when</div><div class="db-msg__body">'+esc(r.acceptance_criteria)+'</div>' : '');
+      return;
     }
-    return {
-      today: roll(function(r){ return r.day === today; }),
-      week:  roll(function(r){ return r.day >= weekStart && r.day <= today; }),
-      month: roll(function(r){ return mKey(r.day) === mo && r.day <= today; }),
-      year:  roll(function(r){ return r.day.slice(0,4) === today.slice(0,4); }),
-      weekStart: weekStart, todayIso: today
-    };
-  }
-  /* One side of the shop over one period. Same arithmetic the whole shop gets. */
-  function sideRoll(side, period){
-    var today = iso(new Date()), mo = today.slice(0,7);
-    var wk = new Date(); wk.setDate(wk.getDate() - ((wk.getDay()+6)%7));
-    var from = period==='today' ? today
-             : period==='week'  ? iso(wk)
-             : period==='month' ? mo + '-01'
-             : today.slice(0,4) + '-01-01';
-    return (D.divRows||[]).reduce(function(a, r){
-      if(r.division !== side || r.day < from || r.day > today) return a;
-      a.sold   += Number(r.rang||0);
-      a.tips   += Number(r.tips||0);
-      a.cogs   += Number(r.cost_known||0);
-      a.wages  += Number(r.wages_share||0);
-      a.rent   += Number(r.overhead_share||0);
-      a.spend  += Number(r.spend_share||0);
-      a.profit += Number(r.profit||0);
-      a.lines  += Number(r.lines||0);
-      a.costed += Number(r.lines_costed||0);
-      a.uncost += Number(r.rang_uncosted||0);
-      a.share   = Number(r.share_of_revenue||a.share);
-      return a;
-    }, { sold:0, tips:0, cogs:0, wages:0, rent:0, spend:0, profit:0, lines:0, costed:0, uncost:0, share:0 });
-  }
-
-  function standTail(){
-    var s = standing(), t = s.today;
-    return '<span class="'+(t.rang >= t.bar ? 'good' : 'bad')+'">'+money(t.rang)+'</span>';
-  }
-  function barRow(label, r){
-    var over = r.rang - r.bar;
-    return '<div class="db-line"><span>'+label+'</span><span>'+money(r.rang)+' of '+money(r.bar)
-      + ' <span class="'+(over>=0?'good':'bad')+'">'+(over>=0?'+':'')+money(over)+'</span></span></div>';
-  }
-
-  function dbPaintDetail(){
-    var box = el('db-detail'), head = el('db-detail-head'); if(!box) return;
-    if(String(D.pick).indexOf('side:') === 0) return paintSide(box, head, D.pick.slice(5));
-    var it = D.items.filter(function(x){ return x.id === D.pick; })[0];
-    if(D.pick !== 'stand' && it) return paintItem(box, head, it);
-    if(head) head.textContent = 'Where we stand';
-
-    var s = standing(), t = s.today, w = s.week, m = s.month, y = s.year;
-    var perDay = t.bar || (m.cal ? m.bar/m.cal : 0);
-    box.innerHTML = '<div class="db-big">'+money(t.rang)+'</div>'
-      + '<div class="db-sub">Today · '+dName(s.todayIso)+' · '+t.orders+(t.orders===1?' order':' orders')+'</div>'
-      + '<div class="db-sec">Against the bar</div>'
-      + barRow('Today', t)
-      + barRow('This week — since '+dName(s.weekStart), w)
-      + barRow('This month so far', m)
-      + '<div class="db-line" style="border-bottom:0"><span>The year</span><span>'+money(y.rang)
-        + ' <span class="'+(y.profit>=0?'good':'bad')+'">'+money(y.profit)+'</span></span></div>'
-      + '<div class="db-note">The bar is '+money(perDay)+' a day — rent plus wages — before a single sale. '
-        + 'Anything under it loses money. Days, weeks, months and what actually sold live in Retail → Till; this screen only says where we stand now.</div>'
-      + '<div class="db-sec">The bench</div>'
-      + '<div class="db-line"><span>Waiting on you — never answered</span><span>'+D.items.filter(function(x){return x.sub==='Never answered';}).length+'</span></div>'
-      + '<div class="db-line"><span>In the shop</span><span>'+(D.jobs||[]).filter(function(j){return j.status==='in_shop';}).length+'</span></div>'
-      + '<div class="db-line" style="border-bottom:0"><span>Needs you today</span><span>'+D.items.filter(function(x){return x.urg===0;}).length+'</span></div>';
-  }
-
-  /* WHAT THIS SIDE COSTS ME. Sold, cost of goods, its share of wages and rent,
-     everything it cost, what it kept — over the year and over today, this week
-     and this month. The same four periods the whole shop gets. */
-  function paintSide(box, head, side){
-    if(head) head.textContent = SIDE_LABEL[side] || side;
-    var y  = sideRoll(side, 'year');
-    var pc = Math.round((y.share||0) * 100);
-    var allIn = y.cogs + y.spend + y.wages + y.rent;
-    function costCell(v, anyLines){
-      return (Number(v) > 0 || !anyLines) ? '-'+money(v) : '<span style="color:var(--text-xs)">not recorded</span>';
+    if(kind === 'job'){
+      if(head) head.textContent = 'Shop job';
+      var due = jobDue(r);
+      box.innerHTML = '<div class="db-big" style="font-size:18px;line-height:1.3">'+esc(r.customer_name||'(no name)')+'</div>'
+        + '<div class="db-sub">'+esc((r.service||'job')+' · '+(r.rush?'RUSH · ':'')+r.status+(due?' · '+dName(due):''))+'</div>'
+        + (p.why ? '<div class="db-sub">'+esc(p.why)+'</div>' : '')
+        + '<div class="db-sec">The job</div>'
+        + '<div class="db-line"><span>Where</span><span>'+esc(r.item_location||'—')+'</span></div>'
+        + '<div class="db-line"><span>Worth</span><span>'+(r.total_cad!=null?'$'+Number(r.total_cad).toFixed(2):'—')+'</span></div>'
+        + (r.blade_detail ? '<div class="db-sec">Blades</div><div class="db-msg__body">'+esc(r.blade_detail)+'</div>' : '')
+        + (r.notes ? '<div class="db-sec">Notes</div><div class="db-msg__body">'+esc(String(r.notes).slice(0,1200))+'</div>' : '')
+        + '<div class="db-note">Move it along in Services → Queue. It leaves this screen the moment it is done.</div>';
+      return;
     }
-    var periods = [
-      ['Today','today'], ['This week','week'], ['This month','month'], ['The year','year']
-    ];
-    box.innerHTML = '<div class="db-big">'+money(y.sold)+'</div>'
-      + '<div class="db-sub">'+esc(SIDE_LABEL[side]||side)+' · sold this year'
-        + (y.tips>0 ? ' · includes '+money(y.tips)+' of tips it earned' : '')+'</div>'
-
-      + '<div class="db-sec">What it costs me — this year</div>'
-      + '<div class="db-line"><span>Cost of the goods it sold'
-        + (y.costed && y.costed < y.lines ? ' <span style="color:var(--text-xs)">('+y.costed+' of '+y.lines+' lines)</span>' : '')
-        + '</span><span>'+costCell(y.cogs, y.lines)+'</span></div>'
-      + (y.spend > 0 ? '<div class="db-line"><span>Money out — '+pc+'% share</span><span>-'+money(y.spend)+'</span></div>' : '')
-      + '<div class="db-line"><span>Wages — '+pc+'% share</span><span>-'+money(y.wages)+'</span></div>'
-      + '<div class="db-line"><span>Rent — '+pc+'% share</span><span>-'+money(y.rent)+'</span></div>'
-      + '<div class="db-line"><span><b>Everything it cost me</b></span><span><b>-'+money(allIn)+'</b></span></div>'
-      + '<div class="db-line" style="border-bottom:0"><span><b>What it kept</b></span><span class="'+(y.profit>=0?'good':'bad')+'"><b>'+money(y.profit)+'</b></span></div>'
-      + '<div class="db-note">This side brings in '+pc+'% of the money, so it carries '+pc+'% of the rent and wages — every calendar day, sold or not. '
-        + 'The sides add back to the whole shop exactly.</div>'
-      + (y.uncost > 0
-          ? '<div class="db-note">'+money(y.uncost)+' of what it sold has NO cost of goods on record, so the number above is kinder than the truth. Only the Wuben stock has a real unit cost on file.</div>'
-          : '')
-
-      + '<div class="db-sec">Over time</div>'
-      + periods.map(function(pr){
-          var r = sideRoll(side, pr[1]);
-          if(!(r.sold > 0) && pr[1] !== 'year') return '<div class="db-line"><span>'+pr[0]+'</span><span style="color:var(--text-xs)">nothing sold</span></div>';
-          return '<div class="db-line"><span>'+pr[0]+'</span><span>'+money(r.sold)
-            + ' · cost -'+money(r.cogs + r.spend + r.wages + r.rent)
-            + ' <span class="'+(r.profit>=0?'good':'bad')+'">'+money(r.profit)+'</span></span></div>';
-        }).join('')
-      + '<div class="db-note">What actually sold, line by line, is in Retail → Till with this same side selected.</div>';
-  }
-
-  function paintItem(box, head, it){
-    if(head) head.textContent = it.kind === 'cal' ? 'On the calendar' : 'On the bench';
-    var r = it.row;
-    if(it.kind === 'cal'){
-      box.innerHTML = '<div class="db-big" style="font-size:20px;line-height:1.3">'+esc(it.title)+'</div>'
-        + '<div class="db-sub">'+esc(it.sub)+'</div>'
+    if(kind === 'ha'){
+      if(head) head.textContent = 'Needs your hands';
+      box.innerHTML = '<div class="db-msg"><div class="db-msg__head"><span class="db-msg__from">'+esc(r.from_user)+'</span>'
+        + '<span>#'+r.id+'</span><span class="db-msg__when">'+esc(ageDays(r.created_at))+'</span></div>'
+        + '<div class="db-msg__body">'+esc(String(r.body).slice(0,4000))+'</div></div>'
+        + '<button type="button" class="db-act" onclick="dbClearHA('+Number(r.id)+')">Done — clear it from the list</button>'
+        + '<div class="db-note">Clearing writes read back to the bus, so it leaves every screen, not just this one.</div>';
+      return;
+    }
+    if(kind === 'cal'){
+      if(head) head.textContent = 'Coming up';
+      box.innerHTML = '<div class="db-big" style="font-size:18px;line-height:1.3">'+esc(r.summary||'(no title)')+'</div>'
+        + '<div class="db-sub">'+esc(dName(String(r.start_time).slice(0,10)) + (r.all_day?'':' · '+clock(r.start_time)))+'</div>'
         + (r.location ? '<div class="db-line"><span>Where</span><span>'+esc(r.location)+'</span></div>' : '')
         + (r.description ? '<div class="db-sec">Detail</div><div class="db-msg__body">'+esc(String(r.description).slice(0,1200))+'</div>' : '')
         + (r.html_link ? '<div class="db-note"><a href="'+esc(r.html_link)+'" target="_blank" rel="noopener">Open in Google Calendar</a></div>' : '');
       return;
     }
-    box.innerHTML = '<div class="db-big" style="font-size:20px;line-height:1.3">'+esc(r.customer_name||'(no name)')+'</div>'
-      + '<div class="db-sub">'+esc(it.sub)+'</div>'
-      + '<div class="db-sec">The job</div>'
-      + '<div class="db-line"><span>What</span><span style="text-align:right;max-width:60%">'+esc(r.service||'—')+'</span></div>'
-      + '<div class="db-line"><span>Status</span><span>'+esc(r.status)+(r.rush?' · RUSH':'')+'</span></div>'
-      + (r.preferred_date ? '<div class="db-line"><span>Wanted by</span><span>'+esc(dName(r.preferred_date))+'</span></div>' : '')
-      + (r.dropped_off_at ? '<div class="db-line"><span>Dropped off</span><span>'+esc(dName(String(r.dropped_off_at).slice(0,10)))+'</span></div>' : '')
-      + (r.item_location ? '<div class="db-line"><span>Where the item is</span><span>'+esc(r.item_location)+'</span></div>' : '')
-      + (r.total_cad ? '<div class="db-line"><span>Quoted</span><span>'+money(r.total_cad)+'</span></div>' : '')
-      + (r.blade_detail ? '<div class="db-sec">Blades</div><div class="db-msg__body">'+esc(r.blade_detail)+'</div>' : '')
-      + (r.notes ? '<div class="db-sec">Notes</div><div class="db-msg__body">'+esc(String(r.notes).slice(0,1200))+'</div>' : '')
-      + '<div class="db-note">Move it along in Service → Queue. It leaves this screen the moment it is done.</div>';
+    box.innerHTML = '<div class="db-empty">Pick anything on the left.</div>';
   }
 
-  async function dbLoadBus(){
-    var box = el('db-bus'); if(!box || !window.supa) return;
+  /* The click that ACTS: flip the bus row to read. It disappears here, in COMMS,
+     and on every other seat's poll — one write, every screen honest. */
+  window.dbClearHA = async function(id){
+    var box = el('db-detail');
     try{
-      var r = await window.supa.from('agent_messages')
-        .select('id,from_user,to_user,body,created_at')
-        .in('project_slug', ['azcc','command-center-cowork','azck-retail-cowork','azck-finance-cowork'])
-        .order('created_at', { ascending: false }).limit(25);
+      var r = await window.supa.from('agent_messages').update({ status:'read' }).eq('id', id);
       if(r.error) throw r.error;
-      var rows = r.data || [];
-      el('db-bus-count').textContent = rows.length ? rows.length + ' recent' : 'none yet';
-      box.innerHTML = rows.length ? rows.map(function(x){
-        var b = esc(x.body||''); if(b.length>320) b = b.slice(0,320)+'…';
-        var when=''; try{ when = new Date(x.created_at).toLocaleString(); }catch(e){}
-        return '<div class="db-msg"><div class="db-msg__head">'
-          + '<span style="color:var(--text)"><b>#'+esc(x.id)+'</b></span>'
-          + '<span class="db-msg__from">'+esc(x.from_user)+'</span><span>→</span><span>'+esc(x.to_user)+'</span><span class="db-msg__when">'+esc(when)+'</span></div>'
-          + '<div class="db-msg__body">'+b+'</div></div>';
-      }).join('') : '<div class="db-empty">Nothing on the business lanes yet.</div>';
-    }catch(e){ box.innerHTML = '<div class="db-empty">Could not read the bus: '+esc(e.message||String(e))+'</div>'; }
-  }
+      D.has = D.has.filter(function(x){ return Number(x.id) !== Number(id); });
+      D.pick = 'three:today';
+      paintLeft(); paintDetail();
+      if(box) box.innerHTML = '<div class="db-empty">Cleared. It is off your list everywhere.</div>' + box.innerHTML;
+    }catch(e){ if(box) box.innerHTML = '<div class="db-empty">Could not clear it: '+esc(e.message||String(e))+'</div>'; }
+  };
+
+  /* Live means live: re-read the board every 5 minutes without being asked. */
+  setInterval(function(){ try{ window.renderDashboard(); }catch(e){} }, 300000);
 })();
     </script>
   </section>
@@ -5547,14 +5497,14 @@ const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 /* Lanes: the 8 business tabs from the phase-1 map + dashboard. Honest empty states —
    nothing pretends to be live until phase 3 moves the real tab in. */
 const LANES = [
-  ['dashboard','DASHBOARD','Where we stand right now — what needs you today.','LIVE 2026-08-12: the STATE, not the record. Today/week/month against the daily bar, the bench, the next two weeks of calendar. Days, weeks, months, the year and what sold all live in Retail \u2192 Till and must never be duplicated here. Static section below; buildShell skips it.'],
+  ['dashboard','DASHBOARD','What needs you — today, this week, this month.','LIVE 2026-08-13: the board that assists — three priorities picked live, the human-action list auto-loaded from the bus and clearable in place, open tasks, the next two weeks, all read live from forge_tasks, the bus, bookings and calendar. The money record lives in STORE → Till, never here. Static section below; buildShell skips it.'],
   ['services','SERVICES','Queue, bookings, calendar, schedule.','LIVE — ported 2026-08-05 (phase 3, first lane in). Static section below; buildShell skips it.'],
   ['shop','SHOP','Shop floor and retail.','LIVE — ported 2026-08-05 (port 6/6, string complete). Static section below; buildShell skips it.'],
   ['quadfang','QUADFANG','The broadheads division.','LIVE — ported 2026-08-05 (port 5/6). Static section below; buildShell skips it.'],
   ['corporate','CORPORATE','Corporate pipeline and team building.','LIVE — ported 2026-08-05 (port 4/6). Static section below; buildShell skips it.'],
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
-  ['retail','RETAIL','Her side of the business — the till and the shelf.','LIVE 2026-08-12 — Till and Stock, each navigation | information | communication. Service jobs are NOT here: they belong to SERVICES, and finished ones belong nowhere he has to look. Static section below; buildShell skips it.'],
+  ['retail','STORE','The till and the shelf — the record of what sold.','LIVE 2026-08-12, renamed STORE 2026-08-13 (his call: the Till carries service days too, so RETAIL was the wrong word — and STORE, not SHOP, because SHOP is the floor). Till and Stock, each navigation | information | communication. Internal key stays retail so nothing breaks. Service jobs are NOT here: they belong to SERVICES, and finished ones belong nowhere he has to look. Static section below; buildShell skips it.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
 
