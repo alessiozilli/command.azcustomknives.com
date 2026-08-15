@@ -37,7 +37,7 @@
 
   var S = {
     host: null, rows: null, bookings: [], sel: null, err: null,
-    busy: false, msg: null, bad: false,
+    busy: false, msg: null, bad: false, later: null,
     folded: {}    // group key -> true when shut
   };
 
@@ -60,6 +60,31 @@
   /* digits only, so "780-897-3944 (text)" and "+17808973944" are the same person */
   function digits(p){ return String(p||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,''); }
 
+  /* ── THE TIMER (2026-08-14, "build it") ──
+     status='approved' is still the only armed state and only his press sets it;
+     send_after just tells the sender to hold. pg_cron asks the sender every
+     minute whether anything is due — punctual to the minute, nothing awake. */
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function localStamp(d){
+    return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())
+      +'T'+pad2(d.getHours())+':'+pad2(d.getMinutes());
+  }
+  function tomorrow9(){
+    var d = new Date(); d.setDate(d.getDate()+1); d.setHours(9,0,0,0);
+    return localStamp(d);
+  }
+  function whenWords(iso){
+    if(!iso) return '';
+    var d = new Date(iso); if(isNaN(d.getTime())) return '';
+    var now = new Date(), t = new Date(); t.setDate(t.getDate()+1);
+    function dayOf(x){ return x.getFullYear()+'-'+x.getMonth()+'-'+x.getDate(); }
+    var clock = ((d.getHours()%12)||12)+':'+pad2(d.getMinutes())+' '+(d.getHours()<12?'AM':'PM');
+    if(dayOf(d) === dayOf(now)) return 'today '+clock;
+    if(dayOf(d) === dayOf(t))   return 'tomorrow '+clock;
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+', '+clock;
+  }
+  function isWaiting(r){ return !!r.send_after && new Date(r.send_after).getTime() > Date.now(); }
+
   /* the job's own money: priced lines first, the stored total behind them.
      Mirrors az_pickup_draft_text exactly — if one changes, change both. */
   function moneyOf(b){
@@ -80,7 +105,7 @@
 
   /* ══════════════ DATA ══════════════ */
   var SMS_COLS = 'id,created_at,direction,to_phone,to_name,body,ref,booking_id,status,'
-               + 'approved_by,approved_at,sent_at,error,created_by';
+               + 'approved_by,approved_at,sent_at,error,created_by,send_after';
   var BK_COLS  = 'id,customer_name,customer_phone,category,service,blade_detail,quantity,'
                + 'total_cad,line_items,item_location,status,done_at,picked_up_at,notes';
 
@@ -169,6 +194,12 @@
   + '.txm-act:disabled{opacity:.4;cursor:default;}'
   + '.txm-note{font-size:11.5px;color:var(--amber,#c8922a);margin-top:8px;}'
   + '.txm-note.bad{color:#e05252;}'
+  + '.txm-timer{margin-top:10px;font-size:14px;color:var(--amber,#c8922a);}'
+  + '.txm-when{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}'
+  + '.txm-when input{background:var(--bg,#0d1114);color:var(--text,#dde4eb);border:1px solid var(--border,#252c33);'
+  +   'border-radius:4px;padding:8px 10px;font-family:inherit;font-size:12.5px;color-scheme:dark;}'
+  + '.txm-when input:focus{outline:none;border-color:var(--amber,#c8922a);}'
+  + '.txm-act.on{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}'
   + '.txm-tag{font-family:var(--mono,monospace);font-size:9px;letter-spacing:.06em;text-transform:uppercase;'
   +   'padding:2px 7px;border:1px solid var(--border,#252c33);border-radius:10px;color:var(--text-dim,#8a9aa8);}'
   + '.txm-tag.amber{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}'
@@ -202,13 +233,14 @@
   var GROUPS = [
     { key:'wait',    label:'Waiting on you', pick:function(r){ return r.direction==='outbound' && r.status==='draft'; } },
     { key:'failed',  label:'Did not go through', pick:function(r){ return r.direction==='outbound' && r.status==='failed'; } },
-    { key:'flight',  label:'On its way',     pick:function(r){ return r.direction==='outbound' && r.status==='approved'; } },
+    { key:'timer',   label:'On a timer',     pick:function(r){ return r.direction==='outbound' && r.status==='approved' && isWaiting(r); } },
+    { key:'flight',  label:'On its way',     pick:function(r){ return r.direction==='outbound' && r.status==='approved' && !isWaiting(r); } },
     { key:'replies', label:'They wrote back', pick:function(r){ return r.direction!=='outbound'; } },
     { key:'sent',    label:'Told them',      pick:function(r){ return r.direction==='outbound' && r.status==='sent'; } },
     { key:'dropped', label:'Dropped',        pick:function(r){ return r.direction==='outbound' && r.status==='cancelled'; } }
   ];
   /* everything shut except the one thing he acts on — a short column he can read */
-  function foldedDefault(key){ return key !== 'wait'; }
+  function foldedDefault(key){ return key !== 'wait' && key !== 'timer'; }
   function isFolded(key){ return S.folded[key] === undefined ? foldedDefault(key) : S.folded[key]; }
 
   function paint(){
@@ -269,7 +301,8 @@
         var m = r.direction === 'outbound' ? moneyOf(b) : null;
         return '<div class="txm-item'+(S.sel===r.id?' on':'')+'" data-txmid="'+esc(r.id)+'">'
           + '<div class="txm-item__n">'+esc(r.to_name || r.to_phone || 'Unknown')+'</div>'
-          + '<div class="txm-item__s">'+esc(ago(r.created_at))
+          + '<div class="txm-item__s">'
+          +   (isWaiting(r) ? '⏱ '+esc(whenWords(r.send_after)) : esc(ago(r.created_at)))
           +   (m ? ' · '+cad(m.total) : (r.direction==='outbound' && r.booking_id && !m ? ' · no price' : ''))
           +   (r.direction !== 'outbound' ? ' · inbound' : '')+'</div>'
           + '<div class="txm-item__p">'+esc(String(r.body||'').slice(0,120))+'</div>'
@@ -300,6 +333,7 @@
 
     var tag = !out ? '<span class="txm-tag">they wrote in</span>'
       : r.status === 'draft'     ? '<span class="txm-tag amber">waiting on you</span>'
+      : r.status === 'approved' && isWaiting(r) ? '<span class="txm-tag amber">⏱ '+esc(whenWords(r.send_after))+'</span>'
       : r.status === 'approved'  ? '<span class="txm-tag amber">on its way</span>'
       : r.status === 'sent'      ? '<span class="txm-tag good">sent '+esc(day(r.sent_at||r.created_at))+'</span>'
       : r.status === 'failed'    ? '<span class="txm-tag bad">did not go through</span>'
@@ -336,12 +370,23 @@
         + '<div class="txm-len">'+String(r.body||'').length+' characters</div>'
         + '<div class="txm-acts">'
         +   '<button type="button" class="txm-act send" data-txmact="send">Send</button>'
+        +   '<button type="button" class="txm-act'+(S.later===r.id?' on':'')+'" data-txmact="later">Send later</button>'
         +   '<button type="button" class="txm-act" data-txmact="save">Save for later</button>'
         +   (b ? '<button type="button" class="txm-act" data-txmact="rewrite">Write it again</button>' : '')
         +   '<button type="button" class="txm-act" data-txmact="drop">Don\'t send</button>'
         + '</div>'
+        + (S.later === r.id
+            ? '<div class="txm-when">'
+              + '<input type="datetime-local" id="txm-whenbox" value="'+tomorrow9()+'">'
+              + '<button type="button" class="txm-act send" data-txmact="schedule">Set the timer</button>'
+              + '</div>'
+            : '')
       : '<div class="txm-label">'+(out ? 'The words' : 'What they wrote')+'</div>'
         + '<div class="txm-frozen">'+esc(r.body||'')+'</div>'
+        + (out && r.status === 'approved' && isWaiting(r)
+            ? '<div class="txm-timer">⏱ Going out '+esc(whenWords(r.send_after))+'</div>'
+              + '<div class="txm-acts"><button type="button" class="txm-act" data-txmact="unschedule">Call it back</button></div>'
+            : '')
         + (r.status === 'cancelled'
             ? '<div class="txm-acts"><button type="button" class="txm-act" data-txmact="revive">Put it back in the queue</button></div>'
             : '');
@@ -437,6 +482,56 @@
       return;
     }
 
+    /* open/close the little clock row — no write, just the panel */
+    if(what === 'later'){
+      S.later = (S.later === r.id) ? null : r.id;
+      S.msg = null; paintMid(); return;
+    }
+
+    /* CALL IT BACK — straight to draft, clock cleared. Only 'approved' is armed,
+       so the text has not gone anywhere and cannot. */
+    if(what === 'unschedule'){
+      S.busy = true;
+      window.supa.from('az_sms_log')
+        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null }).eq('id', r.id)
+        .then(function(up){
+          S.busy = false;
+          if(up.error){ say('Could not call it back: '+up.error.message, true); return; }
+          S.msg = 'Called back. It is a draft again and nothing was sent.'; S.bad = false;
+          load();
+        });
+      return;
+    }
+
+    if(what === 'schedule'){
+      var box = document.getElementById('txm-whenbox');
+      var val = box ? box.value : '';
+      if(!val){ say('Pick a day and a time first.', true); return; }
+      var when = new Date(val);
+      if(isNaN(when.getTime())){ say('That time did not make sense to me.', true); return; }
+      if(when.getTime() <= Date.now()){ say('That moment has already passed — pick a later one.', true); return; }
+      var text = typed();
+      if(!text){ say('There is nothing written to send.', true); return; }
+      if(/\$_+/.test(text)){ say('That still has a blank where the total goes. Press Write it again, or type the number.', true); return; }
+      if(!confirm('This goes to their phone '+whenWords(when.toISOString())+', on its own:\n\n'+text+'\n\nSet the timer?')) return;
+      S.busy = true;
+      window.supa.from('az_sms_log').update({ body: text }).eq('id', r.id).then(function(sv){
+        if(sv.error) throw new Error(sv.error.message);
+        /* armed, but held: the sender skips it until send_after has passed */
+        return window.supa.from('az_sms_log').update({
+          status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(),
+          send_after: when.toISOString()
+        }).eq('id', r.id);
+      }).then(function(up){
+        if(up.error) throw new Error(up.error.message);
+        S.busy = false; S.later = null;
+        S.msg = 'Timer set — it goes out '+whenWords(when.toISOString())+'. You can still call it back.';
+        S.bad = false;
+        load();
+      }).catch(function(e){ S.busy = false; say('Could not set the timer: '+(e.message||e), true); });
+      return;
+    }
+
     if(what === 'revive'){
       S.busy = true;
       window.supa.from('az_sms_log').update({ status:'draft', error:null }).eq('id', r.id).then(function(up){
@@ -519,7 +614,7 @@
       paintLeft(); return;
     }
     if(el = e.target.closest('[data-txmid]')){
-      if(el.classList.contains('txm-item')){ S.sel = el.dataset.txmid; S.msg = null; paintLeft(); paintMid(); return; }
+      if(el.classList.contains('txm-item')){ S.sel = el.dataset.txmid; S.msg = null; S.later = null; paintLeft(); paintMid(); return; }
     }
     if(el = e.target.closest('[data-txmact]')){ act(el.dataset.txmact); return; }
     if(e.target.closest('#txm-reload')){ load(); return; }

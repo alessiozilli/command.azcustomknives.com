@@ -320,7 +320,7 @@
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null,
     // the pickup text — one row of az_sms_log per job, shown inside the job window
-    sms: [], smsMsg: null, smsBad: false
+    sms: [], smsMsg: null, smsBad: false, smsLater: null
   };
 
   const TABS = [
@@ -354,7 +354,7 @@
         /* the pickup texts, so the job window can show a job's own text without
            a second round-trip every time he taps a different job */
         window.supa.from('az_sms_log')
-          .select('id,booking_id,to_name,to_phone,body,status,created_at,sent_at,error')
+          .select('id,booking_id,to_name,to_phone,body,status,created_at,sent_at,error,send_after')
           .eq('direction','outbound').not('booking_id','is',null)
           .order('created_at',{ascending:false}).limit(400)
       ]);
@@ -489,6 +489,11 @@
   .scx-sms__idle{font-size:12px;color:var(--text-dim,#8a9aa8);margin-top:6px;}
   .scx-sms__note{font-size:11.5px;color:var(--amber,#c8922a);margin-top:7px;}
   .scx-sms__note.bad{color:#e05252;}
+  .scx-sms__timer{margin-top:8px;font-size:13px;color:var(--amber,#c8922a);}
+  .scx-sms__when{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .scx-sms__when input{background:var(--bg,#0d1114);color:var(--text,#dde4eb);border:1px solid var(--border,#252c33);
+    border-radius:4px;padding:7px 10px;font-family:inherit;font-size:12.5px;color-scheme:dark;}
+  .scx-sms__when input:focus{outline:none;border-color:var(--amber,#c8922a);}
   .scx-row{display:flex;gap:8px;margin:3px 0;}
   .scx-row__k{width:96px;flex:none;font-family:var(--mono,monospace);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-xs,#566470);padding-top:3px;}
   .scx-row__v{flex:1;min-width:0;overflow-wrap:anywhere;}
@@ -971,6 +976,36 @@
   }
   function cad(n){ return '$' + Number(n).toFixed(2); }
 
+  /* ── THE TIMER (2026-08-14, "build it") ──
+     A text can be armed for later. status='approved' is still the only armed
+     state and only his press sets it; send_after just tells the sender to hold.
+     pg_cron asks the sender every minute whether anything is due, so it is
+     punctual to the minute with no laptop, browser or session awake. */
+  const pad2 = n => String(n).padStart(2,'0');
+  /* the value a <input type="datetime-local"> wants — LOCAL time, never ISO */
+  function localStamp(d){
+    return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())
+      +'T'+pad2(d.getHours())+':'+pad2(d.getMinutes());
+  }
+  /* the default he almost always wants: tell them tomorrow morning */
+  function tomorrow9(){
+    const d = new Date(); d.setDate(d.getDate()+1); d.setHours(9,0,0,0);
+    return localStamp(d);
+  }
+  /* how a human says a moment: "today 4:15 PM", "tomorrow 9:00 AM", "Aug 18, 9:00 AM" */
+  function whenWords(iso){
+    if(!iso) return '';
+    const d = new Date(iso); if(isNaN(d.getTime())) return '';
+    const now = new Date();
+    const dayOf = x => x.getFullYear()+'-'+x.getMonth()+'-'+x.getDate();
+    const t = new Date(now); t.setDate(t.getDate()+1);
+    const clock = ((d.getHours()%12)||12)+':'+pad2(d.getMinutes())+' '+(d.getHours()<12?'AM':'PM');
+    if(dayOf(d) === dayOf(now)) return 'today '+clock;
+    if(dayOf(d) === dayOf(t))   return 'tomorrow '+clock;
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+', '+clock;
+  }
+  const isWaiting = r => !!r.send_after && new Date(r.send_after).getTime() > Date.now();
+
   /* the live text row for a job — the newest one that still matters */
   function smsOf(id){
     const mine = (S.sms || []).filter(x => x.booking_id === id && x.status !== 'cancelled');
@@ -1018,6 +1053,16 @@
         + note + '</div>';
     }
     if(row.status === 'approved'){
+      /* armed and waiting on its clock — still his to call back */
+      if(isWaiting(row)){
+        return '<div class="scx-sms">'+head
+          + '<div class="scx-sms__done">'+esc(row.body)+'</div>'
+          + '<div class="scx-sms__timer">⏱ Going out '+esc(whenWords(row.send_after))+'</div>'
+          + '<div class="scx-acts">'
+          +   '<button type="button" class="scx-act" data-scxsms="unschedule" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Call it back</button>'
+          + '</div>'
+          + note + '</div>';
+      }
       return '<div class="scx-sms">'+head
         + '<div class="scx-sms__done">'+esc(row.body)+'</div>'
         + '<div class="scx-sms__idle">On its way. Hit the reload arrow in a moment to see it land.</div>'
@@ -1032,10 +1077,17 @@
       + '<div class="scx-sms__to">to '+esc(row.to_name||r.customer_name||'')+' · '+esc(row.to_phone||r.customer_phone||'')+'</div>'
       + '<div class="scx-acts">'
       +   '<button type="button" class="scx-act send" data-scxsms="send" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send</button>'
+      +   '<button type="button" class="scx-act'+(S.smsLater===row.id?' on':'')+'" data-scxsms="later" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send later</button>'
       +   '<button type="button" class="scx-act" data-scxsms="save" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Save for later</button>'
       +   '<button type="button" class="scx-act" data-scxsms="rewrite" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Write it again</button>'
       +   '<button type="button" class="scx-act" data-scxsms="drop" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Don\'t send</button>'
       + '</div>'
+      + (S.smsLater === row.id
+          ? '<div class="scx-sms__when">'
+            + '<input type="datetime-local" id="scx-sms-when" value="'+tomorrow9()+'">'
+            + '<button type="button" class="scx-act send" data-scxsms="schedule" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Set the timer</button>'
+            + '</div>'
+          : '')
       + note + '</div>';
   }
 
@@ -1054,6 +1106,52 @@
   async function smsAct(what, smsId, bookingId){
     if(!window.supa || S.busy) return;
     const r = (S.rows || []).find(x => x.id === bookingId);
+
+    /* open/close the little clock row — no write, just the panel */
+    if(what === 'later'){
+      S.smsLater = (S.smsLater === smsId) ? null : smsId;
+      S.smsMsg = null; paintDetail(); return;
+    }
+
+    /* CALL IT BACK — the escape hatch. Straight to draft, clock cleared, and
+       because only 'approved' is armed the text has not gone anywhere. */
+    if(what === 'unschedule'){
+      S.busy = true;
+      const up = await window.supa.from('az_sms_log')
+        .update({ status:'draft', send_after:null, approved_by:null, approved_at:null }).eq('id', smsId);
+      S.busy = false;
+      if(up.error){ smsSay('Could not call it back: '+up.error.message, true); return; }
+      S.smsMsg = 'Called back. It is a draft again and nothing was sent.'; S.smsBad = false;
+      load(); return;
+    }
+
+    if(what === 'schedule'){
+      const box = document.getElementById('scx-sms-when');
+      const val = box ? box.value : '';
+      if(!val){ smsSay('Pick a day and a time first.', true); return; }
+      const when = new Date(val);
+      if(isNaN(when.getTime())){ smsSay('That time did not make sense to me.', true); return; }
+      if(when.getTime() <= Date.now()){ smsSay('That moment has already passed — pick a later one.', true); return; }
+      const body = smsTyped();
+      if(!body){ smsSay('There is nothing written to send.', true); return; }
+      if(/\$_+/.test(body)){ smsSay('That still has a blank where the total goes. Write it again, or type the number.', true); return; }
+      if(!confirm('This goes to their phone '+whenWords(when.toISOString())+', on its own:\n\n'+body+'\n\nSet the timer?')) return;
+      S.busy = true;
+      try{
+        const sv = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
+        if(sv.error) throw new Error(sv.error.message);
+        /* armed, but held: the sender skips it until send_after has passed */
+        const up = await window.supa.from('az_sms_log').update({
+          status:'approved', approved_by:'alessio', approved_at:new Date().toISOString(),
+          send_after: when.toISOString()
+        }).eq('id', smsId);
+        if(up.error) throw new Error(up.error.message);
+        S.busy = false; S.smsLater = null;
+        S.smsMsg = 'Timer set — it goes out '+whenWords(when.toISOString())+'. You can still call it back.';
+        S.smsBad = false;
+        load(); return;
+      }catch(e){ S.busy = false; smsSay('Could not set the timer: '+(e.message||e), true); return; }
+    }
 
     if(what === 'write' || what === 'rewrite'){
       S.busy = true;
@@ -1652,7 +1750,7 @@
     }
     if(el = T('[data-scxid]')){
       /* selecting stays IN PLACE — the product column is always beside you now */
-      S.editing = null; S.formOpen = false; S.smsMsg = null; S.sel = el.dataset.scxid; paint(); return; }
+      S.editing = null; S.formOpen = false; S.smsMsg = null; S.smsLater = null; S.sel = el.dataset.scxid; paint(); return; }
     if(T('#scx-save')){ saveNew(); return; }
     if(T('#scx-add-line')){ addLine(); return; }
     if(el = T('[data-scxc]')){
