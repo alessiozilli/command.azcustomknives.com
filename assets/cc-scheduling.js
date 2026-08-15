@@ -305,6 +305,10 @@
   const told      = r => !!r.notified_at || (S.sms || []).some(x =>
                       x.booking_id === r.id && (x.status === 'sent' || x.status === 'approved'));
   const onBench   = r => isJob(r) && isOpen(r) && !r.done_at;
+  /* how long "at the counter" lasts before a job becomes basket work — see the
+     long note on paintBoard's counter section for why this window exists */
+  const COUNTER_DAYS = 2;
+  const atCounter = r => isPickup(r) && !told(r) && daysWaiting(r.done_at) <= COUNTER_DAYS;
   const wtLabel   = r => r.work_type === 'appointment' ? 'Appointment' : r.work_type === 'event' ? 'Event' : 'Job';
   const typeLabel = r => SVQ_TYPES[r.category] || (r.category ? r.category : 'Job');
 
@@ -560,7 +564,7 @@
       /* the basket is NOT board work (2026-08-12) — but a finished job nobody has
          been told about IS his move, and it clears itself on Send (2026-08-14) */
       board: rows.filter(r => onBench(r) && committed(r)).length
-           + rows.filter(r => isPickup(r) && !told(r)).length
+           + rows.filter(atCounter).length
            + rows.filter(r => isRequest(r) && r.next_action_date && r.next_action_date <= todayStr()).length,
       schedule: null,
       bench: rows.filter(r => onBench(r) && !!r.preferred_date).length,
@@ -637,9 +641,19 @@
        The basket was work waiting on a CUSTOMER — nothing he could do, so it only
        made him tense. This is the opposite: it is HIS move, one tap, and the row
        leaves the board the moment he presses Send. Newest first — the job he just
-       finished is the one he is standing there holding. */
-    const counter = rows.filter(r => isPickup(r) && !told(r))
+       finished is the one he is standing there holding.
+
+       WHY A WINDOW. "Not told yet" alone put twelve rows here on the first run,
+       including three finished over a MONTH ago that the system simply has no
+       record of a call for. That is the stress pile again wearing a new name. The
+       counter is a physical place: this week's finished work, sitting there before
+       it is handed over. Anything older is the basket — it lives on Pickups, where
+       chasing is the job, and the section head says how many are back there so
+       nothing feels hidden. */
+    const untold  = rows.filter(r => isPickup(r) && !told(r));
+    const counter = untold.filter(atCounter)
       .sort((a,b) => (a.done_at||'') < (b.done_at||'') ? 1 : -1);
+    const counterOld = untold.length - counter.length;
     const chase = rows.filter(r => isRequest(r))
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
     const chaseDue = chase.filter(r => r.next_action_date && r.next_action_date <= t);
@@ -686,10 +700,13 @@
        The one thing that DOES belong here: the job he just finished that nobody
        has been told about. That is his move, not the customer's, and it clears
        itself the second he sends the text. */
-    h += '<div class="scx-sec">At the counter — '+counter.length+'</div>';
+    const older = counterOld
+      ? ' <span class="scx-tag">'+counterOld+' older under Pickups</span>' : '';
+    h += '<div class="scx-sec">At the counter — '+counter.length+older+'</div>';
     h += counter.length ? counter.map(r => rowHtml(r, [
         { a:'picked_up', l:'Mark picked up' }
-      ])).join('') : '<div class="scx-empty">Everyone finished has been told.</div>';
+      ])).join('')
+      : '<div class="scx-empty">Nothing finished in the last '+COUNTER_DAYS+' days is waiting on a word from you.</div>';
 
     h += '<div class="scx-sec">Next 7 days</div>';
     h += week.length ? week.map(d =>
