@@ -309,7 +309,9 @@
     sel: null, editing: null, busy: false, err: null, host: null, opts: {},
     // composer
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
-    addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null
+    addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null,
+    // the pickup text — one row of az_sms_log per job, shown inside the job window
+    sms: [], smsMsg: null, smsBad: false
   };
 
   const TABS = [
@@ -331,7 +333,7 @@
   async function load(){
     if(!window.supa){ S.err = 'signin'; paint(); return; }
     try{
-      const [bk, cl, at, oh, gc] = await Promise.all([
+      const [bk, cl, at, oh, gc, sm] = await Promise.all([
         window.supa.from('az_service_bookings').select(BK_COLS).order('created_at',{ascending:false}).limit(500),
         window.supa.from('az_time_claims').select('id,resource,span,kind,status,booking_id,note').limit(500),
         window.supa.from('az_event_attendees').select('id,booking_id,name,contact,paid,notes').limit(1000),
@@ -339,7 +341,13 @@
         window.supa.from('calendar_events').select('summary,start_time,end_time,all_day,location')
           .gte('start_time', new Date(Date.now()-86400000).toISOString())
           .lte('start_time', new Date(Date.now()+15*86400000).toISOString())
-          .order('start_time').limit(120)
+          .order('start_time').limit(120),
+        /* the pickup texts, so the job window can show a job's own text without
+           a second round-trip every time he taps a different job */
+        window.supa.from('az_sms_log')
+          .select('id,booking_id,to_name,to_phone,body,status,created_at,sent_at,error')
+          .eq('direction','outbound').not('booking_id','is',null)
+          .order('created_at',{ascending:false}).limit(400)
       ]);
       if(bk.error) throw bk.error;
       S.rows = bk.data || [];
@@ -347,6 +355,7 @@
       S.attendees = at.error ? [] : (at.data || []);
       S.hours = oh.error ? [] : (oh.data || []);
       S.gcal = gc.error ? [] : (gc.data || []);
+      S.sms = sm.error ? [] : (sm.data || []);
       S.err = null;
     }catch(e){
       console.warn('[scheduling] load failed', e);
@@ -452,7 +461,25 @@
   .scx-act:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
   .scx-act.on{background:var(--amber,#c8922a);color:#000;border-color:var(--amber,#c8922a);}
   .scx-act.go{border-color:rgba(46,160,67,.6);color:#2ea043;}
+  .scx-act.send{background:var(--azck-red,#990000);border-color:var(--azck-red,#990000);color:#fff;font-weight:700;}
+  .scx-act.send:hover{filter:brightness(1.2);color:#fff;}
   .scx-act:disabled{opacity:.4;cursor:default;}
+  /* the pickup text, right under the buttons that finish the job */
+  .scx-sms{margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#252c33);}
+  .scx-sms__head{font-family:var(--mono,monospace);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--amber,#c8922a);margin-bottom:7px;}
+  .scx-sms__money{font-size:12px;color:var(--text-dim,#8a9aa8);margin-bottom:7px;}
+  .scx-sms__money b{color:var(--text,#dde4eb);font-size:13px;}
+  .scx-sms__money.bad{color:#e05252;}
+  .scx-sms__body{width:100%;background:var(--bg,#0d1114);color:var(--text,#dde4eb);border:1px solid var(--border,#252c33);
+    border-radius:5px;padding:8px 10px;font-family:inherit;font-size:12.5px;line-height:1.55;resize:vertical;}
+  .scx-sms__body:focus{outline:none;border-color:var(--amber,#c8922a);}
+  .scx-sms__done{background:var(--bg,#0d1114);border:1px solid var(--border,#252c33);border-radius:5px;
+    padding:8px 10px;font-size:12.5px;line-height:1.55;color:var(--text-dim,#8a9aa8);white-space:pre-wrap;}
+  .scx-sms__to{font-family:var(--mono,monospace);font-size:9.5px;color:var(--text-dim,#8a9aa8);margin-top:5px;}
+  .scx-sms__idle{font-size:12px;color:var(--text-dim,#8a9aa8);margin-top:6px;}
+  .scx-sms__note{font-size:11.5px;color:var(--amber,#c8922a);margin-top:7px;}
+  .scx-sms__note.bad{color:#e05252;}
   .scx-row{display:flex;gap:8px;margin:3px 0;}
   .scx-row__k{width:96px;flex:none;font-family:var(--mono,monospace);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-xs,#566470);padding-top:3px;}
   .scx-row__v{flex:1;min-width:0;overflow-wrap:anywhere;}
@@ -804,6 +831,10 @@
   /* ── DETAIL — the product, plus the actions that move it ── */
   function paintDetail(){
     const det = document.getElementById('scx-detail'); if(!det) return;
+    /* never eat half-typed words: whatever is in the text box outranks what the
+       DB last handed us, so a repaint (or a reload) cannot swallow his edit */
+    const typing = det.querySelector('[data-scxsmsid]');
+    if(typing) smsPatchLocal(typing.dataset.scxsmsid, { body: typing.value });
     const r = (S.rows||[]).find(x => x.id === S.sel);
     if(S.editing === S.sel && r){ paintEdit(det, r); return; }
     delete det.dataset.scxEditing;
@@ -855,7 +886,197 @@
       + row('Notes', r.notes ? esc(r.notes) : '')
       + transport
       + roster
-      + '<div class="scx-acts">'+acts+'</div>';
+      + '<div class="scx-acts">'+acts+'</div>'
+      + smsHtml(r);
+  }
+
+  /* ══════════════ THE PICKUP TEXT — it lives HERE, in the job window ══════════════
+     Alessio, 2026-08-14: the Send button belongs directly under mark started /
+     mark done / mark pickup, so marking a job done and telling the customer are
+     one motion in one place. The Texts tab is the ledger; this is the counter.
+
+     THE MONEY IS CALCULATED, NEVER A PLACEHOLDER. line_items carry Square's
+     catalogue prices, which are PRE-tax (proven: unit_cad matches az_price_list
+     sell_price exactly, and the two texts he has already approved — Randy $109.20,
+     Ralph $86.10 — are both subtotal x 1.05). Alberta is GST 5%, no PST.
+     The same arithmetic lives in the DB function az_pickup_draft_text, which
+     writes the draft; this mirror only SHOWS him the breakdown.
+
+     NOTHING SENDS WITHOUT HIS PRESS. Send is the only thing that flips a row from
+     draft to approved, and the sender (client-sms POST /run) drains approved only. */
+  const SMS_SEND_URL = 'https://twrlvnfszohyrmivdhre.supabase.co/functions/v1/client-sms/run';
+  const GST = 0.05;
+
+  /* the job's own money: priced lines first, the stored total behind them */
+  function moneyOf(r){
+    let sub = null;
+    if(r.line_items && r.line_items.length){
+      sub = r.line_items.reduce((a,l) => a + (Number(l.line_cad) || 0), 0);
+    }
+    if(!(sub > 0) && r.total_cad != null) sub = Number(r.total_cad);
+    if(!(sub > 0)) return null;
+    return { sub: sub, gst: Math.round(sub * GST * 100) / 100, total: Math.round(sub * (1 + GST) * 100) / 100 };
+  }
+  function cad(n){ return '$' + Number(n).toFixed(2); }
+
+  /* the live text row for a job — the newest one that still matters */
+  function smsOf(id){
+    const mine = (S.sms || []).filter(x => x.booking_id === id && x.status !== 'cancelled');
+    return mine.length ? mine[0] : null;
+  }
+
+  function smsHtml(r){
+    if(!isJob(r) && !isSession(r)) return '';
+    if(r.status === 'archived') return '';
+    const m   = moneyOf(r);
+    const row = smsOf(r.id);
+    const note = S.smsMsg
+      ? '<div class="scx-sms__note'+(S.smsBad?' bad':'')+'">'+esc(S.smsMsg)+'</div>' : '';
+
+    const head = '<div class="scx-sms__head">The text'
+      + (row && row.status === 'sent' ? ' <span class="scx-tag">sent '+esc(day(row.sent_at || row.created_at))+'</span>'
+        : row && row.status === 'approved' ? ' <span class="scx-tag amber">handed to the sender</span>'
+        : row && row.status === 'failed'   ? ' <span class="scx-tag bad">last try failed</span>'
+        : row ? ' <span class="scx-tag amber">waiting on you</span>' : '')
+      + '</div>';
+
+    /* the money, spelled out, so he never has to do the arithmetic himself */
+    const priced = m
+      ? '<div class="scx-sms__money">'+cad(m.sub)+' + '+cad(m.gst)+' GST = <b>'+cad(m.total)+'</b></div>'
+      : '<div class="scx-sms__money bad">No price on this job — tap Edit and add the lines, then Write the text again.</div>';
+
+    if(!r.customer_phone){
+      return '<div class="scx-sms">'+head
+        + '<div class="scx-sms__money bad">No phone on file. Tap Edit and add one, then the text can be written.</div>'
+        + '</div>';
+    }
+
+    if(!row){
+      const why = r.done_at ? '' : ' It is written for you the moment you mark this done.';
+      return '<div class="scx-sms">'+head+priced
+        + '<div class="scx-sms__idle">Nothing written yet.'+esc(why)+'</div>'
+        + '<div class="scx-acts"><button type="button" class="scx-act" data-scxsms="write" data-scxrow="'+r.id+'">Write the text</button></div>'
+        + note + '</div>';
+    }
+
+    if(row.status === 'sent'){
+      return '<div class="scx-sms">'+head
+        + '<div class="scx-sms__done">'+esc(row.body)+'</div>'
+        + '<div class="scx-sms__idle">Gone to '+esc(row.to_phone||'')+'. Nothing more to do.</div>'
+        + note + '</div>';
+    }
+    if(row.status === 'approved'){
+      return '<div class="scx-sms">'+head
+        + '<div class="scx-sms__done">'+esc(row.body)+'</div>'
+        + '<div class="scx-sms__idle">On its way. Hit the reload arrow in a moment to see it land.</div>'
+        + note + '</div>';
+    }
+
+    /* draft or failed — the one place the words can still be changed */
+    return '<div class="scx-sms">'+head
+      + (row.status === 'failed' ? '<div class="scx-sms__money bad">'+esc(row.error||'It did not go through.')+'</div>' : '')
+      + priced
+      + '<textarea class="scx-sms__body" id="scx-sms-body" data-scxsmsid="'+row.id+'" rows="5">'+esc(row.body||'')+'</textarea>'
+      + '<div class="scx-sms__to">to '+esc(row.to_name||r.customer_name||'')+' · '+esc(row.to_phone||r.customer_phone||'')+'</div>'
+      + '<div class="scx-acts">'
+      +   '<button type="button" class="scx-act send" data-scxsms="send" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send</button>'
+      +   '<button type="button" class="scx-act" data-scxsms="save" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Save for later</button>'
+      +   '<button type="button" class="scx-act" data-scxsms="rewrite" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Write it again</button>'
+      +   '<button type="button" class="scx-act" data-scxsms="drop" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Don\'t send</button>'
+      + '</div>'
+      + note + '</div>';
+  }
+
+  function smsSay(t, bad){ S.smsMsg = t || null; S.smsBad = !!bad; paintDetail(); }
+
+  /* what is in the box right now — his edits win over what the DB last saw */
+  function smsTyped(){
+    const t = document.getElementById('scx-sms-body');
+    return t ? t.value.trim() : '';
+  }
+  function smsPatchLocal(id, patch){
+    const i = (S.sms || []).findIndex(x => x.id === id);
+    if(i >= 0) S.sms[i] = Object.assign({}, S.sms[i], patch);
+  }
+
+  async function smsAct(what, smsId, bookingId){
+    if(!window.supa || S.busy) return;
+    const r = (S.rows || []).find(x => x.id === bookingId);
+
+    if(what === 'write' || what === 'rewrite'){
+      S.busy = true;
+      try{
+        const t = await window.supa.rpc('az_pickup_draft_text', { p_booking: bookingId });
+        if(t.error) throw new Error(t.error.message);
+        const body = t.data;
+        if(!body) throw new Error('That job did not give me enough to write with.');
+        if(smsId){
+          const up = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
+          if(up.error) throw new Error(up.error.message);
+          smsPatchLocal(smsId, { body: body });
+          S.busy = false; smsSay('Rewritten from the job. It still has not gone anywhere.');
+          return;
+        }
+        const ins = await window.supa.from('az_sms_log').insert({
+          direction:'outbound', to_phone:r.customer_phone, to_name:r.customer_name,
+          body: body, status:'draft', booking_id: bookingId,
+          ref: 'pickup-' + new Date().toISOString().slice(0,10), created_by: 'queue-window'
+        });
+        if(ins.error) throw new Error(ins.error.message);
+        S.busy = false; S.smsMsg = 'Written. Read it, then press Send.'; S.smsBad = false;
+        load(); return;
+      }catch(e){ S.busy = false; smsSay('Could not write it: '+(e.message||e), true); return; }
+    }
+
+    const body = smsTyped();
+
+    if(what === 'save'){
+      if(!body){ smsSay('There is nothing written to save.', true); return; }
+      S.busy = true;
+      const up = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
+      S.busy = false;
+      if(up.error){ smsSay('Could not save it: '+up.error.message, true); return; }
+      smsPatchLocal(smsId, { body: body });
+      smsSay('Saved. It still has not gone anywhere.');
+      return;
+    }
+
+    if(what === 'drop'){
+      if(!confirm('Throw this text away? The job stays done, the customer just does not hear from us.')) return;
+      S.busy = true;
+      const up = await window.supa.from('az_sms_log')
+        .update({ status:'cancelled', error:'dropped by Alessio' }).eq('id', smsId);
+      S.busy = false;
+      if(up.error){ smsSay('Could not drop it: '+up.error.message, true); return; }
+      S.smsMsg = 'Dropped.'; S.smsBad = false;
+      load(); return;
+    }
+
+    if(what === 'send'){
+      if(!body){ smsSay('There is nothing written to send.', true); return; }
+      if(/\$_+/.test(body)){ smsSay('That still has a blank where the total goes. Write it again, or type the number.', true); return; }
+      if(!confirm('This goes to their phone now:\n\n'+body+'\n\nSend it?')) return;
+      S.busy = true;
+      try{
+        const sv = await window.supa.from('az_sms_log').update({ body: body }).eq('id', smsId);
+        if(sv.error) throw new Error(sv.error.message);
+        /* THE ONE LINE THAT ARMS IT. Everything before this is reversible. */
+        const up = await window.supa.from('az_sms_log')
+          .update({ status:'approved', approved_by:'alessio', approved_at:new Date().toISOString() }).eq('id', smsId);
+        if(up.error) throw new Error(up.error.message);
+        await fetch(SMS_SEND_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+        /* trust the ROW, not the call */
+        await new Promise(z => setTimeout(z, 1500));
+        const chk = await window.supa.from('az_sms_log').select('status,error').eq('id', smsId).maybeSingle();
+        const st = chk.data ? chk.data.status : null;
+        S.busy = false;
+        S.smsMsg = st === 'sent'   ? 'Sent.'
+                 : st === 'failed' ? 'It did not go through: '+(chk.data.error||'unknown')
+                 : 'Handed to the sender, still going. Hit the reload arrow in a moment.';
+        S.smsBad = st === 'failed';
+        load(); return;
+      }catch(e){ S.busy = false; smsSay('Could not send it: '+(e.message||e), true); return; }
+    }
   }
 
   /* transport legs (blueprint §5): where the property is + one-tap moves */
@@ -1336,7 +1557,8 @@
     if(T('#scx-reload')){ load(); return; }
     if(T('#scx-new')){ S.formOpen = !S.formOpen; S.editing = null; paint(); return; }
     if(T('#scx-form-cancel')){ S.formOpen = false; paint(); return; }
-    if(el = T('[data-scxact]')){ act(el.dataset.scxrow, el.dataset.scxact); return; }
+    if(el = T('[data-scxsms]')){ smsAct(el.dataset.scxsms, el.dataset.scxsmsid || null, el.dataset.scxrow); return; }
+    if(el = T('[data-scxact]')){ S.smsMsg = null; act(el.dataset.scxrow, el.dataset.scxact); return; }
     if(el = T('[data-scxloc]')){ write(el.dataset.scxrow, { item_location: el.dataset.scxloc }); return; }
     if(el = T('[data-scxedit]')){ S.editing = el.dataset.scxedit; S.sel = el.dataset.scxedit; paintDetail(); return; }
     if(T('#scx-ed-save')){ saveEdit(T('#scx-ed-save').dataset.scxrow); return; }
@@ -1378,7 +1600,7 @@
     }
     if(el = T('[data-scxid]')){
       /* selecting stays IN PLACE — the product column is always beside you now */
-      S.editing = null; S.formOpen = false; S.sel = el.dataset.scxid; paint(); return; }
+      S.editing = null; S.formOpen = false; S.smsMsg = null; S.sel = el.dataset.scxid; paint(); return; }
     if(T('#scx-save')){ saveNew(); return; }
     if(T('#scx-add-line')){ addLine(); return; }
     if(el = T('[data-scxc]')){
