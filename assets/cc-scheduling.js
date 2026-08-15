@@ -299,6 +299,11 @@
   const committed = r => isJob(r) ? !!r.preferred_date : !!r.scheduled_at;
   const isRequest = r => isOpen(r) && !committed(r);
   const isPickup  = r => !!r.done_at && !r.picked_up_at && r.status !== 'archived' && r.status !== 'cancelled';
+  /* Have they heard from us? A text that is sent or armed counts, and so does the
+     old notified_at stamp for the years before the texting line existed. This is
+     what separates HIS move (tell them) from THEIRS (come and get it). */
+  const told      = r => !!r.notified_at || (S.sms || []).some(x =>
+                      x.booking_id === r.id && (x.status === 'sent' || x.status === 'approved'));
   const onBench   = r => isJob(r) && isOpen(r) && !r.done_at;
   const wtLabel   = r => r.work_type === 'appointment' ? 'Appointment' : r.work_type === 'event' ? 'Event' : 'Job';
   const typeLabel = r => SVQ_TYPES[r.category] || (r.category ? r.category : 'Job');
@@ -552,7 +557,10 @@
   function counts(){
     const rows = S.rows || [];
     return {
-      board: rows.filter(r => onBench(r) && committed(r)).length   // pickups are NOT board work (2026-08-12)
+      /* the basket is NOT board work (2026-08-12) — but a finished job nobody has
+         been told about IS his move, and it clears itself on Send (2026-08-14) */
+      board: rows.filter(r => onBench(r) && committed(r)).length
+           + rows.filter(r => isPickup(r) && !told(r)).length
            + rows.filter(r => isRequest(r) && r.next_action_date && r.next_action_date <= todayStr()).length,
       schedule: null,
       bench: rows.filter(r => onBench(r) && !!r.preferred_date).length,
@@ -622,6 +630,16 @@
   function paintBoard(left){
     const rows = S.rows || [], t = todayStr();
     const bench = rows.filter(r => onBench(r) && committed(r)).sort(benchSort);
+    /* AT THE COUNTER — done, and they have NOT been told yet. Alessio, 2026-08-14:
+       "they should still be on the board somewhere, not on the bench, they're at
+       the counter … so I can send a text and go through the system with it."
+       This does not undo the 2026-08-12 order that took the basket off his board.
+       The basket was work waiting on a CUSTOMER — nothing he could do, so it only
+       made him tense. This is the opposite: it is HIS move, one tap, and the row
+       leaves the board the moment he presses Send. Newest first — the job he just
+       finished is the one he is standing there holding. */
+    const counter = rows.filter(r => isPickup(r) && !told(r))
+      .sort((a,b) => (a.done_at||'') < (b.done_at||'') ? 1 : -1);
     const chase = rows.filter(r => isRequest(r))
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
     const chaseDue = chase.filter(r => r.next_action_date && r.next_action_date <= t);
@@ -632,7 +650,7 @@
       const late = r.status === 'at_risk';
       /* the tag states WHERE IT IS; the buttons are ACTIONS ("Mark …") — the two
          must never read alike (Alessio caught the buttons reading as states) */
-      const state = isPickup(r) ? 'done · not collected'
+      const state = isPickup(r) ? (told(r) ? 'done · not collected' : 'done · not told yet')
         : r.started_at ? 'started' : (r.status||'').replace('_',' ');
       return '<div class="scx-card'+(S.sel===r.id?' on':'')+'" data-scxid="'+r.id+'">'
         + '<div class="scx-card__t">'+esc(r.customer_name||'—')+' · '+esc(typeLabel(r))
@@ -663,7 +681,15 @@
        queue, it is just sitting there. Every day I look at it and get stressed
        by it. I am creating this so I cannot be stressed." Done-and-not-collected
        lives on the PICKUPS tab, where it is someone's job to chase it — and it
-       is still one tap away. Nothing was deleted; it was moved off his glance. */
+       is still one tap away. Nothing was deleted; it was moved off his glance.
+
+       The one thing that DOES belong here: the job he just finished that nobody
+       has been told about. That is his move, not the customer's, and it clears
+       itself the second he sends the text. */
+    h += '<div class="scx-sec">At the counter — '+counter.length+'</div>';
+    h += counter.length ? counter.map(r => rowHtml(r, [
+        { a:'picked_up', l:'Mark picked up' }
+      ])).join('') : '<div class="scx-empty">Everyone finished has been told.</div>';
 
     h += '<div class="scx-sec">Next 7 days</div>';
     h += week.length ? week.map(d =>
@@ -680,7 +706,8 @@
 
     if(left) left.innerHTML = h;
     const cnt = document.getElementById('scx-count');
-    if(cnt) cnt.textContent = bench.length + chaseDue.length;   // basket excluded — not his work
+    /* the basket stays excluded — but the counter is his work, so it counts */
+    if(cnt) cnt.textContent = bench.length + counter.length + chaseDue.length;
     /* NOTHING auto-selects (Alessio, 2026-08-09): the centre shows only what HE
        tapped — otherwise it just offers + New job. */
   }
@@ -755,8 +782,16 @@
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
     if(S.tab === 'classes')  return rows.filter(r => isSession(r) && isOpen(r))
       .sort((a,b) => (a.scheduled_at||'9999') < (b.scheduled_at||'9999') ? -1 : 1);
-    if(S.tab === 'pickups')  return rows.filter(isPickup)
-      .sort((a,b) => (a.done_at||'') < (b.done_at||'') ? -1 : 1);
+    /* PICKUPS — nobody-told-yet rides at the top, freshest first (2026-08-14: he
+       marked a job done and could not find it, because oldest-first buried it at
+       the bottom of fifteen). Below that, the chase list keeps its old order:
+       longest wait first, because that is who needs chasing. */
+    if(S.tab === 'pickups')  return rows.filter(isPickup).sort((a,b) => {
+      const ta = told(a), tb = told(b);
+      if(ta !== tb) return ta ? 1 : -1;
+      if(!ta) return (a.done_at||'') < (b.done_at||'') ? 1 : -1;
+      return (a.done_at||'') < (b.done_at||'') ? -1 : 1;
+    });
     if(S.tab === 'history')  return rows.filter(r => !isOpen(r))
       .sort((a,b) => (a.created_at||'') < (b.created_at||'') ? 1 : -1);
     return [];
