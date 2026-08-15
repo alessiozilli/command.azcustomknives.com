@@ -36,10 +36,11 @@
     { sel: '.dash-3col',           key: 'cc.dash.cols'    }, // Dashboard (areas | overview | bus)
     { sel: '.ht4',                 key: 'cc.ht.cols',   stack: 1100 }, // Shop > Heat Treat (steel | procs | phases | detail+bus)
     { sel: '.ah4',                 key: 'cc.ah.cols',   stack: 1100 }, // Shop > After-Hours (days | steps | viewer | bus)
+    { sel: '.knp-3col',            key: 'cc.knp.cols'   }, // Shop > Patterns (knives | pattern | bus) — 2026-08-06
+    { sel: '.hw-3col',             key: 'cc.hw.cols'    }, // Hardware (builds | buy board + history | bus) — bus #4224, 2026-08-06
     { sel: '.scx-3col',            key: 'cc.scx.cols'   }, // Services > Queue scheduling module (nav | job | bus) — 2026-08-08
     { sel: '.svsc-3col',           key: 'cc.svsched.cols' }, // Services > Schedule (hours | blocks | bus) — 2026-08-09
-    { sel: '.rt-3col',             key: 'cc.retail.cols' }, // Retail > Till/Stock (nav | info | bus) — 2026-08-12; both subtabs share one width memory
-    { sel: '.db-3col',             key: 'cc.dash.cols2' }  // Dashboard > the year in money (months | month | bus) — 2026-08-12
+    { sel: '.txm-3col',            key: 'cc.txm.cols'   } // Services > Texts (nav | message | bus) — 2026-08-14
   ];
 
   var DEFAULT_STACK = 700;
