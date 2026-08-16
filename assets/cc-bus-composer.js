@@ -2,12 +2,6 @@
    cc-bus-composer.js — the ONE shared bus message composer (bus #2081 follow-up,
    Alessio direct 2026-06-04).
 
-   COMMAND MIRROR (2026-08-05, Three-homes phase 3): byte-identical to the
-   azck-faces original except from_user — command is signed into by BOTH humans
-   (admin@ is Reanna's seat), so the sender comes from window.CC_BUS_IDENTITY()
-   set at sign-in. Hardcoding 'alessio' here would sign her words as him
-   (feedback_never_presign_as_alessio). Re-mirror from faces = re-apply this.
-
    This is an exact, reusable copy of the SHOP › INTERNS "Project Bus" composer
    (the labelled box with: to: recipient select, a channel-type chip row
    — general / task / question / fyi / escalation — a textarea, and a Send button).
@@ -197,6 +191,14 @@
       var slug = (typeof opts.getSlug === 'function') ? opts.getSlug() : opts.projectSlug;
       if (!slug) { console.warn('[ccbc] no project_slug — abort send'); sendBtn.disabled = false; sendBtn.textContent = old; return; }
       var payload = {
+        // WHO IS SENDING. Never hardcode a name here.
+        // This file is the ONE source mirrored into every face (lane-split 5,
+        // Alessio's pick 2026-08-15). command.azcustomknives.com is signed into
+        // by BOTH humans — admin@ is Reanna's seat — so the sender must come
+        // from the session, or her words get posted under his name
+        // (feedback_never_presign_as_alessio). A face with no identity helper
+        // falls through to 'alessio', which is exactly what it always did, so
+        // this line is a no-op there and correct on command.
         from_user: (typeof window.CC_BUS_IDENTITY === 'function' ? window.CC_BUS_IDENTITY() : 'alessio'),
         to_user: to,
         channel: chan,

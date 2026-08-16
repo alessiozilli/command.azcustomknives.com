@@ -225,8 +225,19 @@
   function lsSet(k, v) {
     try { localStorage.setItem(k, v == null ? '' : String(v)); } catch (e) {}
   }
+  // ─── THE PER-FACE KNOB ────────────────────────────────────────────────
+  // This file is the ONE source mirrored into every face (lane-split 5,
+  // Alessio's pick 2026-08-15). The faces are NOT identical and must not be
+  // flattened: Alessio's face wakes on BOTH (the split view), command wakes on
+  // AZ so infrastructure chatter does not clog the business side — his call,
+  // 2026-08-10. That difference now lives in the PAGE, not in a second copy of
+  // this file. Each face sets window.CC_FACE_CONFIG before loading this script.
+  // No config = 'both', which is what every face did before this existed.
+  var FACE = window.CC_FACE_CONFIG || {};
+  var DEFAULT_LANE = FACE.defaultLane || 'both';
+
   var STATE = {
-    lane:     lsGet(STATE_KEYS.lane,     'az'),        // CHANNEL: both | az | forge | machines. COMMAND face defaults AZ - the business side; infrastructure chatter does not clog it (his call, 2026-08-10).
+    lane:     lsGet(STATE_KEYS.lane,     DEFAULT_LANE), // CHANNEL, one switch flips the whole bus: both | az | forge | machines | log. Fresh key so old picks don't pin him.
     sender:   lsGet(STATE_KEYS.sender,   'all'),       // all | <instance>
     channel:  lsGet(STATE_KEYS.channel,  'all'),       // all | general | task | build | reply | … (agent_messages.channel CHECK list)
     status:   lsGet(STATE_KEYS.status,   'all'),       // all | unread | awaiting | archived
@@ -234,7 +245,7 @@
     search:   lsGet(STATE_KEYS.search,   '')
   };
   // Legacy stored picks and the retired Log button all collapse to the face default.
-  if (['log', 'all', 'human', 'ai', 'local'].indexOf(STATE.lane) !== -1) STATE.lane = 'az';
+  if (['log', 'all', 'human', 'ai', 'local'].indexOf(STATE.lane) !== -1) STATE.lane = DEFAULT_LANE;
 
   // ─── Bus #1800 — honor ?priority=urgent in the URL hash ───────────────
   // Diag-urgent pill in the header navigates to #operator/buses-v2?priority=urgent.
