@@ -5689,6 +5689,71 @@ applyTheme(localStorage.getItem(THEME_KEY)||'dark');
 /* ✎ edit — resize bars on the lane grids show only while this is on (faces pattern) */
 $('#editBtn').onclick=()=>{ const on=document.body.classList.toggle('cc-edit-on'); $('#editBtn').classList.toggle('on',on); };
 
+/* ── PASSWORD-FREE ON THIS DEVICE (Alessio, 2026-08-17) ───────────────────────
+   "I never want to put in a password for my command center again, on any device.
+   I ask that every week."
+
+   He was right that it was every week. The session persists fine — persistSession
+   and autoRefreshToken have been on since 2026-08-12 — but a session is a session:
+   clean it up server-side, or open a different face with its own storage bucket,
+   and the password form is back. Evidence in auth.sessions the night this was
+   built: one surviving session for him, created that same evening.
+
+   So the thing that outlives a session is a DEVICE KEY. 32 random bytes, minted
+   once while he is already signed in, stored beside the session it will outlive.
+   Only its SHA-256 reaches the database. On a cold load with no session the page
+   trades the key for a one-time magic-link OTP through cc-auto-login and lands in
+   a normal Supabase session — no password typed, none stored, nowhere.
+
+   Revoking it: the devices panel archives a device, and a database trigger revokes
+   every key hanging off it. Signing out HERE wipes the local key first, or the
+   auto-login would simply sign him back in — that trap is handled below. */
+const AUTOLOGIN_URL = 'https://twrlvnfszohyrmivdhre.supabase.co/functions/v1/cc-auto-login';
+const CC_FACE       = 'command';
+const DEV_ID_LS     = 'azck_cmd_device_row';   // must match ACCT_DEV_KEY below
+const DEV_KEY_LS    = 'azck_cmd_device_key';
+
+function ccLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function ccLSset(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function ccLSdel(k){ try{ localStorage.removeItem(k); }catch(e){} }
+
+/* Cold load, no session: spend the device key. Returns true if we are now signed in. */
+async function ccTryAutoLogin(){
+  const id = ccLS(DEV_ID_LS), key = ccLS(DEV_KEY_LS);
+  if(!id || !key) return false;
+  try{
+    const r = await fetch(AUTOLOGIN_URL, {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ action:'redeem', device_id:id, key:key })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!j.ok || !j.otp){
+      /* A key the server refuses is a dead key — drop it so we never loop on it.
+         Anything else (offline, 500) keeps it: the network is not the key's fault. */
+      if(r.status === 401 || r.status === 400) ccLSdel(DEV_KEY_LS);
+      return false;
+    }
+    const v = await supa.auth.verifyOtp({ email:j.email, token:j.otp, type:'magiclink' });
+    return !!(v && v.data && v.data.session);
+  }catch(e){ console.warn('[auto-login] could not run', e); return false; }
+}
+
+/* Signed in and no key yet: mint one, so the NEXT cold load needs nothing from him. */
+window.ccEnsureDeviceKey = async function(session){
+  if(ccLS(DEV_KEY_LS)) return;
+  const id = ccLS(DEV_ID_LS);
+  if(!id || !session || !session.access_token) return;
+  try{
+    const r = await fetch(AUTOLOGIN_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+session.access_token },
+      body: JSON.stringify({ action:'mint', device_id:id, face:CC_FACE })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(j.ok && j.key){ ccLSset(DEV_KEY_LS, j.key); console.info('[auto-login] this device is now password-free'); }
+  }catch(e){ console.warn('[auto-login] mint failed', e); }
+};
+
 /* gate */
 async function boot(){
   /* Resilient session read (2026-08-12): one transient null on a slow load used to bounce
@@ -5700,6 +5765,11 @@ async function boot(){
     if(session) break;
     await new Promise(res=>setTimeout(res,400));
   }
+  /* Still nothing after the retries? This device may hold a key. Spend it before
+     showing him a password form he has been typing weekly. */
+  if(!session && await ccTryAutoLogin()){
+    const r2=await supa.auth.getSession(); session=(r2.data&&r2.data.session)||null;
+  }
   if(session && ALLOWED.includes((session.user.email||'').toLowerCase())){
     $('#gate').style.display='none'; $('#app').style.display='flex';
     $('#userPill').textContent=session.user.email.split('@')[0];
@@ -5710,7 +5780,13 @@ async function boot(){
        his refresh tokens revoked, 1963/1983 of hers). The pill now opens the devices
        panel, where every sign-out button names its blast radius. */
     $('#userPill').onclick=()=>window.ccAccountOpen();
-    try{ window.ccRegisterDevice(session); }catch(e){}
+    /* Register the device, THEN mint its key — the key hangs off the device row, so
+       the order matters. ccRegisterDevice lands in a later IIFE, so wait for it. */
+    (async function(){
+      for(let i=0;i<40 && !window.ccRegisterDevice;i++) await new Promise(r=>setTimeout(r,50));
+      try{ await window.ccRegisterDevice(session); }catch(e){}
+      try{ await window.ccEnsureDeviceKey(session); }catch(e){}
+    })();
     /* Bus identity for the shared composer: NEVER presign — admin@ is Reanna's seat.
        (feedback_never_presign_as_alessio; the composer falls back to alessio only
        where this hook is absent, i.e. on the faces build it was mirrored from.) */
@@ -5854,14 +5930,19 @@ boot();
   window.ccRenameDevice=async function(inp){
     try{ await window.supa.from('cc_devices').update({ label:(inp.value||'Device').slice(0,60) }).eq('id',inp.dataset.dev); }catch(e){}
   };
-  window.ccSignOutHere=async function(){ await window.supa.auth.signOut({ scope:'local' }); location.reload(); };
+  /* Signing out must ALSO drop this device's password-free key. Without this the
+     auto-login on the next load would cheerfully sign him straight back in, and
+     "sign out" would be a button that does nothing. */
+  function dropDeviceKey(){ try{ localStorage.removeItem('azck_cmd_device_key'); }catch(e){} }
+  window.ccSignOutHere=async function(){ dropDeviceKey(); await window.supa.auth.signOut({ scope:'local' }); location.reload(); };
   window.ccSignOutOthers=async function(){
     if(!confirm('Kick every other device off? This one keeps its seat.')) return;
     await window.supa.auth.signOut({ scope:'others' });
-    alert('Done — every other device will ask for the password next time it opens a face.');
+    alert('Done — every other device signs itself back in from its own key. To lock one out for good, archive it in this list.');
   };
   window.ccSignOutAll=async function(){
     if(!confirm('Sign out EVERYWHERE, including this device?')) return;
+    dropDeviceKey();
     await window.supa.auth.signOut({ scope:'global' });
     location.reload();
   };
