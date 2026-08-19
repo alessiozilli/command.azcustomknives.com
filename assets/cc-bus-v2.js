@@ -599,6 +599,11 @@
   function speechOk() {
     return typeof window !== 'undefined' && 'speechSynthesis' in window;
   }
+  // There are two engines now. The Read button must not refuse just because the
+  // OS robot is absent — the human voice does not need the OS at all.
+  function canSpeak() {
+    return speechOk() || !!(window.CCVoice && window.CCVoice.supported());
+  }
   // Volume is owned by the CC's own voice slider (#voice-vol, persisted in
   // localStorage as cc_voice_vol, 0..1, default 0.85). Read it fresh for every
   // chunk so dragging the slider mid-playback takes effect on the next
@@ -613,6 +618,7 @@
   }
   function stopSpeech() {
     if (speechOk()) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+    try { window.CCVoice && window.CCVoice.stop(); } catch (e) {}
     SPEECH.id = null;
     resetReadButtons();
   }
@@ -626,9 +632,39 @@
     var all = root.querySelector('[data-act="read-all"]');
     if (all) { all.textContent = '▶ Read bus'; all.classList.remove('speaking'); }
   }
+  /* THE HUMAN VOICE FIRST (Alessio 2026-08-19: "make sure all the read buttons
+     and each way a bus or a text can come through that can be spoken is
+     connected to that new voice"). These Read buttons had their own engine and
+     kept talking in the OS robot after the rest of the page had moved on.
+
+     window.CCVoice is Kokoro running in the browser; it exists on his face and
+     not on command.azcustomknives.com, which shares this exact file. So this is
+     a preference, not a requirement: no CCVoice, engine switched off, model
+     refused to load — every one of those falls through to the robot below and
+     the button behaves identically. */
+  function speak(text, tokenId, onDone) {
+    if (!text) return;
+    SPEECH.id = tokenId;
+    var finish = function () {
+      if (SPEECH.id !== tokenId) return;   // a newer Read took over; leave it alone
+      SPEECH.id = null;
+      resetReadButtons();
+      if (onDone) onDone();
+    };
+    if (window.CCVoice && window.CCVoice.on() && window.CCVoice.supported()) {
+      if (speechOk()) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+      window.CCVoice.speak(text, voiceVolume()).then(function (spoke) {
+        if (spoke) finish();
+        else robotSpeak(text, tokenId, onDone);
+      }, function () { robotSpeak(text, tokenId, onDone); });
+      return;
+    }
+    robotSpeak(text, tokenId, onDone);
+  }
+
   // Long bodies are split into sentence-sized chunks: some browsers silently
   // stop long utterances, and chunking also makes Stop feel immediate.
-  function speak(text, tokenId, onDone) {
+  function robotSpeak(text, tokenId, onDone) {
     if (!speechOk() || !text) return;
     window.speechSynthesis.cancel();
     SPEECH.id = tokenId;
@@ -1828,7 +1864,7 @@
       ev.stopPropagation();
       var rcard = btn.closest('.cc-bus-v2-card');
       var rid = rcard && rcard.getAttribute('data-msg-id');
-      if (!speechOk()) { btn.textContent = 'no voice support'; return; }
+      if (!canSpeak()) { btn.textContent = 'no voice support'; return; }
       if (SPEECH.id === 'msg-' + rid) { stopSpeech(); return; }
       stopSpeech();
       btn.textContent = '◼ Stop';
@@ -1838,7 +1874,7 @@
     }
     if (act === 'read-all') {
       ev.stopPropagation();
-      if (!speechOk()) { btn.textContent = 'no voice support'; return; }
+      if (!canSpeak()) { btn.textContent = 'no voice support'; return; }
       if (SPEECH.id === 'all') { stopSpeech(); return; }
       stopSpeech();
       var cards = [].slice.call(document.querySelectorAll('#bus-v2-mount .cc-bus-v2-card'));
