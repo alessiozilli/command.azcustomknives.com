@@ -237,36 +237,37 @@
   var FACE = window.CC_FACE_CONFIG || {};
   var DEFAULT_LANE = FACE.defaultLane || 'both';
 
+  // THE FILTER SIDEBAR IS GONE — Alessio direct, 2026-08-18: "you might as well
+  // delete that whole left column and filters because they're not applicable to me.
+  // I say awaiting reply, and it shows me a forge-code / forge-terminal interaction.
+  // So it's just overwhelming me." He was describing real rows, correctly counted,
+  // that were never his to answer. Five ways to slice a list he only ever wanted
+  // whole.
+  //
+  // Sender, channel, status and priority are now PINNED to 'all' and no longer read
+  // from localStorage. That is not cosmetic: with no buttons left, a pick left over
+  // in his browser from weeks ago would have filtered his board forever with nothing
+  // on screen to undo it. rowMatches still reads them, so every one of those gates
+  // now falls straight through.
+  //
+  // What survives is the one control he uses: the channel switch in the header,
+  // Both / AZ / Forge / System. Search lives with the composer.
   var STATE = {
-    lane:     lsGet(STATE_KEYS.lane,     DEFAULT_LANE), // CHANNEL, one switch flips the whole bus: both | az | forge | machines | log. Fresh key so old picks don't pin him.
-    sender:   lsGet(STATE_KEYS.sender,   'all'),       // all | <instance>
-    channel:  lsGet(STATE_KEYS.channel,  'all'),       // all | general | task | build | reply | … (agent_messages.channel CHECK list)
-    status:   lsGet(STATE_KEYS.status,   'all'),       // all | unread | awaiting | archived
-    priority: lsGet(STATE_KEYS.priority, 'all'),       // all | urgent | normal | low (matches agent_messages.priority enum)
-    search:   lsGet(STATE_KEYS.search,   '')
+    lane:     lsGet(STATE_KEYS.lane, DEFAULT_LANE), // both | az | forge | machines
+    sender:   'all',
+    channel:  'all',
+    status:   'all',
+    priority: 'all',
+    search:   lsGet(STATE_KEYS.search, '')
   };
   // Legacy stored picks and the retired Log button all collapse to the face default.
   if (['log', 'all', 'human', 'ai', 'local'].indexOf(STATE.lane) !== -1) STATE.lane = DEFAULT_LANE;
 
-  // ─── Bus #1800 — honor ?priority=urgent in the URL hash ───────────────
-  // Diag-urgent pill in the header navigates to #operator/buses-v2?priority=urgent.
-  // Parse the query off the hash (search is reserved for the cache-buster) and
-  // apply it to STATE before first render. Persists to localStorage so a normal
-  // refresh keeps the filter applied.
-  try {
-    var _h = window.location.hash || '';
-    var _qIdx = _h.indexOf('?');
-    if (_qIdx >= 0) {
-      var _hashQS = new URLSearchParams(_h.slice(_qIdx + 1));
-      var _qp = _hashQS.get('priority');
-      if (_qp) {
-        STATE.priority = _qp; lsSet(STATE_KEYS.priority, _qp);
-        // Urgent rows to forge-code/forge live in lane 'ai' — widen the channel
-        // so the pill's count matches what the panel shows (bus #1800 regression).
-        STATE.lane = 'machines'; lsSet(STATE_KEYS.lane, 'machines');
-      }
-    }
-  } catch (e) {}
+  // The ?priority=urgent hash handler that used to live here is gone with the
+  // header pill that was its only caller (2026-08-18). It pinned a priority filter
+  // AND flipped the channel to machines, and it wrote both to localStorage — so one
+  // click on a pill could leave his board filtered days later. With no filter
+  // buttons on screen there would have been nothing to undo it with.
 
   // ─── Supabase client ───────────────────────────────────────────────────
   function sb() {
@@ -309,13 +310,13 @@
       // Root layout — sidebar (filter) | main (human feed) | syslog (system noise)
       // 2026-06-01 Alessio direct: pull system messages OUT of the human feed.
       // Right col is read-only audit trail; nothing is lost, but the chat stays readable.
-      '#bus-v2-mount { display:grid; grid-template-columns:220px 1fr 400px; gap:var(--sp-16,16px); align-items:stretch; height:100%; min-height:0; }',
-      '@media (max-width: 1280px) { #bus-v2-mount { grid-template-columns:220px 1fr 320px; } }',
-      '@media (max-width: 1024px) { #bus-v2-mount { grid-template-columns:220px 1fr; } #bus-v2-mount .cc-bus-v2__syslog { display:none; } }',
-      '@media (max-width: 900px) { #bus-v2-mount { grid-template-columns:1fr; } #bus-v2-mount .cc-bus-v2__sidebar { order:2; } #bus-v2-mount .cc-bus-v2__syslog { display:none; } }',
+      // The 220px filter column is gone (2026-08-18, his call). Two columns now:
+      // the conversation, and the system log.
+      '#bus-v2-mount { display:grid; grid-template-columns:1fr 400px; gap:var(--sp-16,16px); align-items:stretch; height:100%; min-height:0; }',
+      '@media (max-width: 1280px) { #bus-v2-mount { grid-template-columns:1fr 320px; } }',
+      '@media (max-width: 1024px) { #bus-v2-mount { grid-template-columns:1fr; } #bus-v2-mount .cc-bus-v2__syslog { display:none; } }',
 
       // ─── Sidebar (filter) ───
-      '#bus-v2-mount .cc-bus-v2__sidebar { min-height:0; max-height:100%; overflow-y:auto; display:flex; flex-direction:column; gap:var(--sp-16,16px); padding:var(--sp-12,12px); background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; }',
       '#bus-v2-mount .cc-bus-v2__filter-group { display:flex; flex-direction:column; gap:4px; }',
       '#bus-v2-mount .cc-bus-v2__filter-label { font-family:var(--display,sans-serif); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs,#566470); margin-bottom:4px; }',
       '#bus-v2-mount .cc-bus-v2__filter-btn { display:flex; align-items:center; gap:8px; background:transparent; border:1px solid transparent; color:var(--text-dim,#8a9aa8); padding:5px 8px; border-radius:3px; cursor:pointer; font-family:var(--sans,sans-serif); font-size:12px; text-align:left; }',
@@ -1001,7 +1002,6 @@
   // Alessio direct 2026-05-17 (topstack) + 2026-06-01 (syslog right col).
   function renderShell() {
     return '' +
-      '<aside class="cc-bus-v2__sidebar" data-role="sidebar"></aside>' +
       '<div class="cc-bus-v2__main">' +
         '<div class="cc-bus-v2__topstack">' +
           '<div class="cc-bus-v2__header" data-role="header"></div>' +
@@ -1018,118 +1018,15 @@
       '</aside>';
   }
 
-  function renderSidebar(rows) {
-    function btn(group, value, label, dotColor, count) {
-      var active = STATE[group] === value ? ' active' : '';
-      var dot = dotColor
-        ? '<span class="cc-bus-v2__filter-dot" style="background:' + dotColor + ';"></span>'
-        : '';
-      var cnt = (count == null) ? '' : '<span class="cc-bus-v2__filter-count">' + count + '</span>';
-      return '<button class="cc-bus-v2__filter-btn' + active + '" data-filter-group="' + group + '" data-filter-value="' + escapeHtml(value) + '">' +
-        dot + '<span>' + escapeHtml(label) + '</span>' + cnt +
-        '</button>';
-    }
-
-    // Every group counts against all the OTHER active filters (facet-correct,
-    // 2026-08-09): a number on a button is exactly what clicking it will show.
-    var forSender = rows.filter(function (r) { return rowMatches(r, 'sender'); });
-    var senderCounts = { all: forSender.length };
-    var liveSenders = {};
-    forSender.forEach(function (r) {
-      var k = String(r.from_user || '').toLowerCase();
-      if (!k) return;
-      liveSenders[k] = (liveSenders[k] || 0) + 1;
-    });
-    // The roster is the fleet regulars PLUS whoever actually sent something —
-    // a sender missing from the fixed list used to be unfilterable entirely.
-    var senderOrder = ALL_INSTANCES.slice();
-    Object.keys(liveSenders).sort().forEach(function (k) {
-      if (senderOrder.indexOf(k) === -1) senderOrder.push(k);
-    });
-    if (STATE.sender !== 'all' && senderOrder.indexOf(STATE.sender) === -1) senderOrder.push(STATE.sender);
-
-    var forStatus = rows.filter(function (r) { return rowMatches(r, 'status'); });
-    // The fetch now holds EITHER the live rows OR the archived ones, never both,
-    // so the side we are not holding gets no number at all rather than a false 0.
-    // A blank badge means "click to go and look"; a 0 would be a lie.
-    var onArchived = STATE.status === 'archived';
-    var statusCounts = {
-      all:      onArchived ? null : forStatus.filter(function (r) { return !r.archived_at && r.status !== 'done'; }).length,
-      unread:   onArchived ? null : forStatus.filter(function (r) { return r.status === 'sent' && !r.archived_at; }).length,
-      awaiting: onArchived ? null : forStatus.filter(function (r) { return r.awaiting_reply_from && !r.archived_at && r.status !== 'done'; }).length,
-      done:     onArchived ? null : forStatus.filter(function (r) { return r.status === 'done' && !r.archived_at; }).length,
-      archived: onArchived ? forStatus.filter(function (r) { return !!r.archived_at; }).length : null
-    };
-    var forPriority = rows.filter(function (r) { return rowMatches(r, 'priority'); });
-    var priorityCounts = {
-      all:    forPriority.length,
-      urgent: forPriority.filter(function (r) { return String(r.priority || 'normal').toLowerCase() === 'urgent'; }).length,
-      normal: forPriority.filter(function (r) { return String(r.priority || 'normal').toLowerCase() === 'normal'; }).length,
-      low:    forPriority.filter(function (r) { return String(r.priority || 'normal').toLowerCase() === 'low'; }).length
-    };
-
-    var senderHtml = '<div class="cc-bus-v2__filter-group">' +
-      '<div class="cc-bus-v2__filter-label">Sender</div>' +
-      btn('sender', 'all', 'All buses', null, senderCounts.all) +
-      senderOrder.map(function (i) {
-        var c = liveSenders[i] || 0;
-        // regulars always render (even at 0); extra live senders render while
-        // they have rows, and a persisted selection stays clearable
-        if (!c && ALL_INSTANCES.indexOf(i) === -1 && i !== STATE.sender) return '';
-        return btn('sender', i, i, instColor(i).color, c);
-      }).join('') +
-      '</div>';
-
-    // ─── Type group (Alessio direct 2026-06-09): the little card tags —
-    // general / task / build / reply / … — as their own left-rail filter.
-    // Buttons are built from the channels actually present in the loaded
-    // rows (fyi never appears here — it lives in the syslog column). A
-    // persisted selection with zero rows still renders so it can be cleared.
-    var forChannel = rows.filter(function (r) { return rowMatches(r, 'channel'); });
-    var channelCounts = { all: forChannel.length };
-    forChannel.forEach(function (r) {
-      var c = String(r.channel || '').toLowerCase();
-      if (!c) return;
-      channelCounts[c] = (channelCounts[c] || 0) + 1;
-    });
-    var CHANNEL_ORDER = ['general', 'task', 'build', 'reply', 'question', 'shop', 'personal', 'escalation'];
-    var channelsShown = CHANNEL_ORDER.filter(function (c) { return channelCounts[c]; });
-    Object.keys(channelCounts).forEach(function (c) {
-      if (c !== 'all' && channelsShown.indexOf(c) === -1) channelsShown.push(c);
-    });
-    if (STATE.channel !== 'all' && channelsShown.indexOf(STATE.channel) === -1) channelsShown.push(STATE.channel);
-    var channelHtml = '<div class="cc-bus-v2__filter-group">' +
-      '<div class="cc-bus-v2__filter-label">Type</div>' +
-      btn('channel', 'all', 'All', null, channelCounts.all) +
-      channelsShown.map(function (c) {
-        return btn('channel', c, c, null, channelCounts[c] || 0);
-      }).join('') +
-      '</div>';
-
-    var statusHtml = '<div class="cc-bus-v2__filter-group">' +
-      '<div class="cc-bus-v2__filter-label">Status</div>' +
-      btn('status', 'all',      'All',            null, statusCounts.all) +
-      btn('status', 'unread',   'Unread',         null, statusCounts.unread) +
-      btn('status', 'awaiting', 'Awaiting reply', null, statusCounts.awaiting) +
-      btn('status', 'done',     'Done',           null, statusCounts.done) +
-      btn('status', 'archived', 'Archived',       null, statusCounts.archived) +
-      '</div>';
-
-    var priorityHtml = '<div class="cc-bus-v2__filter-group">' +
-      '<div class="cc-bus-v2__filter-label">Priority</div>' +
-      btn('priority', 'all',    'All',    null,                       priorityCounts.all) +
-      btn('priority', 'urgent', 'Urgent', 'var(--red,#e5534b)',       priorityCounts.urgent) +
-      btn('priority', 'normal', 'Normal', 'var(--amber,#c8922a)',     priorityCounts.normal) +
-      btn('priority', 'low',    'Low',    'var(--text-xs,#566470)',   priorityCounts.low) +
-      '</div>';
-
-    return senderHtml + channelHtml + statusHtml + priorityHtml;
-  }
+  // renderSidebar lived here: 106 lines that drew Sender / Channel / Status /
+  // Priority buttons with a facet-correct count on each. Deleted 2026-08-18 on his
+  // word - the column they filled is gone, and dead code that draws a wrong number
+  // is exactly what he asked us to stop keeping around.
 
   function renderHeader(filteredCount) {
-    var title = STATE.sender === 'all'
-      ? 'Bus Traffic · All Senders'
-      : 'Bus Traffic · ' + STATE.sender;
+    // Was "Bus Traffic · All Senders" / "· <sender>". The sender filter is gone,
+    // so the tail was always the same six words. Just the name now.
+    var title = 'Bus Traffic';
     var fontOn = (busFontPref() !== 'off');
     // Lane tabs (2026-07-19): Human / AI / Log / All over agent_messages.lane.
     // Emitted with data-filter-group so the existing delegation handles clicks;
@@ -1433,7 +1330,6 @@
     if (!mount.querySelector('[data-role="list"]') || !mount.querySelector('[data-role="syslog-list"]')) {
       mount.innerHTML = renderShell();
     }
-    var sidebar = mount.querySelector('[data-role="sidebar"]');
     var header = mount.querySelector('[data-role="header"]');
     var list = mount.querySelector('[data-role="list"]');
     var composer = mount.querySelector('[data-role="composer"]');
@@ -1444,18 +1340,8 @@
     var humanRows = ALL_ROWS.filter(function (r) { return !isSystemMsg(r); });
     var systemRows = ALL_ROWS.filter(isSystemMsg);
 
-    // Sidebar counts must reflect the ACTIVE lane, or a badge promises rows the
-    // lane-filtered list won't show — the "urgent: 10 but the list is empty" bug. (2026-07-20)
-    var laneBase = (STATE.lane === 'log') ? ALL_ROWS : humanRows;
-    // Sidebar counts follow the CHANNEL gate exactly, same rules as rowMatches.
-    var sidebarRows = laneBase.filter(function (r) {
-      var lo = laneOf(r), ch = STATE.lane;
-      if (ch === 'az' || ch === 'forge') return lo === 'human';
-      if (ch === 'machines') return lo === 'ai' || lo === 'local';
-      if (ch === 'log') return lo === 'log';
-      return true;   // both
-    });
-    if (sidebar) sidebar.innerHTML = renderSidebar(sidebarRows);
+    // The sidebar and its five count badges used to be computed here. Both are
+    // gone (2026-08-18). Nothing else read those numbers.
 
     // GROUP FIRST, FILTER SECOND — a conversation is an atom.
     // Filtering rows and then grouping tore threads in half: search for a word
