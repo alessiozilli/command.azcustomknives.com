@@ -263,10 +263,19 @@
   var MINE = [ME, 'team'];
 
   // Machine bookkeeping that is addressed to a human but is not FOR one.
+  //
+  // ONLY the AUTO: prefix, and that is deliberate. The first cut of this also threw
+  // out anything containing "daily health" or "digest" anywhere in the body, which is
+  // a word-match standing in for the thing itself. Checked against the data: not one
+  // machine health or digest post is addressed to him — they go to 'team' — while TEN
+  // real messages to him in a fortnight mention those words in a sentence ("I read
+  // your 2 pm meeting from your daily digest"). That filter would have taken ten of
+  // his own messages out of his inbox and dropped them in the machine room.
+  //
+  // AUTO: is anchored at the start and is a marker the machines actually write, so it
+  // cannot catch a sentence about a subject.
   function notNoise(q) {
-    return q.not('body', 'like', 'AUTO:%')
-            .not('body', 'ilike', '%daily health%')
-            .not('body', 'ilike', '%digest%');
+    return q.not('body', 'like', 'AUTO:%');
   }
   function sevenDaysAgo() {
     return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -295,9 +304,11 @@
     { id: 'machine', label: 'Machine room', hint: 'seat to seat — not yours to answer',
       quiet: true,
       apply: function (q) {
+        // Exactly the complement of To me / Team / From me — the same AUTO: marker,
+        // nothing wider. If this list and notNoise ever disagree, a row lands in both
+        // buckets or in neither, and neither of those is something he can see.
         return q.is('archived_at', null).neq('from_user', ME)
-                .or('to_user.not.in.(' + MINE.join(',') + '),body.like.AUTO:*,' +
-                    'body.ilike.*daily health*,body.ilike.*digest*');
+                .or('to_user.not.in.(' + MINE.join(',') + '),body.like.AUTO:*');
       } }
   ];
   function bucketById(id) {
