@@ -890,13 +890,13 @@ window.renderKeyPartners = function() {
       [data-lane="comms"] .cc-card { max-width:760px; }
       [data-lane="comms"] code { font-family:var(--mono); font-size:11px; background:var(--raised); border:1px solid var(--border); border-radius:3px; padding:1px 5px; }
     </style>
-    <!-- COMMS > BUS - THE bus surface (assets/cc-bus-v2.js), duplicated from
+    <!-- COMMS > BUS - THE bus surface (assets/cc-bus.js), duplicated from
          the alessio face per Alessio 2026-08-09: same three columns (filters |
          feed + composer | system log), same filters (sender / type / status /
          priority, facet-correct counts), colors ride this face's tokens. One
-         renderer, every face - edit cc-bus-v2.js, copy per face, bump ?v=. -->
+         renderer, every face - edit cc-bus.js, copy per face, bump ?v=. -->
     <div class="cc-subpane active" data-subtab="bus">
-      <div id="bus-v2-mount">
+      <div id="bus-mount">
         <div class="cc-card"><div class="cc-card__sub" style="text-align:center;color:var(--text-xs)">Loading bus…</div></div>
       </div>
     </div>
@@ -1227,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .cc-lane[data-lane="operator"] { overflow-y:auto; -webkit-overflow-scrolling:touch; }
         [data-lane="operator"] .cc-subpane.active { overflow:visible; height:auto; min-height:0; flex:0 0 auto; }
         [data-lane="operator"] [data-subtab="projects"] #op-projects-mount { overflow:visible; height:auto; min-height:0; }
-        [data-lane="operator"] [data-subtab="buses-v2"] #bus-v2-mount { overflow:visible; height:auto; min-height:0; }
+        [data-lane="operator"] [data-subtab="bus"] #bus-mount { overflow:visible; height:auto; min-height:0; }
         [data-lane="operator"] [data-subtab="tasks"] .ts3 { height:auto; min-height:0; }
         [data-lane="operator"] [data-subtab="tasks"] .ts3-col { height:auto; min-height:0; max-height:none; }
       }
@@ -5505,7 +5505,7 @@ window.ccPagedRead = ccPagedRead;
      THIS face wakes on AZ: the business side, so infrastructure chatter does not
      clog it. Alessio's call, 2026-08-10. Must run before the deferred scripts. -->
 <script>window.CC_FACE_CONFIG = { face: 'command', defaultLane: 'az' };</script>
-<script defer src="assets/cc-bus-v2.js?v=20260819-humanvoice"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
+<script defer src="assets/cc-bus.js?v=20260819-hisfilters"></script><!-- the bus surface, mirrored from the alessio face - bump on every edit. Channel switch: Both / AZ / Forge / System (this face wakes on AZ); Both = split view, AZ business left, Forge infrastructure right. Threads assemble from the UNFILTERED set and stay whole if root OR any reply matches. Open replies are DURABLE (localStorage cc.bus.v2.drafts): panel, text, forward target and armed Close survive every repaint and a browser reload. Scroll anchors on a card, not a pixel. No Log button - the syslog owns the right column. -->
 <script defer src="assets/cc-master-detail.js?v=20260805-kp"></script>
 <script defer src="assets/cc-mic.js?v=20260805-shop"></script><!-- universal mic — auto-attaches to composer textareas, mirrored verbatim --><!-- md3 master-detail engine, mirrored verbatim from azck-faces (no hardcoded sender) --><!-- drag-to-resize under the ✎ pill; .scx-3col + .svsc-3col are registered SURFACES -->
 <script>

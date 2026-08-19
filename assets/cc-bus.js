@@ -1,7 +1,9 @@
-// cc-bus-v2.js — parallel "Buses v2" subtab for the Operator lane.
+// cc-bus.js — THE bus. One surface, one renderer.
+// Renamed off "v2" on 2026-08-19 (bus #5735, his order): there was never a v1 in
+// service - it was archived 2026-07-12 - so the version number named nothing.
 // Reads from public.agent_messages, decorates rows that reference a forge_plans UUID
 // with an inline approve/bounce/open action bar. Never touches cc-bus-panel.js or the
-// existing Buses subtab. Pure additive — scoped to #bus-v2-mount.
+// existing Buses subtab. Pure additive — scoped to #bus-mount.
 //
 // Built per bus #1334 + amendment #1351 spec · forge-code Opus 4.7 on beast.
 // Layout: 220px filter sidebar | main column (header bar + list + sticky composer).
@@ -9,16 +11,19 @@
 (function () {
   'use strict';
 
-  var MOUNT_ID = 'bus-v2-mount';
+  var MOUNT_ID = 'bus-mount';
   var REFRESH_MS = 30000;
-  var ROW_LIMIT = 120;      // live cards. Raised from 60 with the two-query split
+  // 400 covers every bucket's real size today (the biggest is the machine room at
+  // ~324). If a bucket ever outgrows it the list says so out loud at the bottom —
+  // see the overflow line in paintAll. A cap he cannot see is a lie by omission.
+  var ROW_LIMIT = 400;
   var SYSLOG_LIMIT = 60;    // the right-hand system log, lane 'log', archived or not
   var UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
   var BROWSER_SESSION_KEY = 'cc.browser.session_id';
 
   // ─── Browser session plumbing ──────────────────────────────────────────
   // Every bus posted from the CC composer carries the browser's session_id
-  // as from_instance_id, so Buses v2 can group/label by instance + intent.
+  // as from_instance_id, so the bus can group/label by instance + intent.
   function genUuid() {
     if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
     var b = new Uint8Array(16);
@@ -50,7 +55,7 @@
         model: 'cc-ui',
         status: 'active',
         last_seen: nowIso,
-        intent: 'CC Buses v2 composer · browser tab'
+        intent: 'CC bus composer · browser tab'
       }, { onConflict: 'id', ignoreDuplicates: false });
     } catch (e) {
       // RLS may block INSERT — non-fatal; from_instance_id still flows through.
@@ -181,7 +186,7 @@
     var p = PARENT_MAP[msg.parent_id];
     var gist = p ? p.gist : '';
     if (gist.length > 110) gist = gist.slice(0, 110) + '…';
-    return '<button type="button" class="cc-bus-v2__replyctx" data-act="jump-parent" ' +
+    return '<button type="button" class="cc-bus__replyctx" data-act="jump-parent" ' +
       'data-parent="' + escapeHtml(String(msg.parent_id)) + '" ' +
       'title="Jump to the message this answers">↳ replying to #' + escapeHtml(String(msg.parent_id)) +
       (p ? ' · <span style="color:' + instColor(p.from).color + '">' + escapeHtml(p.from) + '</span>' : '') +
@@ -213,6 +218,9 @@
 
   // ─── Persistent filter state ───────────────────────────────────────────
   var STATE_KEYS = {
+    // The v2 in these keys is history, not a version: renaming them would throw away
+    // every reply he has half-typed and every pick he has made. The keys stay.
+    bucket:   'cc.bus.v2.bucket',
     lane:     'cc.bus.v2.channel',
     sender:   'cc.bus.v2.filter.sender',
     channel:  'cc.bus.v2.filter.channel',
@@ -235,33 +243,84 @@
   // this file. Each face sets window.CC_FACE_CONFIG before loading this script.
   // No config = 'both', which is what every face did before this existed.
   var FACE = window.CC_FACE_CONFIG || {};
-  var DEFAULT_LANE = FACE.defaultLane || 'both';
 
-  // THE FILTER SIDEBAR IS GONE — Alessio direct, 2026-08-18: "you might as well
-  // delete that whole left column and filters because they're not applicable to me.
-  // I say awaiting reply, and it shows me a forge-code / forge-terminal interaction.
-  // So it's just overwhelming me." He was describing real rows, correctly counted,
-  // that were never his to answer. Five ways to slice a list he only ever wanted
-  // whole.
+  // ─── HIS FILTERS ─────────────────────────────────────────────────────
+  // Bus #5735, 2026-08-19. The old first column filtered on the SYSTEM taxonomy —
+  // agent_messages.lane: cross / ai / log / local / human / intern. Thirty days of
+  // proof that it was machine-facing: lane='human' held 45 rows while 567 rows were
+  // actually addressed to him. That is exactly why his board kept showing him buses
+  // that were never his, and why he deleted the whole column on 2026-08-18.
   //
-  // Sender, channel, status and priority are now PINNED to 'all' and no longer read
-  // from localStorage. That is not cosmetic: with no buttons left, a pick left over
-  // in his browser from weeks ago would have filtered his board forever with nothing
-  // on screen to undo it. rowMatches still reads them, so every one of those gates
-  // now falls straight through.
+  // These six ask a different question: WHO IS IT FOR. Every one is derived from the
+  // data, and — this is the part that stops it going stale — each is defined ONCE.
+  // The same builder feeds the count on the button AND the query behind the list, so
+  // the number cannot disagree with what clicking it produces. There is no second
+  // definition to drift.
   //
-  // What survives is the one control he uses: the channel switch in the header,
-  // Both / AZ / Forge / System. Search lives with the composer.
+  // The face decides whose board this is. Reanna's face is the same component with
+  // her name in it; the command face is the business surface and answers to him.
+  var ME = (FACE.face === 'reanna') ? 'reanna' : 'alessio';
+  var MINE = [ME, 'team'];
+
+  // Machine bookkeeping that is addressed to a human but is not FOR one.
+  function notNoise(q) {
+    return q.not('body', 'like', 'AUTO:%')
+            .not('body', 'ilike', '%daily health%')
+            .not('body', 'ilike', '%digest%');
+  }
+  function sevenDaysAgo() {
+    return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  var BUCKETS = [
+    { id: 'needs',   label: 'Needs me',     hint: 'waiting on you',
+      apply: function (q) {
+        return q.is('archived_at', null).eq('status', 'sent')
+                .like('body', 'HUMAN ACTION%').in('to_user', MINE);
+      } },
+    { id: 'tome',    label: 'To me',        hint: 'addressed to you',
+      apply: function (q) { return notNoise(q.is('archived_at', null).eq('to_user', ME)); } },
+    { id: 'team',    label: 'Team',         hint: 'addressed to the team',
+      apply: function (q) { return notNoise(q.is('archived_at', null).eq('to_user', 'team')); } },
+    { id: 'fromme',  label: 'From me',      hint: 'sent by you',
+      apply: function (q) { return q.is('archived_at', null).eq('from_user', ME); } },
+    { id: 'handled', label: 'Handled',      hint: 'dealt with, last 7 days',
+      apply: function (q) {
+        return q.in('to_user', MINE).in('status', ['read', 'archived'])
+                .gte('created_at', sevenDaysAgo());
+      } },
+    // EVERYTHING ELSE LANDS HERE, ON PURPOSE. A message shape nobody has seen before
+    // matches none of the five above and falls through to this one — visible, at the
+    // bottom, never silently dropped off the board.
+    { id: 'machine', label: 'Machine room', hint: 'seat to seat — not yours to answer',
+      quiet: true,
+      apply: function (q) {
+        return q.is('archived_at', null).neq('from_user', ME)
+                .or('to_user.not.in.(' + MINE.join(',') + '),body.like.AUTO:*,' +
+                    'body.ilike.*daily health*,body.ilike.*digest*');
+      } }
+  ];
+  function bucketById(id) {
+    for (var i = 0; i < BUCKETS.length; i++) if (BUCKETS[i].id === id) return BUCKETS[i];
+    return null;
+  }
+
+  // Sender, channel, status and priority stayed pinned to 'all' when their buttons
+  // were deleted on 2026-08-18, and they stay pinned now — rowMatches still reads
+  // them, so every one of those gates falls straight through. A pick left in his
+  // browser from weeks ago can never filter a board that has no button to undo it.
   var STATE = {
-    lane:     lsGet(STATE_KEYS.lane, DEFAULT_LANE), // both | az | forge | machines
+    bucket:   lsGet(STATE_KEYS.bucket, 'tome'),
+    lane:     'both',      // the lane switch is gone; nothing narrows the list but the bucket
     sender:   'all',
     channel:  'all',
     status:   'all',
     priority: 'all',
     search:   lsGet(STATE_KEYS.search, '')
   };
-  // Legacy stored picks and the retired Log button all collapse to the face default.
-  if (['log', 'all', 'human', 'ai', 'local'].indexOf(STATE.lane) !== -1) STATE.lane = DEFAULT_LANE;
+  // A stored bucket that no longer exists falls back to his inbox rather than to an
+  // empty board he cannot explain.
+  if (!bucketById(STATE.bucket)) STATE.bucket = 'tome';
 
   // The ?priority=urgent hash handler that used to live here is gone with the
   // header pill that was its only caller (2026-08-18). It pinned a priority filter
@@ -305,175 +364,189 @@
 
   // ─── Styles ────────────────────────────────────────────────────────────
   function injectStylesOnce() {
-    if (document.getElementById('cc-bus-v2-style')) return;
+    if (document.getElementById('cc-bus-style')) return;
     var css = [
       // Root layout — sidebar (filter) | main (human feed) | syslog (system noise)
       // 2026-06-01 Alessio direct: pull system messages OUT of the human feed.
       // Right col is read-only audit trail; nothing is lost, but the chat stays readable.
-      // The 220px filter column is gone (2026-08-18, his call). Two columns now:
-      // the conversation, and the system log.
-      '#bus-v2-mount { display:grid; grid-template-columns:1fr 400px; gap:var(--sp-16,16px); align-items:stretch; height:100%; min-height:0; }',
-      '@media (max-width: 1280px) { #bus-v2-mount { grid-template-columns:1fr 320px; } }',
-      '@media (max-width: 1024px) { #bus-v2-mount { grid-template-columns:1fr; } #bus-v2-mount .cc-bus-v2__syslog { display:none; } }',
+      // Three columns: HIS filters, the conversation, the system log. The first
+      // column is new (2026-08-19) and is not the old one — that one sliced by the
+      // machine's own taxonomy and he deleted it. On a phone the filters ride on
+      // top, as a row, because they are how he chooses what he is looking at.
+      '#bus-mount { display:grid; grid-template-columns:190px 1fr 400px; gap:var(--sp-16,16px); align-items:stretch; height:100%; min-height:0; }',
+      '@media (max-width: 1280px) { #bus-mount { grid-template-columns:180px 1fr 320px; } }',
+      '@media (max-width: 1024px) { #bus-mount { grid-template-columns:180px 1fr; } #bus-mount .cc-bus__syslog { display:none; } }',
+      '@media (max-width: 820px) { #bus-mount { grid-template-columns:1fr; } #bus-mount .cc-bus__filters { flex-direction:row; flex-wrap:wrap; max-height:none; } #bus-mount .cc-bus__fbtn { flex:1 1 auto; } }',
+
+      // ─── First column: his filters ───
+      '#bus-mount .cc-bus__filters { min-height:0; max-height:100%; overflow-y:auto; display:flex; flex-direction:column; gap:3px; padding:var(--sp-10,10px); background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; }',
+      '#bus-mount .cc-bus__fbtn { display:flex; align-items:baseline; gap:8px; width:100%; background:transparent; border:1px solid transparent; border-radius:3px; padding:7px 9px; cursor:pointer; text-align:left; color:var(--text-dim,#8a9aa8); font-family:var(--sans,sans-serif); font-size:13px; }',
+      '#bus-mount .cc-bus__fbtn:hover { background:var(--raised,#161b20); color:var(--text,#dde4eb); }',
+      '#bus-mount .cc-bus__fbtn.active { background:var(--amber-soft,rgba(200,146,42,0.08)); color:var(--amber,#c8922a); border-color:var(--amber-glow,rgba(200,146,42,0.15)); }',
+      // Zero is not hidden and not styled away — it is shown, dimmed, still clickable.
+      // A filter that vanishes when it empties is a filter he cannot trust is there.
+      '#bus-mount .cc-bus__fbtn.empty { opacity:0.45; }',
+      '#bus-mount .cc-bus__fbtn.quiet { margin-top:auto; }',
+      '#bus-mount .cc-bus__fnum { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; }',
+      '#bus-mount .cc-bus__fhint { display:block; font-size:10px; color:var(--text-xs,#566470); letter-spacing:0.02em; margin-top:2px; }',
+      '#bus-mount .cc-bus__fsep { height:1px; background:var(--border,#252c33); margin:8px 2px 4px; }',
+      '#bus-mount .cc-bus__more { padding:14px 6px; font-family:var(--mono,monospace); font-size:11px; color:var(--text-xs,#6e7681); border-top:1px dashed var(--border,#252c33); margin-top:10px; }',
 
       // The eight filter-sidebar style rules that lived here are deleted too
       // (2026-08-18). He asked whether the column was really gone or only hidden;
       // nothing styles an element that no longer exists.
 
       // ─── Main column ───
-      '#bus-v2-mount .cc-bus-v2__main { display:flex; flex-direction:column; gap:var(--sp-10,10px); min-width:0; min-height:0; max-height:100%; overflow-y:auto; }',
+      '#bus-mount .cc-bus__main { display:flex; flex-direction:column; gap:var(--sp-10,10px); min-width:0; min-height:0; max-height:100%; overflow-y:auto; }',
 
       // ─── System log column (right side) — 2026-06-01 ─────────────────────
       // Pulls from_user="system" OR channel="fyi" messages out of the main feed
       // so the human chat stays readable. Read-only. Full audit trail kept.
-      '#bus-v2-mount .cc-bus-v2__syslog { min-height:0; max-height:100%; overflow:hidden; display:flex; flex-direction:column; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; }',
-      '#bus-v2-mount .cc-bus-v2__syslog-head { padding:var(--sp-10,10px) var(--sp-12,12px); border-bottom:1px solid var(--border,#252c33); display:flex; align-items:center; gap:var(--sp-8,8px); flex-shrink:0; background:var(--surface,#0f1316); }',
-      '#bus-v2-mount .cc-bus-v2__syslog-title { font-family:var(--display,sans-serif); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim,#8a9aa8); }',
-      '#bus-v2-mount .cc-bus-v2__syslog-count { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); padding:2px 10px; border-radius:10px; background:var(--amber-soft,rgba(200,146,42,0.08)); }',
-      '#bus-v2-mount .cc-bus-v2__syslog-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px; background:var(--bg,#090b0d); min-height:0; }',
-      '#bus-v2-mount .cc-bus-v2__syslog-row { padding:5px 8px; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-left:2px solid var(--text-xs,#566470); border-radius:3px; font-family:var(--mono,monospace); font-size:10px; color:var(--text-dim,#8a9aa8); line-height:1.4; word-break:break-word; }',
-      '#bus-v2-mount .cc-bus-v2__syslog-row__head { font-size:11px; font-weight:700; color:var(--amber,#c8922a); letter-spacing:0.04em; margin-bottom:3px; display:flex; justify-content:space-between; gap:8px; }',
-      '#bus-v2-mount .cc-bus-v2__syslog-row__head .to { color:var(--text-dim,#8a9aa8); }',
-      '#bus-v2-mount .cc-bus-v2__syslog-row__body { white-space:pre-wrap; word-break:break-word; }',
-      '#bus-v2-mount .cc-bus-v2__syslog-empty { font-family:var(--mono,monospace); font-size:10px; color:var(--text-xs,#566470); text-align:center; padding:16px; border:1px dashed var(--border,#252c33); border-radius:3px; }',
+      '#bus-mount .cc-bus__syslog { min-height:0; max-height:100%; overflow:hidden; display:flex; flex-direction:column; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; }',
+      '#bus-mount .cc-bus__syslog-head { padding:var(--sp-10,10px) var(--sp-12,12px); border-bottom:1px solid var(--border,#252c33); display:flex; align-items:center; gap:var(--sp-8,8px); flex-shrink:0; background:var(--surface,#0f1316); }',
+      '#bus-mount .cc-bus__syslog-title { font-family:var(--display,sans-serif); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim,#8a9aa8); }',
+      '#bus-mount .cc-bus__syslog-count { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); padding:2px 10px; border-radius:10px; background:var(--amber-soft,rgba(200,146,42,0.08)); }',
+      '#bus-mount .cc-bus__syslog-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px; background:var(--bg,#090b0d); min-height:0; }',
+      '#bus-mount .cc-bus__syslog-row { padding:5px 8px; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-left:2px solid var(--text-xs,#566470); border-radius:3px; font-family:var(--mono,monospace); font-size:10px; color:var(--text-dim,#8a9aa8); line-height:1.4; word-break:break-word; }',
+      '#bus-mount .cc-bus__syslog-row__head { font-size:11px; font-weight:700; color:var(--amber,#c8922a); letter-spacing:0.04em; margin-bottom:3px; display:flex; justify-content:space-between; gap:8px; }',
+      '#bus-mount .cc-bus__syslog-row__head .to { color:var(--text-dim,#8a9aa8); }',
+      '#bus-mount .cc-bus__syslog-row__body { white-space:pre-wrap; word-break:break-word; }',
+      '#bus-mount .cc-bus__syslog-empty { font-family:var(--mono,monospace); font-size:10px; color:var(--text-xs,#566470); text-align:center; padding:16px; border:1px dashed var(--border,#252c33); border-radius:3px; }',
 
       // ─── Top stack (header + composer pinned as one block) ───
       // Alessio direct 2026-05-17: header must not disappear, and no gap can
       // leak the scrolling cards. top uses a CSS custom property set at
       // runtime by updateStickyOffset() so we abut cc-subnav.bottom exactly
       // even if it wraps to two rows. Opaque var(--bg) blocks cards behind.
-      '#bus-v2-mount .cc-bus-v2__topstack { position:sticky; top:0; z-index:5; background:var(--bg,#090b0d); display:flex; flex-direction:column; gap:var(--sp-10,10px); padding-top:var(--sp-8,8px); padding-bottom:var(--sp-4,4px); }',
+      '#bus-mount .cc-bus__topstack { position:sticky; top:0; z-index:5; background:var(--bg,#090b0d); display:flex; flex-direction:column; gap:var(--sp-10,10px); padding-top:var(--sp-8,8px); padding-bottom:var(--sp-4,4px); }',
 
       // ─── Header bar (title + count + search) ───
-      '#bus-v2-mount .cc-bus-v2__header { display:flex; align-items:center; gap:var(--sp-10,10px); padding-bottom:var(--sp-8,8px); border-bottom:1px solid var(--border,#252c33); flex-wrap:wrap; }',
-      '#bus-v2-mount .cc-bus-v2__header-title { font-family:var(--display,sans-serif); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__header-count { font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); background:var(--amber-soft,rgba(200,146,42,0.08)); padding:2px 10px; border-radius:10px; }',
-      '#bus-v2-mount .cc-bus-v2__header-search { margin-left:auto; width:240px; max-width:100%; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:5px 10px; font-family:var(--mono,monospace); font-size:11px; }',
-      '#bus-v2-mount .cc-bus-v2__header-search:focus { outline:none; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__header { display:flex; align-items:center; gap:var(--sp-10,10px); padding-bottom:var(--sp-8,8px); border-bottom:1px solid var(--border,#252c33); flex-wrap:wrap; }',
+      '#bus-mount .cc-bus__header-title { font-family:var(--display,sans-serif); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__header-count { font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); background:var(--amber-soft,rgba(200,146,42,0.08)); padding:2px 10px; border-radius:10px; }',
+      '#bus-mount .cc-bus__header-search { margin-left:auto; width:240px; max-width:100%; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:5px 10px; font-family:var(--mono,monospace); font-size:11px; }',
+      '#bus-mount .cc-bus__header-search:focus { outline:none; border-color:var(--amber,#c8922a); }',
 
       // ─── Lane tabs (2026-07-19) — Human/AI/Log/All inside the header row ───
-      '#bus-v2-mount .cc-bus-v2__lane-tab { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; cursor:pointer; }',
-      '#bus-v2-mount .cc-bus-v2__lane-tab:hover { background:var(--raised,#161b20); color:var(--text,#dde4eb); }',
-      '#bus-v2-mount .cc-bus-v2__lane-tab.active { background:var(--amber-soft,rgba(200,146,42,0.08)); color:var(--amber,#c8922a); border-color:var(--amber-glow,rgba(200,146,42,0.15)); }',
 
       // ─── Bus list ───
-      '#bus-v2-mount .cc-bus-v2__list { display:flex; flex-direction:column; gap:var(--sp-10,10px); }',
-      '#bus-v2-mount .cc-bus-v2-card { background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; padding:var(--sp-12,12px) var(--sp-16,16px); position:relative; overflow:hidden; }',
-      '#bus-v2-mount .cc-bus-v2-card:hover { border-color:var(--border-hi,#2e3740); }',
-      '#bus-v2-mount .cc-bus-v2-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--stripe, var(--text-xs,#566470)); }',
-      '#bus-v2-mount .cc-bus-v2-card.is-archived::before { opacity:0.35; }',
-      '#bus-v2-mount .cc-bus-v2-card.is-approved::before { background:var(--green,#2ea043) !important; }',
+      '#bus-mount .cc-bus__list { display:flex; flex-direction:column; gap:var(--sp-10,10px); }',
+      '#bus-mount .cc-bus-card { background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; padding:var(--sp-12,12px) var(--sp-16,16px); position:relative; overflow:hidden; }',
+      '#bus-mount .cc-bus-card:hover { border-color:var(--border-hi,#2e3740); }',
+      '#bus-mount .cc-bus-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--stripe, var(--text-xs,#566470)); }',
+      '#bus-mount .cc-bus-card.is-archived::before { opacity:0.35; }',
+      '#bus-mount .cc-bus-card.is-approved::before { background:var(--green,#2ea043) !important; }',
 
       // ─── Card meta ───
-      '#bus-v2-mount .cc-bus-v2__meta { display:flex; align-items:center; gap:10px; margin-bottom:var(--sp-8,8px); flex-wrap:wrap; }',
-      '#bus-v2-mount .cc-bus-v2__from { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.04em; }',
-      '#bus-v2-mount .cc-bus-v2__arrow { font-family:var(--mono,monospace); font-size:10px; color:var(--text-xs,#566470); }',
-      '#bus-v2-mount .cc-bus-v2__to { font-family:var(--mono,monospace); font-size:10px; font-weight:500; }',
+      '#bus-mount .cc-bus__meta { display:flex; align-items:center; gap:10px; margin-bottom:var(--sp-8,8px); flex-wrap:wrap; }',
+      '#bus-mount .cc-bus__from { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.04em; }',
+      '#bus-mount .cc-bus__arrow { font-family:var(--mono,monospace); font-size:10px; color:var(--text-xs,#566470); }',
+      '#bus-mount .cc-bus__to { font-family:var(--mono,monospace); font-size:10px; font-weight:500; }',
       // Bus #ID + time bumped 2026-06-01 (Alessio direct: "barely can see them")
-      '#bus-v2-mount .cc-bus-v2__id { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); letter-spacing:0.02em; }',
+      '#bus-mount .cc-bus__id { margin-left:auto; font-family:var(--mono,monospace); font-size:13px; font-weight:700; color:var(--amber,#c8922a); letter-spacing:0.02em; }',
       // "replying to" line (bus #3949) — the question, above the answer.
-      '#bus-v2-mount .cc-bus-v2__replyctx { display:block; width:100%; text-align:left; margin:2px 0 6px; padding:5px 9px; background:var(--raised,rgba(255,255,255,0.04)); border:1px solid var(--border,#252c33); border-left:2px solid var(--amber,#c8922a); border-radius:3px; font-family:var(--mono,monospace); font-size:11px; line-height:1.45; color:var(--text-dim,#8a9aa8); cursor:pointer; }',
-      '#bus-v2-mount .cc-bus-v2__replyctx:hover { border-color:var(--amber,#c8922a); color:var(--text,#fff); }',
-      '#bus-v2-mount .cc-bus-v2__parentbox { margin:0 0 8px; padding:8px 10px; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; font-size:12px; line-height:1.5; color:var(--text-dim,#8a9aa8); white-space:pre-wrap; max-height:280px; overflow-y:auto; }',
-      '#bus-v2-mount .cc-bus-v2__parentbox-h { font-family:var(--mono,monospace); font-size:10px; font-weight:700; margin-bottom:5px; }',
-      '#bus-v2-mount .cc-bus-v2__card--flash { animation:ccBusFlash 1.4s ease-out; }',
+      '#bus-mount .cc-bus__replyctx { display:block; width:100%; text-align:left; margin:2px 0 6px; padding:5px 9px; background:var(--raised,rgba(255,255,255,0.04)); border:1px solid var(--border,#252c33); border-left:2px solid var(--amber,#c8922a); border-radius:3px; font-family:var(--mono,monospace); font-size:11px; line-height:1.45; color:var(--text-dim,#8a9aa8); cursor:pointer; }',
+      '#bus-mount .cc-bus__replyctx:hover { border-color:var(--amber,#c8922a); color:var(--text,#fff); }',
+      '#bus-mount .cc-bus__parentbox { margin:0 0 8px; padding:8px 10px; background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; font-size:12px; line-height:1.5; color:var(--text-dim,#8a9aa8); white-space:pre-wrap; max-height:280px; overflow-y:auto; }',
+      '#bus-mount .cc-bus__parentbox-h { font-family:var(--mono,monospace); font-size:10px; font-weight:700; margin-bottom:5px; }',
+      '#bus-mount .cc-bus__card--flash { animation:ccBusFlash 1.4s ease-out; }',
       '@keyframes ccBusFlash { 0%,40% { background:var(--amber-soft,rgba(200,146,42,0.18)); } 100% { background:transparent; } }',
-      '#bus-v2-mount .cc-bus-v2__time { font-family:var(--mono,monospace); font-size:11px; font-weight:600; color:var(--text-dim,#8a9aa8); }',
-      '#bus-v2-mount .cc-bus-v2__channel { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); text-transform:uppercase; letter-spacing:0.08em; }',
-      '#bus-v2-mount .cc-bus-v2__intent { font-family:var(--mono,monospace); font-size:9px; font-style:italic; color:var(--text-xs,#566470); padding:2px 6px; border-radius:8px; background:var(--raised,#161b20); border:1px solid var(--border,#252c33); }',
-      '#bus-v2-mount .cc-bus-v2__instance-short { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); opacity:0.7; }',
+      '#bus-mount .cc-bus__time { font-family:var(--mono,monospace); font-size:11px; font-weight:600; color:var(--text-dim,#8a9aa8); }',
+      '#bus-mount .cc-bus__channel { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); text-transform:uppercase; letter-spacing:0.08em; }',
+      '#bus-mount .cc-bus__intent { font-family:var(--mono,monospace); font-size:9px; font-style:italic; color:var(--text-xs,#566470); padding:2px 6px; border-radius:8px; background:var(--raised,#161b20); border:1px solid var(--border,#252c33); }',
+      '#bus-mount .cc-bus__instance-short { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); opacity:0.7; }',
 
       // ─── Card body ───
-      '#bus-v2-mount .cc-bus-v2__body { font-family:var(--sans,sans-serif); font-size:13px; line-height:1.5; color:var(--text,#dde4eb); white-space:pre-wrap; word-wrap:break-word; margin-bottom:var(--sp-8,8px); }',
-      '#bus-v2-mount .cc-bus-v2__body.collapsed { display:-webkit-box; -webkit-line-clamp:10; -webkit-box-orient:vertical; overflow:hidden; }',
-      '#bus-v2-mount .cc-bus-v2__readrow { display:flex; align-items:center; gap:8px; margin-bottom:var(--sp-8,8px); }',
-      '#bus-v2-mount .cc-bus-v2__read { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; flex-shrink:0; }',
-      '#bus-v2-mount .cc-bus-v2__read:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__read.speaking { color:#000; background:var(--amber,#c8922a); border-color:var(--amber,#c8922a); font-weight:700; }',
-      '#bus-v2-mount .cc-bus-v2__readall { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; }',
-      '#bus-v2-mount .cc-bus-v2__readall:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__readall.speaking { color:#000; background:var(--amber,#c8922a); border-color:var(--amber,#c8922a); font-weight:700; }',
-      '#bus-v2-mount .cc-bus-v2__body code { font-family:var(--mono,monospace); font-size:11px; color:var(--amber,#c8922a); background:var(--amber-soft,rgba(200,146,42,0.08)); padding:1px 5px; border-radius:3px; }',
-      '#bus-v2-mount .cc-bus-v2__body strong { font-weight:600; color:var(--text,#dde4eb); }',
-      '#bus-v2-mount .cc-bus-v2__showmore { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:transparent; color:var(--amber,#c8922a); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-radius:3px; padding:4px 10px; cursor:pointer; margin-bottom:var(--sp-10,10px); }',
-      '#bus-v2-mount .cc-bus-v2__showmore:hover { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__body { font-family:var(--sans,sans-serif); font-size:13px; line-height:1.5; color:var(--text,#dde4eb); white-space:pre-wrap; word-wrap:break-word; margin-bottom:var(--sp-8,8px); }',
+      '#bus-mount .cc-bus__body.collapsed { display:-webkit-box; -webkit-line-clamp:10; -webkit-box-orient:vertical; overflow:hidden; }',
+      '#bus-mount .cc-bus__readrow { display:flex; align-items:center; gap:8px; margin-bottom:var(--sp-8,8px); }',
+      '#bus-mount .cc-bus__read { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; flex-shrink:0; }',
+      '#bus-mount .cc-bus__read:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__read.speaking { color:#000; background:var(--amber,#c8922a); border-color:var(--amber,#c8922a); font-weight:700; }',
+      '#bus-mount .cc-bus__readall { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; cursor:pointer; }',
+      '#bus-mount .cc-bus__readall:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__readall.speaking { color:#000; background:var(--amber,#c8922a); border-color:var(--amber,#c8922a); font-weight:700; }',
+      '#bus-mount .cc-bus__body code { font-family:var(--mono,monospace); font-size:11px; color:var(--amber,#c8922a); background:var(--amber-soft,rgba(200,146,42,0.08)); padding:1px 5px; border-radius:3px; }',
+      '#bus-mount .cc-bus__body strong { font-weight:600; color:var(--text,#dde4eb); }',
+      '#bus-mount .cc-bus__showmore { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:transparent; color:var(--amber,#c8922a); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-radius:3px; padding:4px 10px; cursor:pointer; margin-bottom:var(--sp-10,10px); }',
+      '#bus-mount .cc-bus__showmore:hover { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
 
       // ─── Plan action bar ───
-      '#bus-v2-mount .cc-bus-v2__plan-action { background:var(--raised,#161b20); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-left:2px solid var(--amber,#c8922a); border-radius:3px; padding:var(--sp-10,10px) var(--sp-12,12px); margin-top:var(--sp-10,10px); }',
-      '#bus-v2-mount .cc-bus-v2__plan-label { font-family:var(--display,sans-serif); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--amber,#c8922a); margin-bottom:var(--sp-8,8px); display:flex; align-items:center; gap:6px; }',
-      '#bus-v2-mount .cc-bus-v2__plan-title { font-family:var(--sans,sans-serif); font-size:13px; font-weight:600; color:var(--text,#dde4eb); line-height:1.35; margin-bottom:var(--sp-4,4px); }',
-      '#bus-v2-mount .cc-bus-v2__plan-meta { font-family:var(--mono,monospace); font-size:10px; color:var(--text-dim,#8a9aa8); margin-bottom:var(--sp-10,10px); }',
-      '#bus-v2-mount .cc-bus-v2__plan-meta .sep { color:var(--text-xs,#566470); margin:0 4px; }',
-      '#bus-v2-mount .cc-bus-v2__plan-buttons { display:flex; gap:6px; flex-wrap:wrap; }',
-      '#bus-v2-mount .cc-bus-v2__btn { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-radius:3px; padding:5px 12px; cursor:pointer; border:1px solid; display:inline-flex; align-items:center; gap:5px; }',
-      '#bus-v2-mount .cc-bus-v2__btn--approve { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__btn--approve:hover { background:var(--text,#dde4eb); border-color:var(--text,#dde4eb); }',
-      '#bus-v2-mount .cc-bus-v2__btn--ghost { background:transparent; color:var(--amber,#c8922a); border-color:var(--amber-glow,rgba(200,146,42,0.15)); }',
-      '#bus-v2-mount .cc-bus-v2__btn--ghost:hover { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__btn--neutral { background:transparent; color:var(--text-dim,#8a9aa8); border-color:var(--border,#252c33); }',
-      '#bus-v2-mount .cc-bus-v2__btn--neutral:hover { color:var(--text,#dde4eb); border-color:var(--border-hi,#2e3740); }',
-      '#bus-v2-mount .cc-bus-v2__btn[disabled] { opacity:0.4; cursor:not-allowed; }',
-      '#bus-v2-mount .cc-bus-v2__approved { background:var(--green-bg,rgba(46,160,67,0.12)); border:1px solid var(--green,#2ea043); border-left-width:2px; border-radius:3px; padding:var(--sp-10,10px) var(--sp-12,12px); margin-top:var(--sp-10,10px); display:flex; align-items:center; gap:8px; font-family:var(--mono,monospace); font-size:11px; color:var(--green,#2ea043); }',
-      '#bus-v2-mount .cc-bus-v2__approved strong { color:var(--text,#dde4eb); font-weight:700; }',
-      '#bus-v2-mount .cc-bus-v2__approved .sep { color:var(--text-xs,#566470); margin:0 4px; }',
+      '#bus-mount .cc-bus__plan-action { background:var(--raised,#161b20); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-left:2px solid var(--amber,#c8922a); border-radius:3px; padding:var(--sp-10,10px) var(--sp-12,12px); margin-top:var(--sp-10,10px); }',
+      '#bus-mount .cc-bus__plan-label { font-family:var(--display,sans-serif); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--amber,#c8922a); margin-bottom:var(--sp-8,8px); display:flex; align-items:center; gap:6px; }',
+      '#bus-mount .cc-bus__plan-title { font-family:var(--sans,sans-serif); font-size:13px; font-weight:600; color:var(--text,#dde4eb); line-height:1.35; margin-bottom:var(--sp-4,4px); }',
+      '#bus-mount .cc-bus__plan-meta { font-family:var(--mono,monospace); font-size:10px; color:var(--text-dim,#8a9aa8); margin-bottom:var(--sp-10,10px); }',
+      '#bus-mount .cc-bus__plan-meta .sep { color:var(--text-xs,#566470); margin:0 4px; }',
+      '#bus-mount .cc-bus__plan-buttons { display:flex; gap:6px; flex-wrap:wrap; }',
+      '#bus-mount .cc-bus__btn { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; border-radius:3px; padding:5px 12px; cursor:pointer; border:1px solid; display:inline-flex; align-items:center; gap:5px; }',
+      '#bus-mount .cc-bus__btn--approve { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__btn--approve:hover { background:var(--text,#dde4eb); border-color:var(--text,#dde4eb); }',
+      '#bus-mount .cc-bus__btn--ghost { background:transparent; color:var(--amber,#c8922a); border-color:var(--amber-glow,rgba(200,146,42,0.15)); }',
+      '#bus-mount .cc-bus__btn--ghost:hover { background:var(--amber,#c8922a); color:#000; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__btn--neutral { background:transparent; color:var(--text-dim,#8a9aa8); border-color:var(--border,#252c33); }',
+      '#bus-mount .cc-bus__btn--neutral:hover { color:var(--text,#dde4eb); border-color:var(--border-hi,#2e3740); }',
+      '#bus-mount .cc-bus__btn[disabled] { opacity:0.4; cursor:not-allowed; }',
+      '#bus-mount .cc-bus__approved { background:var(--green-bg,rgba(46,160,67,0.12)); border:1px solid var(--green,#2ea043); border-left-width:2px; border-radius:3px; padding:var(--sp-10,10px) var(--sp-12,12px); margin-top:var(--sp-10,10px); display:flex; align-items:center; gap:8px; font-family:var(--mono,monospace); font-size:11px; color:var(--green,#2ea043); }',
+      '#bus-mount .cc-bus__approved strong { color:var(--text,#dde4eb); font-weight:700; }',
+      '#bus-mount .cc-bus__approved .sep { color:var(--text-xs,#566470); margin:0 4px; }',
 
       // ─── Inline reply (legacy narrow input — kept for "Bounce with edits" flow) ───
-      '#bus-v2-mount .cc-bus-v2__reply { display:flex; gap:6px; margin-top:var(--sp-10,10px); }',
-      '#bus-v2-mount .cc-bus-v2__reply input { flex:1; background:var(--bg,#090b0d); border:1px solid var(--border,#252c33); color:var(--text,#dde4eb); padding:6px 10px; border-radius:3px; font-family:var(--mono,monospace); font-size:11px; }',
-      '#bus-v2-mount .cc-bus-v2__reply input:focus { outline:none; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__reply.hidden { display:none; }',
+      '#bus-mount .cc-bus__reply { display:flex; gap:6px; margin-top:var(--sp-10,10px); }',
+      '#bus-mount .cc-bus__reply input { flex:1; background:var(--bg,#090b0d); border:1px solid var(--border,#252c33); color:var(--text,#dde4eb); padding:6px 10px; border-radius:3px; font-family:var(--mono,monospace); font-size:11px; }',
+      '#bus-mount .cc-bus__reply input:focus { outline:none; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__reply.hidden { display:none; }',
 
       // ─── Per-card actions row (Reply / Archive / Delete) ───
-      '#bus-v2-mount .cc-bus-v2__actions { display:flex; gap:6px; margin-top:var(--sp-10,10px); padding-top:var(--sp-8,8px); border-top:1px dashed var(--border,#252c33); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }',
-      '#bus-v2-mount .cc-bus-v2__act-btn:hover { color:var(--text,#dde4eb); border-color:var(--border-hi,#2e3740); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn--reply:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn--close:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn--close.is-armed { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); background:rgba(200,146,42,0.08); }',
-      '#bus-v2-mount .cc-bus-v2__close-hint { display:none; font-family:var(--mono,monospace); font-size:10px; color:var(--amber,#c8922a); font-weight:600; margin-right:auto; }',
-      '#bus-v2-mount .cc-bus-v2-card[data-close-on-send="1"] .cc-bus-v2__close-hint { display:inline-block; }',
-      '#bus-v2-mount .cc-bus-v2__act-btn--delete:hover { color:var(--red,#e5534b); border-color:var(--red,#e5534b); background:var(--red-bg,rgba(229,83,75,0.12)); }',
+      '#bus-mount .cc-bus__actions { display:flex; gap:6px; margin-top:var(--sp-10,10px); padding-top:var(--sp-8,8px); border-top:1px dashed var(--border,#252c33); }',
+      '#bus-mount .cc-bus__act-btn { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }',
+      '#bus-mount .cc-bus__act-btn:hover { color:var(--text,#dde4eb); border-color:var(--border-hi,#2e3740); }',
+      '#bus-mount .cc-bus__act-btn--reply:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__act-btn--close:hover { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__act-btn--close.is-armed { color:var(--amber,#c8922a); border-color:var(--amber,#c8922a); background:rgba(200,146,42,0.08); }',
+      '#bus-mount .cc-bus__close-hint { display:none; font-family:var(--mono,monospace); font-size:10px; color:var(--amber,#c8922a); font-weight:600; margin-right:auto; }',
+      '#bus-mount .cc-bus-card[data-close-on-send="1"] .cc-bus__close-hint { display:inline-block; }',
+      '#bus-mount .cc-bus__act-btn--delete:hover { color:var(--red,#e5534b); border-color:var(--red,#e5534b); background:var(--red-bg,rgba(229,83,75,0.12)); }',
       // Done is the finishing action — green, and it stays lit once a thread is closed.
-      '#bus-v2-mount .cc-bus-v2__act-btn--done:hover { color:var(--green,#3fb950); border-color:var(--green,#3fb950); background:var(--green-bg,rgba(63,185,80,0.12)); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn--done[data-done="1"] { color:var(--green,#3fb950); border-color:var(--green,#3fb950); background:var(--green-bg,rgba(63,185,80,0.12)); }',
-      '#bus-v2-mount .cc-bus-v2__act-btn[disabled] { opacity:0.4; cursor:not-allowed; }',
+      '#bus-mount .cc-bus__act-btn--done:hover { color:var(--green,#3fb950); border-color:var(--green,#3fb950); background:var(--green-bg,rgba(63,185,80,0.12)); }',
+      '#bus-mount .cc-bus__act-btn--done[data-done="1"] { color:var(--green,#3fb950); border-color:var(--green,#3fb950); background:var(--green-bg,rgba(63,185,80,0.12)); }',
+      '#bus-mount .cc-bus__act-btn[disabled] { opacity:0.4; cursor:not-allowed; }',
 
       // ─── Full-width reply panel (NEW — spans entire card, supports dictation) ───
-      '#bus-v2-mount .cc-bus-v2__reply-wide { margin-top:var(--sp-10,10px); display:flex; flex-direction:column; gap:6px; }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide.hidden { display:none; }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide textarea { width:100%; min-height:80px; max-height:240px; resize:vertical; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-radius:3px; padding:10px 12px; padding-right:42px; font-family:var(--mono,monospace); font-size:12px; line-height:1.5; box-sizing:border-box; }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide textarea:focus { outline:none; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide-row { display:flex; align-items:center; gap:8px; }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide-hint { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide-send { margin-left:auto; }',
-      '#bus-v2-mount .cc-bus-v2__reply-wide-cancel { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:4px 10px; font-family:var(--mono,monospace); font-size:10px; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; }',
+      '#bus-mount .cc-bus__reply-wide { margin-top:var(--sp-10,10px); display:flex; flex-direction:column; gap:6px; }',
+      '#bus-mount .cc-bus__reply-wide.hidden { display:none; }',
+      '#bus-mount .cc-bus__reply-wide textarea { width:100%; min-height:80px; max-height:240px; resize:vertical; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--amber-glow,rgba(200,146,42,0.15)); border-radius:3px; padding:10px 12px; padding-right:42px; font-family:var(--mono,monospace); font-size:12px; line-height:1.5; box-sizing:border-box; }',
+      '#bus-mount .cc-bus__reply-wide textarea:focus { outline:none; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__reply-wide-row { display:flex; align-items:center; gap:8px; }',
+      '#bus-mount .cc-bus__reply-wide-hint { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); }',
+      '#bus-mount .cc-bus__reply-wide-send { margin-left:auto; }',
+      '#bus-mount .cc-bus__reply-wide-cancel { background:transparent; color:var(--text-dim,#8a9aa8); border:1px solid var(--border,#252c33); border-radius:3px; padding:4px 10px; font-family:var(--mono,monospace); font-size:10px; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; }',
 
-      // ─── Composer (rendered inside .cc-bus-v2__topstack — wrapper handles the stickiness now) ───
-      '#bus-v2-mount .cc-bus-v2__composer { background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; padding:var(--sp-10,10px); display:flex; flex-direction:column; gap:var(--sp-8,8px); }',
-      '#bus-v2-mount .cc-bus-v2__chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }',
-      '#bus-v2-mount .cc-bus-v2__compose-search { flex:1 1 200px; min-width:140px; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; box-sizing:border-box; }',
-      '#bus-v2-mount .cc-bus-v2__compose-search:focus { outline:none; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__chip { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.04em; padding:3px 9px; border-radius:12px; border:1px solid; background:transparent; cursor:pointer; }',
-      '#bus-v2-mount .cc-bus-v2__compose-input { width:100%; min-height:56px; max-height:200px; resize:vertical; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:8px 10px; font-family:var(--mono,monospace); font-size:12px; line-height:1.5; }',
-      '#bus-v2-mount .cc-bus-v2__compose-input:focus { outline:none; border-color:var(--amber,#c8922a); }',
-      '#bus-v2-mount .cc-bus-v2__compose-row { display:flex; align-items:center; gap:8px; }',
-      '#bus-v2-mount .cc-bus-v2__compose-hint { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); }',
-      '#bus-v2-mount .cc-bus-v2__compose-send { margin-left:auto; }',
+      // ─── Composer (rendered inside .cc-bus__topstack — wrapper handles the stickiness now) ───
+      '#bus-mount .cc-bus__composer { background:var(--surface,#0f1316); border:1px solid var(--border,#252c33); border-radius:4px; padding:var(--sp-10,10px); display:flex; flex-direction:column; gap:var(--sp-8,8px); }',
+      '#bus-mount .cc-bus__chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }',
+      '#bus-mount .cc-bus__compose-search { flex:1 1 200px; min-width:140px; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:3px 10px; font-family:var(--mono,monospace); font-size:11px; box-sizing:border-box; }',
+      '#bus-mount .cc-bus__compose-search:focus { outline:none; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__chip { font-family:var(--mono,monospace); font-size:10px; font-weight:700; letter-spacing:0.04em; padding:3px 9px; border-radius:12px; border:1px solid; background:transparent; cursor:pointer; }',
+      '#bus-mount .cc-bus__compose-input { width:100%; min-height:56px; max-height:200px; resize:vertical; background:var(--bg,#090b0d); color:var(--text,#dde4eb); border:1px solid var(--border,#252c33); border-radius:3px; padding:8px 10px; font-family:var(--mono,monospace); font-size:12px; line-height:1.5; }',
+      '#bus-mount .cc-bus__compose-input:focus { outline:none; border-color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__compose-row { display:flex; align-items:center; gap:8px; }',
+      '#bus-mount .cc-bus__compose-hint { font-family:var(--mono,monospace); font-size:9px; color:var(--text-xs,#566470); }',
+      '#bus-mount .cc-bus__compose-send { margin-left:auto; }',
 
       // ─── Empty + error ───
-      '#bus-v2-mount .cc-bus-v2__empty { font-family:var(--mono,monospace); font-size:11px; color:var(--text-xs,#566470); text-align:center; padding:24px; border:1px dashed var(--border,#252c33); border-radius:4px; }',
-      '#bus-v2-mount .cc-bus-v2__err { font-family:var(--mono,monospace); font-size:11px; color:var(--red,#e5534b); padding:12px 16px; border:1px solid var(--red,#e5534b); border-radius:4px; background:var(--red-bg,rgba(229,83,75,0.12)); }',
+      '#bus-mount .cc-bus__empty { font-family:var(--mono,monospace); font-size:11px; color:var(--text-xs,#566470); text-align:center; padding:24px; border:1px dashed var(--border,#252c33); border-radius:4px; }',
+      '#bus-mount .cc-bus__err { font-family:var(--mono,monospace); font-size:11px; color:var(--red,#e5534b); padding:12px 16px; border:1px solid var(--red,#e5534b); border-radius:4px; background:var(--red-bg,rgba(229,83,75,0.12)); }',
 
       // ─── Dyslexia-friendly font toggle (default ON = Lexend) — Alessio 2026-05-17.
       //     !important needed because index.html has a universal Oswald rule on body * .
-      '#bus-v2-mount .cc-bus-v2__font-toggle { background:transparent; color:var(--amber,#c8922a); border:1px solid var(--amber,#c8922a); border-radius:3px; padding:2px 8px; font-family:var(--display,sans-serif); font-size:9px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; margin-left:auto; }',
-      '#bus-v2-mount .cc-bus-v2__font-toggle:hover { background:var(--amber,#c8922a); color:#000; }',
-      '#bus-v2-mount .cc-bus-v2__font-toggle.on { background:var(--amber,#c8922a); color:#000; }',
-      '#bus-v2-mount.font-lexend .cc-bus-v2__body { font-family:\'Lexend\', system-ui, sans-serif !important; text-transform:none !important; letter-spacing:0.01em !important; line-height:1.6 !important; }'
+      '#bus-mount .cc-bus__font-toggle { background:transparent; color:var(--amber,#c8922a); border:1px solid var(--amber,#c8922a); border-radius:3px; padding:2px 8px; font-family:var(--display,sans-serif); font-size:9px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; margin-left:auto; }',
+      '#bus-mount .cc-bus__font-toggle:hover { background:var(--amber,#c8922a); color:#000; }',
+      '#bus-mount .cc-bus__font-toggle.on { background:var(--amber,#c8922a); color:#000; }',
+      '#bus-mount.font-lexend .cc-bus__body { font-family:\'Lexend\', system-ui, sans-serif !important; text-transform:none !important; letter-spacing:0.01em !important; line-height:1.6 !important; }'
     ].join('\n');
 
     var style = document.createElement('style');
-    style.id = 'cc-bus-v2-style';
+    style.id = 'cc-bus-style';
     style.textContent = css;
     document.head.appendChild(style);
   }
@@ -513,18 +586,10 @@
   }
 
   // ─── Filtering ─────────────────────────────────────────────────────────
-  // Lane bucketing (2026-07-19; three-lane split ratified 2026-08-10):
-  // agent_messages.lane is trigger-filed as 'human' (both parties human),
-  // 'cross' (one human, one AI), 'ai', 'log', 'local'. 'cross' buckets under
-  // the Human tab on every face. THIS face is Alessio's: his call is that
-  // AI↔AI IS first-glance here (default lane 'all') — and only here; the
-  // command + Reanna faces default to Human. Null/unknown buckets with 'ai'
-  // so rows can never vanish from every tab except All.
-  function laneOf(r) {
-    var l = String((r && r.lane) || '').toLowerCase();
-    if (l === 'cross') return 'human';
-    return (l === 'human' || l === 'ai' || l === 'log' || l === 'local') ? l : 'ai';
-  }
+  // laneOf is deleted (2026-08-19). agent_messages.lane is the machine's own
+  // taxonomy — cross / ai / log / local / human / intern — and thirty days of it
+  // said lane='human' held 45 rows while 567 were addressed to him. Nothing on
+  // his board is decided by it any more.
 
   // ONE predicate for both the list and the sidebar counts (bus #4361-era fix,
   // 2026-08-09): the filters "didn't all work" because the counts and the list
@@ -532,48 +597,15 @@
   // show. rowMatches(r, skip) skips exactly one group so each sidebar group can
   // count against every OTHER active filter; the numbers now always equal what
   // clicking produces.
+  // ONE GATE LEFT: his search box. Everything else that used to filter here now
+  // happens in the query, which is the whole point — a client-side gate on top of a
+  // server-side bucket is how a count and a list start lying to each other.
+  //
+  // This function used to drop archived and done rows on its own. That alone would
+  // have made HANDLED count 47 and show 0, because HANDLED asks the database for
+  // read and archived rows on purpose. The gate had to go, not be worked around.
   function rowMatches(r, skip) {
     var s = STATE.search.toLowerCase().trim();
-    // Channel gate (2026-08-10): one switch, whole bus flips. 'both' passes
-    // every non-log row (the split view partitions + counts machines itself);
-    // az/forge take the people lanes and partition by topic in paintAll;
-    // machines = AI↔AI + local crew; log = the system lane.
-    if (skip !== 'lane') {
-      var lo = laneOf(r);
-      var ch = STATE.lane;
-      if (ch === 'az' || ch === 'forge') { if (lo !== 'human') return false; }
-      else if (ch === 'machines') { if (lo !== 'ai' && lo !== 'local') return false; }
-      else if (ch === 'log') { if (lo !== 'log') return false; }
-      // 'both' (and anything unknown) falls through
-    }
-    if (skip !== 'sender' && STATE.sender !== 'all') {
-      if (String(r.from_user || '').toLowerCase() !== STATE.sender) return false;
-    }
-    if (skip !== 'status') {
-      if (STATE.status === 'unread') {
-        // archived rows keep status 'sent' — they are not unread work
-        if (r.status !== 'sent' || r.archived_at) return false;
-      } else if (STATE.status === 'awaiting') {
-        if (!r.awaiting_reply_from || r.archived_at || r.status === 'done') return false;
-      } else if (STATE.status === 'archived') {
-        if (!r.archived_at) return false;
-      } else if (STATE.status === 'done') {
-        if (r.status !== 'done' || r.archived_at) return false;
-      } else if (STATE.status === 'all') {
-        // exclude archived AND finished from "all" by default. Before 2026-08-04 this
-        // feed ignored status entirely, so a row marked done stayed on screen forever —
-        // Reanna's board already hid finished rows, which is why she could clear her
-        // list and Alessio could not. Done rows remain reachable under the Done filter.
-        if (r.archived_at) return false;
-        if (r.status === 'done') return false;
-      }
-    }
-    if (skip !== 'priority' && STATE.priority !== 'all') {
-      if (String(r.priority || 'normal').toLowerCase() !== STATE.priority) return false;
-    }
-    if (skip !== 'channel' && STATE.channel !== 'all') {
-      if (String(r.channel || '').toLowerCase() !== STATE.channel) return false;
-    }
     if (skip !== 'search' && s) {
       if (String(r.body || '').toLowerCase().indexOf(s) === -1) return false;
     }
@@ -619,7 +651,7 @@
     resetReadButtons();
   }
   function resetReadButtons() {
-    var root = document.getElementById('bus-v2-mount');
+    var root = document.getElementById(MOUNT_ID);
     if (!root) return;
     root.querySelectorAll('[data-act="read-body"]').forEach(function (b) {
       b.textContent = '▶ Read';
@@ -688,9 +720,9 @@
   // What a listener actually wants to hear: who sent it, then the message.
   function spokenTextFor(card) {
     if (!card) return '';
-    var from = card.querySelector('.cc-bus-v2__from');
-    var to = card.querySelector('.cc-bus-v2__to');
-    var body = card.querySelector('.cc-bus-v2__body');
+    var from = card.querySelector('.cc-bus__from');
+    var to = card.querySelector('.cc-bus__to');
+    var body = card.querySelector('.cc-bus__body');
     var lead = (from ? 'From ' + from.textContent.trim() : '')
              + (to ? ', to ' + to.textContent.trim() + '. ' : '. ');
     return lead + (body ? body.textContent.trim() : '');
@@ -706,7 +738,7 @@
       if (r && r.to_user) mix[r.to_user] = 1;
     });
     var mixHtml = replies.length
-      ? '<span class="cc-bus-v2__mix" title="everyone in this thread">👥 ' +
+      ? '<span class="cc-bus__mix" title="everyone in this thread">👥 ' +
         Object.keys(mix).map(function (n) { return '<b style="color:' + instColor(n).color + '">' + escapeHtml(n) + '</b>'; }).join(' · ') + '</span>'
       : '';
     // Reply goes to the last OTHER voice in the thread, not blindly to the root sender.
@@ -717,26 +749,26 @@
     var body = String(msg.body || '');
     var bodyLines = body.split('\n').length;
     var needsTruncate = bodyLines > 10 || body.length > 600;
-    var bodyClass = needsTruncate ? 'cc-bus-v2__body collapsed' : 'cc-bus-v2__body';
+    var bodyClass = needsTruncate ? 'cc-bus__body collapsed' : 'cc-bus__body';
     var showMore = needsTruncate
-      ? '<button class="cc-bus-v2__showmore" data-act="toggle-body">▾ Show more</button>'
+      ? '<button class="cc-bus__showmore" data-act="toggle-body">▾ Show more</button>'
       : '';
     // Read aloud (Alessio 2026-07-27): selecting a long body by hand is painful,
     // especially while it is clamped to 10 lines. This speaks the WHOLE message,
     // collapsed or not, so nothing has to be expanded or selected first.
-    var readBtn = '<button class="cc-bus-v2__read" data-act="read-body" title="Read this message out loud">▶ Read</button>';
+    var readBtn = '<button class="cc-bus__read" data-act="read-body" title="Read this message out loud">▶ Read</button>';
     var msgId = String(msg.id);
 
     var fromColor = instColor(msg.from_user).color;
     var toColor = instColor(msg.to_user).color;
-    var cardClasses = ['cc-bus-v2-card'];
+    var cardClasses = ['cc-bus-card'];
     if (hasPlanApproved) cardClasses.push('is-approved');
     if (msg.archived_at) cardClasses.push('is-archived');
 
     // OPEN ASK (bus #2715 lane 2, 2026-07-12): watchers now stamp delivery and
     // leave human-lane rows status='sent' until someone acts — surface that state.
     var isOpenAsk = (msg.status === 'sent') && ['alessio','reanna','team'].indexOf(String(msg.to_user||'').toLowerCase()) !== -1;
-    var openAskTag = isOpenAsk ? '<span class="cc-bus-v2__tag" style="color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 6px;font-size:10px;letter-spacing:0.05em;">⚑ OPEN ASK</span>' : '';
+    var openAskTag = isOpenAsk ? '<span class="cc-bus__tag" style="color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 6px;font-size:10px;letter-spacing:0.05em;">⚑ OPEN ASK</span>' : '';
 
     // Save + Flag (Alessio 2026-07-11): flagged rows take the flag color as their
     // stripe; saved-but-unflagged take amber. Both survive the 14-day auto-wipe.
@@ -752,24 +784,24 @@
     var planBar = '';
     if (hasPlanDraft) {
       planBar = '' +
-        '<div class="cc-bus-v2__plan-action">' +
-          '<div class="cc-bus-v2__plan-label">⚡ Plan detected · awaiting your approval</div>' +
-          '<div class="cc-bus-v2__plan-title">' + escapeHtml(plan.title || '(untitled plan)') + '</div>' +
-          '<div class="cc-bus-v2__plan-meta">' +
+        '<div class="cc-bus__plan-action">' +
+          '<div class="cc-bus__plan-label">⚡ Plan detected · awaiting your approval</div>' +
+          '<div class="cc-bus__plan-title">' + escapeHtml(plan.title || '(untitled plan)') + '</div>' +
+          '<div class="cc-bus__plan-meta">' +
             escapeHtml(plan.id) +
             (plan.domain ? '<span class="sep">·</span> domain: ' + escapeHtml(plan.domain) : '') +
           '</div>' +
-          '<div class="cc-bus-v2__plan-buttons">' +
-            '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve" data-act="approve" data-plan-id="' + escapeHtml(plan.id) + '" data-msg-id="' + escapeHtml(msgId) + '" data-from="' + escapeHtml(msg.from_user || '') + '">✓ Approve plan</button>' +
-            '<button class="cc-bus-v2__btn cc-bus-v2__btn--ghost" data-act="bounce">↺ Bounce with edits</button>' +
-            '<button class="cc-bus-v2__btn cc-bus-v2__btn--neutral" data-act="open-plan" data-plan-id="' + escapeHtml(plan.id) + '">↗ Open in plans board</button>' +
+          '<div class="cc-bus__plan-buttons">' +
+            '<button class="cc-bus__btn cc-bus__btn--approve" data-act="approve" data-plan-id="' + escapeHtml(plan.id) + '" data-msg-id="' + escapeHtml(msgId) + '" data-from="' + escapeHtml(msg.from_user || '') + '">✓ Approve plan</button>' +
+            '<button class="cc-bus__btn cc-bus__btn--ghost" data-act="bounce">↺ Bounce with edits</button>' +
+            '<button class="cc-bus__btn cc-bus__btn--neutral" data-act="open-plan" data-plan-id="' + escapeHtml(plan.id) + '">↗ Open in plans board</button>' +
           '</div>' +
         '</div>';
     } else if (hasPlanApproved) {
       var approvedBy = plan.approved_by || 'alessio';
       var approvedAt = plan.approved_at ? fmtTime(plan.approved_at) : '—';
       planBar = '' +
-        '<div class="cc-bus-v2__approved">' +
+        '<div class="cc-bus__approved">' +
           '<span style="font-size:14px;">✓</span>' +
           '<span><strong>Plan ' + escapeHtml(plan.status) + '</strong>' +
             '<span class="sep">·</span>' + escapeHtml(approvedBy) +
@@ -783,8 +815,8 @@
     var intentText = sessionRow ? shortenIntent(sessionRow.intent) : '';
     var instanceShort = msg.from_instance_id ? String(msg.from_instance_id).slice(0, 8) : '';
     var intentHtml = intentText
-      ? '<span class="cc-bus-v2__intent" title="session ' + escapeHtml(instanceShort) + '">' + escapeHtml(intentText) + '</span>'
-      : (instanceShort ? '<span class="cc-bus-v2__instance-short" title="session ' + escapeHtml(instanceShort) + '">·' + escapeHtml(instanceShort) + '</span>' : '');
+      ? '<span class="cc-bus__intent" title="session ' + escapeHtml(instanceShort) + '">' + escapeHtml(intentText) + '</span>'
+      : (instanceShort ? '<span class="cc-bus__instance-short" title="session ' + escapeHtml(instanceShort) + '">·' + escapeHtml(instanceShort) + '</span>' : '');
 
     // ─── Per-card actions — Reply / Done / Close / Save / Archive ───
     // 2026-08-04 rebuild (Alessio: "I need a done button... delete is basically useless
@@ -800,18 +832,18 @@
     var isDone = msg.status === 'done';
     var doneLabel = isDone ? '↩ Not done' : '✓ Done';
     var flagDots = Object.keys(FLAG_COLORS).map(function (name) {
-      return '<button class="cc-bus-v2__flag-dot" data-act="set-flag" data-flag="' + name + '" title="' + name + '" style="width:15px;height:15px;border-radius:50%;border:2px solid ' + (msg.flag_color === name ? '#fff' : 'transparent') + ';background:' + FLAG_COLORS[name] + ';cursor:pointer;padding:0;"></button>';
+      return '<button class="cc-bus__flag-dot" data-act="set-flag" data-flag="' + name + '" title="' + name + '" style="width:15px;height:15px;border-radius:50%;border:2px solid ' + (msg.flag_color === name ? '#fff' : 'transparent') + ';background:' + FLAG_COLORS[name] + ';cursor:pointer;padding:0;"></button>';
     }).join('');
     // The chat: every reply stacks chronologically on the original bus card.
     var threadHtml = '';
     if (replies.length) {
-      threadHtml = '<div class="cc-bus-v2__thread">' + replies.map(function (r) {
+      threadHtml = '<div class="cc-bus__thread">' + replies.map(function (r) {
         var mine = String(r.from_user || '') === 'alessio';
-        return '<div class="cc-bus-v2__bubble' + (mine ? ' mine' : '') + '">' +
-          '<div class="cc-bus-v2__bubble-head"><b style="color:' + instColor(r.from_user).color + '">' + escapeHtml(r.from_user || '?') + '</b>' +
+        return '<div class="cc-bus__bubble' + (mine ? ' mine' : '') + '">' +
+          '<div class="cc-bus__bubble-head"><b style="color:' + instColor(r.from_user).color + '">' + escapeHtml(r.from_user || '?') + '</b>' +
           (r.to_user ? '<span style="opacity:.6">→</span><span style="color:' + instColor(r.to_user).color + '">' + escapeHtml(r.to_user) + '</span>' : '') +
-          '<span class="cc-bus-v2__bubble-when">#' + escapeHtml(String(r.id)) + ' · ' + escapeHtml(fmtTime(r.sent_at || r.created_at)) + '</span></div>' +
-          '<div class="cc-bus-v2__bubble-body">' + escapeHtml(String(r.body || '')) + '</div>' +
+          '<span class="cc-bus__bubble-when">#' + escapeHtml(String(r.id)) + ' · ' + escapeHtml(fmtTime(r.sent_at || r.created_at)) + '</span></div>' +
+          '<div class="cc-bus__bubble-body">' + escapeHtml(String(r.body || '')) + '</div>' +
         '</div>';
       }).join('') + '</div>';
     }
@@ -831,50 +863,50 @@
     var armed = !!(draft && draft.armed);
     var panelOpen = !!draft;
     var actionsHtml =
-      '<div class="cc-bus-v2__actions">' +
-        '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--reply" data-act="open-reply-wide">↩ Reply</button>' +
-        '<button class="cc-bus-v2__act-btn" data-act="open-forward" title="Send this thread to someone else — they join the mix and their answer stacks here too.">⇄ Forward</button>' +
-        '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--done" data-act="toggle-done" data-done="' + (isDone ? '1' : '') + '" title="' + (isDone ? 'Put it back on the list' : 'Finished — takes it off the list. No comment needed. Find it again under the Done filter.') + '">' + doneLabel + '</button>' +
-        '<button class="cc-bus-v2__act-btn cc-bus-v2__act-btn--close' + (armed ? ' is-armed' : '') + '" data-act="toggle-close-on-send" title="Reply and finish in one go: arms this thread to be marked done when you hit Send. Just want it done with no message? Use Done.">' + (armed ? '✓ Close' : '✦ Close') + '</button>' +
-        '<button class="cc-bus-v2__act-btn" data-act="save" data-saved="' + (msg.saved_at ? '1' : '') + '" title="Keep — exempts this from the nightly tidy-up. Nothing is ever deleted either way.">' + saveLabel + '</button>' +
-        '<button class="cc-bus-v2__act-btn" data-act="archive" title="Hide it without marking it finished. Reversible.">' + archiveLabel + '</button>' +
+      '<div class="cc-bus__actions">' +
+        '<button class="cc-bus__act-btn cc-bus__act-btn--reply" data-act="open-reply-wide">↩ Reply</button>' +
+        '<button class="cc-bus__act-btn" data-act="open-forward" title="Send this thread to someone else — they join the mix and their answer stacks here too.">⇄ Forward</button>' +
+        '<button class="cc-bus__act-btn cc-bus__act-btn--done" data-act="toggle-done" data-done="' + (isDone ? '1' : '') + '" title="' + (isDone ? 'Put it back on the list' : 'Finished — takes it off the list. No comment needed. Find it again under the Done filter.') + '">' + doneLabel + '</button>' +
+        '<button class="cc-bus__act-btn cc-bus__act-btn--close' + (armed ? ' is-armed' : '') + '" data-act="toggle-close-on-send" title="Reply and finish in one go: arms this thread to be marked done when you hit Send. Just want it done with no message? Use Done.">' + (armed ? '✓ Close' : '✦ Close') + '</button>' +
+        '<button class="cc-bus__act-btn" data-act="save" data-saved="' + (msg.saved_at ? '1' : '') + '" title="Keep — exempts this from the nightly tidy-up. Nothing is ever deleted either way.">' + saveLabel + '</button>' +
+        '<button class="cc-bus__act-btn" data-act="archive" title="Hide it without marking it finished. Reversible.">' + archiveLabel + '</button>' +
       '</div>' +
-      '<div class="cc-bus-v2__flagrow" data-role="flag-row" style="display:flex;gap:8px;align-items:center;padding:6px 2px;">' +
+      '<div class="cc-bus__flagrow" data-role="flag-row" style="display:flex;gap:8px;align-items:center;padding:6px 2px;">' +
         flagDots +
         '<button data-act="set-flag" data-flag="" style="background:none;border:0;color:#7a7a7a;cursor:pointer;font-size:11px;">✕ clear</button>' +
       '</div>' +
-      '<div class="cc-bus-v2__reply-wide' + (panelOpen ? '' : ' hidden') + '" data-role="reply-wide">' +
+      '<div class="cc-bus__reply-wide' + (panelOpen ? '' : ' hidden') + '" data-role="reply-wide">' +
         '<textarea data-role="reply-wide-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '" placeholder="Type your reply… click the mic icon for dictation. Cmd/Ctrl+Enter to send.">' + escapeHtml(draft ? (draft.text || '') : '') + '</textarea>' +
-        '<div class="cc-bus-v2__reply-wide-row">' +
+        '<div class="cc-bus__reply-wide-row">' +
           fwdSelect +
-          '<span class="cc-bus-v2__reply-wide-hint">' + (fwdOn ? 'Forwarding this thread — pick who joins the mix:' : 'Replying to ' + escapeHtml(lastOther) + ' on bus #' + escapeHtml(msgId)) + '</span>' +
-          '<span class="cc-bus-v2__close-hint">✓ Will close this thread when sent</span>' +
-          '<button class="cc-bus-v2__reply-wide-cancel" data-act="cancel-reply-wide">Cancel</button>' +
-          '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve cc-bus-v2__reply-wide-send" data-act="send-reply-wide">Send</button>' +
+          '<span class="cc-bus__reply-wide-hint">' + (fwdOn ? 'Forwarding this thread — pick who joins the mix:' : 'Replying to ' + escapeHtml(lastOther) + ' on bus #' + escapeHtml(msgId)) + '</span>' +
+          '<span class="cc-bus__close-hint">✓ Will close this thread when sent</span>' +
+          '<button class="cc-bus__reply-wide-cancel" data-act="cancel-reply-wide">Cancel</button>' +
+          '<button class="cc-bus__btn cc-bus__btn--approve cc-bus__reply-wide-send" data-act="send-reply-wide">Send</button>' +
         '</div>' +
       '</div>';
 
     return '<article class="' + cardClasses.join(' ') + '" data-msg-id="' + escapeHtml(msgId) + '"' +
         (armed ? ' data-close-on-send="1"' : '') + (fwdOn ? ' data-fwd="1"' : '') + stripeStyle + '>' +
-        '<div class="cc-bus-v2__meta">' +
-          '<span class="cc-bus-v2__from" style="color:' + fromColor + ';">' + escapeHtml(msg.from_user || '?') + '</span>' +
+        '<div class="cc-bus__meta">' +
+          '<span class="cc-bus__from" style="color:' + fromColor + ';">' + escapeHtml(msg.from_user || '?') + '</span>' +
           intentHtml +
-          '<span class="cc-bus-v2__arrow">→</span>' +
-          '<span class="cc-bus-v2__to" style="color:' + toColor + ';">' + escapeHtml(msg.to_user || '?') + '</span>' +
-          (msg.channel ? '<span class="cc-bus-v2__channel">' + escapeHtml(msg.channel) + '</span>' : '') +
+          '<span class="cc-bus__arrow">→</span>' +
+          '<span class="cc-bus__to" style="color:' + toColor + ';">' + escapeHtml(msg.to_user || '?') + '</span>' +
+          (msg.channel ? '<span class="cc-bus__channel">' + escapeHtml(msg.channel) + '</span>' : '') +
           openAskTag +
-          '<span class="cc-bus-v2__id">#' + escapeHtml(msgId) + '</span>' +
-          '<span class="cc-bus-v2__time">' + escapeHtml(fmtTime(msg.sent_at || msg.created_at)) + '</span>' +
+          '<span class="cc-bus__id">#' + escapeHtml(msgId) + '</span>' +
+          '<span class="cc-bus__time">' + escapeHtml(fmtTime(msg.sent_at || msg.created_at)) + '</span>' +
           mixHtml +
         '</div>' +
         replyContextHtml(msg) +
         '<div class="' + bodyClass + '">' + bodyHtml + '</div>' +
-        '<div class="cc-bus-v2__readrow">' + readBtn + showMore + '</div>' +
+        '<div class="cc-bus__readrow">' + readBtn + showMore + '</div>' +
         threadHtml +
         planBar +
-        '<div class="cc-bus-v2__reply hidden" data-role="reply">' +
+        '<div class="cc-bus__reply hidden" data-role="reply">' +
           '<input type="text" placeholder="Reply on this thread…" data-role="reply-input" data-parent-id="' + escapeHtml(msgId) + '" data-to="' + escapeHtml(lastOther) + '">' +
-          '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve" data-act="send-reply">Send</button>' +
+          '<button class="cc-bus__btn cc-bus__btn--approve" data-act="send-reply">Send</button>' +
         '</div>' +
         actionsHtml +
       '</article>';
@@ -940,7 +972,7 @@
       if (nn) { note = nn; break; }
     }
     var noteHtml = note
-      ? '<div class="cc-bus-v2__body">' + escapeHtml(note)
+      ? '<div class="cc-bus__body">' + escapeHtml(note)
           .replace(/`([^`]+)`/g, '<code>$1</code>')
           .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>') + '</div>'
       : '';
@@ -949,67 +981,83 @@
       return '<li data-msg-id="' + escapeHtml(String(m.id)) + '"' +
         ' style="display:flex;align-items:baseline;gap:8px;padding:5px 8px;border:1px solid var(--border,#252c33);border-left:2px solid ' + fromColor + ';border-radius:3px;background:var(--bg,#0a0a0a);">' +
         '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(title) + '</span>' +
-        '<span class="cc-bus-v2__id">#' + escapeHtml(String(m.id)) + '</span>' +
+        '<span class="cc-bus__id">#' + escapeHtml(String(m.id)) + '</span>' +
       '</li>';
     }).join('');
-    return '<article class="cc-bus-v2-card cc-bus-v2-card--bundle" data-msg-id="' + escapeHtml(leadId) + '" data-bundle="1" style="--stripe:' + fromColor + ';">' +
-        '<div class="cc-bus-v2__meta">' +
-          '<span class="cc-bus-v2__from" style="color:' + fromColor + ';">' + escapeHtml(lead.from_user || '?') + '</span>' +
-          '<span class="cc-bus-v2__arrow">→</span>' +
-          '<span class="cc-bus-v2__to" style="color:' + toColor + ';">' + escapeHtml(lead.to_user || '?') + '</span>' +
-          '<span class="cc-bus-v2__channel">' + msgs.length + ' tasks</span>' +
-          '<span class="cc-bus-v2__time">' + escapeHtml(fmtTime(lead.sent_at || lead.created_at)) + '</span>' +
+    return '<article class="cc-bus-card cc-bus-card--bundle" data-msg-id="' + escapeHtml(leadId) + '" data-bundle="1" style="--stripe:' + fromColor + ';">' +
+        '<div class="cc-bus__meta">' +
+          '<span class="cc-bus__from" style="color:' + fromColor + ';">' + escapeHtml(lead.from_user || '?') + '</span>' +
+          '<span class="cc-bus__arrow">→</span>' +
+          '<span class="cc-bus__to" style="color:' + toColor + ';">' + escapeHtml(lead.to_user || '?') + '</span>' +
+          '<span class="cc-bus__channel">' + msgs.length + ' tasks</span>' +
+          '<span class="cc-bus__time">' + escapeHtml(fmtTime(lead.sent_at || lead.created_at)) + '</span>' +
         '</div>' +
         noteHtml +
         '<ul style="list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;">' + taskRows + '</ul>' +
       '</article>';
   }
 
-  // ─── System-message bucketing (2026-06-01) ─────────────────────────────
-  // Auto-generated noise (system user + fyi channel) lives in the right
-  // column. Everything else is "casual feed" — human-to-human traffic in
-  // the middle column.
-  function isSystemMsg(r) {
-    if (!r) return false;
-    // System noise = the 'log' lane (from_user 'system') ONLY. FYI rows from real
-    // senders (local crew, cloud fleet) now stay in their own lane's tab instead of
-    // being dumped in the syslog column where nobody sees them. (2026-07-20)
-    return laneOf(r) === 'log';
-  }
+  // isSystemMsg is deleted (2026-08-19). Deciding in the browser which column a
+  // row belonged to is what let the two columns steal rows from each other. Each
+  // column now asks the database for its own rows and draws all of them.
 
   function renderSyslogRow(r) {
     var body = String(r.body || '').slice(0, 400);
     var idStr = escapeHtml(String(r.id));
-    return '<div class="cc-bus-v2__syslog-row" data-msg-id="' + idStr + '">' +
-      '<div class="cc-bus-v2__syslog-row__head">' +
+    return '<div class="cc-bus__syslog-row" data-msg-id="' + idStr + '">' +
+      '<div class="cc-bus__syslog-row__head">' +
         '<span>#' + idStr + ' · <span class="to">→ ' + escapeHtml(r.to_user || '—') + '</span></span>' +
         '<span>' + escapeHtml(fmtTime(r.sent_at || r.created_at)) + '</span>' +
       '</div>' +
-      '<div class="cc-bus-v2__syslog-row__body">' + escapeHtml(body) + '</div>' +
+      '<div class="cc-bus__syslog-row__body">' + escapeHtml(body) + '</div>' +
     '</div>';
   }
 
   // ─── Shell (sidebar + main column + syslog column) ─────────────────────
-  // Header + composer wrapped in .cc-bus-v2__topstack so they pin as one
+  // Header + composer wrapped in .cc-bus__topstack so they pin as one
   // sticky block flush with the subtab row — no gap for scrolling cards
   // to peek through, and the "Bus Traffic" header stays visible too.
   // Alessio direct 2026-05-17 (topstack) + 2026-06-01 (syslog right col).
   function renderShell() {
     return '' +
-      '<div class="cc-bus-v2__main">' +
-        '<div class="cc-bus-v2__topstack">' +
-          '<div class="cc-bus-v2__header" data-role="header"></div>' +
-          '<div class="cc-bus-v2__composer" data-role="composer"></div>' +
+      '<aside class="cc-bus__filters" data-role="filters"></aside>' +
+      '<div class="cc-bus__main">' +
+        '<div class="cc-bus__topstack">' +
+          '<div class="cc-bus__header" data-role="header"></div>' +
+          '<div class="cc-bus__composer" data-role="composer"></div>' +
         '</div>' +
-        '<div class="cc-bus-v2__list" data-role="list"></div>' +
+        '<div class="cc-bus__list" data-role="list"></div>' +
       '</div>' +
-      '<aside class="cc-bus-v2__syslog" data-role="syslog">' +
-        '<header class="cc-bus-v2__syslog-head">' +
-          '<span class="cc-bus-v2__syslog-title">System log</span>' +
-          '<span class="cc-bus-v2__syslog-count" data-role="syslog-count">…</span>' +
+      '<aside class="cc-bus__syslog" data-role="syslog">' +
+        '<header class="cc-bus__syslog-head">' +
+          '<span class="cc-bus__syslog-title">System log</span>' +
+          '<span class="cc-bus__syslog-count" data-role="syslog-count">…</span>' +
         '</header>' +
-        '<div class="cc-bus-v2__syslog-list" data-role="syslog-list"></div>' +
+        '<div class="cc-bus__syslog-list" data-role="syslog-list"></div>' +
       '</aside>';
+  }
+
+  // The first column. Built from BUCKETS every paint — there is no list of filters
+  // written into any HTML file, so a bucket added or removed in one place is the
+  // whole change. Machine room sits under a rule at the bottom: present, honest,
+  // out of the way.
+  function renderFilters() {
+    return BUCKETS.map(function (b) {
+      var n = COUNTS[b.id];
+      var active = (STATE.bucket === b.id) ? ' active' : '';
+      var empty = (n === 0) ? ' empty' : '';
+      var quiet = b.quiet ? ' quiet' : '';
+      var num = (n == null) ? '—' : String(n);   // a dash means we could not ask
+      return (b.quiet ? '<div class="cc-bus__fsep"></div>' : '') +
+        '<button type="button" class="cc-bus__fbtn' + active + empty + quiet + '"' +
+          ' data-filter-group="bucket" data-filter-value="' + b.id + '"' +
+          ' title="' + escapeHtml(b.hint) + '">' +
+          '<span>' + escapeHtml(b.label) +
+            '<span class="cc-bus__fhint">' + escapeHtml(b.hint) + '</span>' +
+          '</span>' +
+          '<span class="cc-bus__fnum">' + num + '</span>' +
+        '</button>';
+    }).join('');
   }
 
   // renderSidebar lived here: 106 lines that drew Sender / Channel / Status /
@@ -1018,44 +1066,40 @@
   // is exactly what he asked us to stop keeping around.
 
   function renderHeader(filteredCount) {
-    // Was "Bus Traffic · All Senders" / "· <sender>". The sender filter is gone,
-    // so the tail was always the same six words. Just the name now.
-    var title = 'Bus Traffic';
+    // THE CHANNEL SWITCH IS GONE (2026-08-19). Both / AZ / Forge / System sliced by
+    // agent_messages.lane — the machine's taxonomy, the same one that put buses on
+    // his board that were never his. Two filter systems on one screen would also
+    // have broken the rule that matters here: a count on a button has to equal what
+    // clicking it shows, and it cannot if a second switch is narrowing the list
+    // behind it. The first column is the only thing that chooses now.
+    //
+    // The header says which bucket he is in, so the title is never a generic word
+    // sitting above a filtered list.
+    var b = bucketById(STATE.bucket);
+    var title = 'Bus · ' + (b ? b.label : 'To me');
     var fontOn = (busFontPref() !== 'off');
-    // Lane tabs (2026-07-19): Human / AI / Log / All over agent_messages.lane.
-    // Emitted with data-filter-group so the existing delegation handles clicks;
-    // header rebuilds every paintAll, so active state re-derives from STATE.
-    // THE CHANNEL SWITCH (his call 2026-08-10: "one switch and the whole bus
-    // changes" — the old five filter chips didn't do the clean cut justice).
-    // No Log button: the system log already lives in its own right-hand column
-    // on every face (his catch, 2026-08-10 late).
-    var laneTabs = [['both', '⬌ Both'], ['az', 'AZ'], ['forge', 'Forge'], ['machines', 'System']].map(function (t) {
-      var active = STATE.lane === t[0] ? ' active' : '';
-      return '<button type="button" class="cc-bus-v2__lane-tab cc-bus-v2__channel-btn' + active + '" data-filter-group="lane" data-filter-value="' + t[0] + '">' + t[1] + '</button>';
-    }).join('');
     // Search input was moved into renderComposer() per Alessio direct 2026-05-17
     // — it now sits inline with the @chips above the type box.
     return '' +
-      '<span class="cc-bus-v2__header-title">' + escapeHtml(title) + '</span>' +
-      laneTabs +
-      '<span class="cc-bus-v2__header-count">' + filteredCount + '</span>' +
-      '<button type="button" class="cc-bus-v2__font-toggle' + (fontOn ? ' on' : '') + '" data-act="toggle-font" title="Toggle dyslexic-friendly font (Lexend)">Aa</button>' +
-      '<button type="button" class="cc-bus-v2__readall" data-act="read-all" title="Read every message shown, out loud">▶ Read bus</button>';
+      '<span class="cc-bus__header-title">' + escapeHtml(title) + '</span>' +
+      '<span class="cc-bus__header-count" title="conversations on screen">' + filteredCount + ' threads</span>' +
+      '<button type="button" class="cc-bus__font-toggle' + (fontOn ? ' on' : '') + '" data-act="toggle-font" title="Toggle dyslexic-friendly font (Lexend)">Aa</button>' +
+      '<button type="button" class="cc-bus__readall" data-act="read-all" title="Read every message shown, out loud">▶ Read bus</button>';
   }
 
   function renderComposer() {
     var chips = ALL_INSTANCES.filter(function (i) { return i !== 'alessio'; }).map(function (i) {
       var c = instColor(i);
-      return '<button class="cc-bus-v2__chip" data-act="chip" data-target="' + i + '" style="color:' + c.color + '; border-color:' + c.color + ';">@' + i.replace('forge-', '') + '</button>';
+      return '<button class="cc-bus__chip" data-act="chip" data-target="' + i + '" style="color:' + c.color + '; border-color:' + c.color + ';">@' + i.replace('forge-', '') + '</button>';
     }).join('');
     return '' +
-      '<div class="cc-bus-v2__chips">' + chips +
-        '<input class="cc-bus-v2__compose-search" type="text" placeholder="Search bus bodies…" data-role="search" value="' + escapeHtml(STATE.search) + '">' +
+      '<div class="cc-bus__chips">' + chips +
+        '<input class="cc-bus__compose-search" type="text" placeholder="Search bus bodies…" data-role="search" value="' + escapeHtml(STATE.search) + '">' +
       '</div>' +
-      '<textarea class="cc-bus-v2__compose-input" data-role="compose-input" placeholder="Type a message… start with @code / @cowork / @design / @reanna to dispatch, or plain text for a general bus."></textarea>' +
-      '<div class="cc-bus-v2__compose-row">' +
-        '<span class="cc-bus-v2__compose-hint">Cmd/Ctrl+Enter to send · plain text → alessio</span>' +
-        '<button class="cc-bus-v2__btn cc-bus-v2__btn--approve cc-bus-v2__compose-send" data-act="compose-send">Send</button>' +
+      '<textarea class="cc-bus__compose-input" data-role="compose-input" placeholder="Type a message… start with @code / @cowork / @design / @reanna to dispatch, or plain text for a general bus."></textarea>' +
+      '<div class="cc-bus__compose-row">' +
+        '<span class="cc-bus__compose-hint">Cmd/Ctrl+Enter to send · plain text → alessio</span>' +
+        '<button class="cc-bus__btn cc-bus__btn--approve cc-bus__compose-send" data-act="compose-send">Send</button>' +
       '</div>';
   }
 
@@ -1077,7 +1121,7 @@
           channel: 'reply',
           priority: 'normal',
           status: 'sent',
-          body: '✓ Plan ' + planId + ' approved by alessio via CC Buses v2.',
+          body: '✓ Plan ' + planId + ' approved by alessio via the CC bus.',
           parent_id: Number(msgId) || null,
           parent_bus_id: Number(msgId) || null
         });
@@ -1269,7 +1313,9 @@
   }
 
   // ─── Render orchestrator ───────────────────────────────────────────────
-  var ALL_ROWS = [];
+  var ALL_ROWS = [];   // both sets, for thread/parent/plan lookups only
+  var MAIN_ROWS = [];  // exactly what the active bucket asked for — the list
+  var SYS_ROWS = [];   // lane 'log' — the right-hand column, its own query
   var PLAN_MAP = {};
   var SESSION_MAP = {};  // from_instance_id (uuid string) → { instance, intent, model, device, status }
 
@@ -1324,27 +1370,27 @@
     if (!mount.querySelector('[data-role="list"]') || !mount.querySelector('[data-role="syslog-list"]')) {
       mount.innerHTML = renderShell();
     }
+    var filters = mount.querySelector('[data-role="filters"]');
     var header = mount.querySelector('[data-role="header"]');
     var list = mount.querySelector('[data-role="list"]');
     var composer = mount.querySelector('[data-role="composer"]');
     var syslogList = mount.querySelector('[data-role="syslog-list"]');
     var syslogCount = mount.querySelector('[data-role="syslog-count"]');
 
-    // Split: human messages → middle column, system noise → right column.
-    var humanRows = ALL_ROWS.filter(function (r) { return !isSystemMsg(r); });
-    var systemRows = ALL_ROWS.filter(isSystemMsg);
+    // Each column draws its OWN query's rows. No skimming between them.
+    var humanRows = MAIN_ROWS;
+    var systemRows = SYS_ROWS;
 
-    // The sidebar and its five count badges used to be computed here. Both are
-    // gone (2026-08-18). Nothing else read those numbers.
+    if (filters) filters.innerHTML = renderFilters();
 
     // GROUP FIRST, FILTER SECOND — a conversation is an atom.
     // Filtering rows and then grouping tore threads in half: search for a word
     // that appears in a reply and you got the reply with no question above it,
     // and the rest of the exchange vanished. Now the thread is assembled from
     // the unfiltered set and kept whole if the root OR ANY reply matches.
-    // Lane 'log' overlaps the syslog split (system rows never reach humanRows),
-    // so the Log tab groups the FULL set — otherwise it renders near-empty.
-    var baseRows = (STATE.lane === 'log') ? ALL_ROWS : humanRows;
+    // The list is built from the rows the bucket asked for, minus the ones the
+    // system-log column is already showing on the right.
+    var baseRows = humanRows;
     var filtered = groupRenderUnits(baseRows).filter(function (u) {
       var rows = [u.msg].concat(u.replies || []).concat(u.msgs || []);
       for (var i = 0; i < rows.length; i++) if (rows[i] && rowMatches(rows[i])) return true;
@@ -1357,7 +1403,7 @@
     if (syslogList) {
       var savedSysScroll = syslogList.scrollTop;
       if (!systemRows.length) {
-        syslogList.innerHTML = '<div class="cc-bus-v2__syslog-empty">No system messages.</div>';
+        syslogList.innerHTML = '<div class="cc-bus__syslog-empty">No system messages.</div>';
       } else {
         syslogList.innerHTML = systemRows.slice(0, 100).map(renderSyslogRow).join('');
       }
@@ -1370,22 +1416,20 @@
       // Covers reply-wide (textarea) + legacy narrow reply (input) + show-more
       // body expansion + the list's scroll position. Also tracks which field
       // had focus so we can restore caret + focus (no "pull away").
-      // Read/write the scroll on the element that ACTUALLY scrolls. .cc-bus-v2__list has no
+      // Read/write the scroll on the element that ACTUALLY scrolls. .cc-bus__list has no
       // overflow (see the CSS at the top of this file) so its scrollTop is permanently 0 —
       // this save/restore pair was a no-op and the feed lost its place on every refresh.
-      // The real scroller is .cc-bus-v2__main; under 1100px the operator lane is.
-      var scroller = list.closest('.cc-bus-v2__main') || list.parentElement || list;
+      // The real scroller is .cc-bus__main; under 1100px the operator lane is.
+      var scroller = list.closest('.cc-bus__main') || list.parentElement || list;
       var savedScrollTop = scroller.scrollTop;
       // ANCHOR ON A CARD, NOT A PIXEL. Restoring a raw offset kept the scrollbar
       // still while the content moved under it: one new message at the top and
       // the card he was reading slid out from under him. Remember WHICH card sat
       // at the top of the viewport and how far into it we were, then put that
       // same card back in that same spot after the rewrite.
-      // Each split column keeps its OWN place — they are two separate reads.
-      var splitScroll = [].slice.call(list.querySelectorAll('.cc-bus-v2__split-col')).map(function (c) { return c.scrollTop; });
       var anchorId = null, anchorDelta = 0;
       var sTop = scroller.getBoundingClientRect().top;
-      var cardsNow = list.querySelectorAll('.cc-bus-v2-card');
+      var cardsNow = list.querySelectorAll('.cc-bus-card');
       for (var ci = 0; ci < cardsNow.length; ci++) {
         var cr = cardsNow[ci].getBoundingClientRect();
         if (cr.bottom > sTop + 4) { anchorId = cardsNow[ci].getAttribute('data-msg-id'); anchorDelta = cr.top - sTop; break; }
@@ -1393,7 +1437,7 @@
       var replySnap = {};
       var expandedSnap = {};
       var activeEl = document.activeElement;
-      list.querySelectorAll('.cc-bus-v2-card').forEach(function (card) {
+      list.querySelectorAll('.cc-bus-card').forEach(function (card) {
         var msgId = card.getAttribute('data-msg-id');
         var entry = null;
         var wide = card.querySelector('[data-role="reply-wide"]');
@@ -1419,7 +1463,7 @@
         if (entry) replySnap[msgId] = entry;
         // Show-more expansion: cards with the toggle button that are NOT
         // collapsed have been opened by the user — preserve that on rerender.
-        var body = card.querySelector('.cc-bus-v2__body');
+        var body = card.querySelector('.cc-bus__body');
         var toggleBtn = card.querySelector('[data-act="toggle-body"]');
         if (body && toggleBtn && !body.classList.contains('collapsed')) {
           expandedSnap[msgId] = true;
@@ -1431,55 +1475,25 @@
         var plan = pickDraftPlan(u.msg, PLAN_MAP);
         return renderCard(u.msg, plan, u.replies);
       }
-      // ─── The channels (Alessio, 2026-08-10, three refinements in one night):
-      // a clean cut between AZ business talk, Forge infrastructure talk, the
-      // machines talking to each other, and the system log. One switch flips
-      // the whole bus. 'both' = the split view, AZ left, Forge right.
-      //   AZ — the business: anything Reanna touches, plus every row whose
-      //   project is shop/clients/people/QuadFang. What the business needs from him.
-      //   Forge — the infrastructure: CC builds, repos, fleet, tools — his
-      //   work on the machine itself. NOT shown on the command face by default.
-      var INFRA_SLUG_RE = /^(command-center|forge|atlas|debug|overwatch|beast|azcc|email-studio|phantom)/;
-      function sideOf(u) {
-        var m = u.msg || (u.msgs && u.msgs[0]) || {};
-        var everyone = [m.from_user, m.to_user];
-        (u.replies || []).forEach(function (r) { everyone.push(r.from_user, r.to_user); });
-        if (everyone.indexOf('reanna') !== -1) return 'az';   // her traffic is business, always
-        var slug = String(m.project_slug || '').toLowerCase();
-        if (slug && slug !== 'unsorted') return INFRA_SLUG_RE.test(slug) ? 'infra' : 'az';
-        return 'infra';   // unfiled machine-age traffic is almost always infra
-      }
-      var splitMode = (STATE.lane === 'both');
+      // THE AZ | FORGE SPLIT WENT WITH THE CHANNEL SWITCH (2026-08-19). It sorted
+      // threads by project slug into two columns and QUIETLY SET ASIDE every
+      // machine-to-machine thread into a counter at the bottom — a list that was
+      // not the list its own header claimed. The bucket he picked is now the only
+      // thing that decides what is here, and everything in it is shown.
+      // NO SILENT CAP. If the bucket holds more than one fetch can carry, the last
+      // line on the list says how many are not on screen. Without it the board looks
+      // complete while quietly ending early, and that is how a number goes stale
+      // without anyone noticing.
+      var held = MAIN_ROWS.length;
+      var total = COUNTS[STATE.bucket];
+      var overflow = (total != null && total > held)
+        ? '<div class="cc-bus__more">Showing the newest ' + held + ' of ' + total +
+          '. Search to reach the rest.</div>'
+        : '';
       if (!filtered.length) {
-        list.innerHTML = '<div class="cc-bus-v2__empty">Channel is clear.</div>';
-      } else if (STATE.lane === 'az' || STATE.lane === 'forge') {
-        var side = (STATE.lane === 'az') ? 'az' : 'infra';
-        var chanUnits = filtered.filter(function (u) { return sideOf(u) === side; });
-        list.innerHTML = chanUnits.length
-          ? chanUnits.map(unitHtml).join('')
-          : '<div class="cc-bus-v2__empty">Channel is clear.</div>';
-      } else if (splitMode) {
-        var units = filtered;
-        var azUnits = [], infraUnits = [], machineCount = 0;
-        units.forEach(function (u) {
-          var rawLane = String((u.msg && u.msg.lane) || (u.msgs && u.msgs[0] && u.msgs[0].lane) || '').toLowerCase();
-          if (rawLane === 'ai' || rawLane === 'local' || rawLane === 'log') { machineCount++; return; }
-          if (sideOf(u) === 'az') azUnits.push(u); else infraUnits.push(u);
-        });
-        list.innerHTML =
-          '<div class="cc-bus-v2__split">' +
-            '<div class="cc-bus-v2__split-col">' +
-              '<div class="cc-bus-v2__split-h">AZ — the business</div>' +
-              (azUnits.length ? azUnits.map(unitHtml).join('') : '<div class="cc-bus-v2__split-empty">Nothing the business needs from you right now.</div>') +
-            '</div>' +
-            '<div class="cc-bus-v2__split-col">' +
-              '<div class="cc-bus-v2__split-h">Forge — the infrastructure</div>' +
-              (infraUnits.length ? infraUnits.map(unitHtml).join('') : '<div class="cc-bus-v2__split-empty">No infrastructure talk in this window.</div>') +
-            '</div>' +
-            (machineCount ? '<div class="cc-bus-v2__machine-note">▸ ' + machineCount + ' machine-to-machine thread' + (machineCount === 1 ? '' : 's') + ' behind the AI tab</div>' : '') +
-          '</div>';
+        list.innerHTML = '<div class="cc-bus__empty">Nothing here.</div>' + overflow;
       } else {
-        list.innerHTML = filtered.map(unitHtml).join('');
+        list.innerHTML = filtered.map(unitHtml).join('') + overflow;
       }
 
       // Restore expanded bodies (must run BEFORE scrollTop restore so the
@@ -1487,7 +1501,7 @@
       Object.keys(expandedSnap).forEach(function (msgId) {
         var ecard = list.querySelector('[data-msg-id="' + msgId + '"]');
         if (!ecard) return;
-        var ebody = ecard.querySelector('.cc-bus-v2__body');
+        var ebody = ecard.querySelector('.cc-bus__body');
         var ebtn = ecard.querySelector('[data-act="toggle-body"]');
         if (ebody && ebtn) {
           ebody.classList.remove('collapsed');
@@ -1521,13 +1535,6 @@
           }
         }
       });
-
-      // Give the split its height and hand each column its place back.
-      sizeSplitColumns(list);
-      var newCols = list.querySelectorAll('.cc-bus-v2__split-col');
-      for (var sc = 0; sc < newCols.length; sc++) {
-        if (splitScroll[sc]) { try { newCols[sc].scrollTop = splitScroll[sc]; } catch (e) {} }
-      }
 
       // If a message is being read aloud, its button must still say Stop. The
       // voice kept talking through a repaint while the button reverted to
@@ -1568,35 +1575,25 @@
     THREAD_CSS_DONE = true;
     var st = document.createElement('style');
     st.textContent =
-      '.cc-bus-v2__thread{margin:8px 0 4px;border-left:2px solid var(--border,#252c33);padding-left:10px;display:flex;flex-direction:column;gap:6px}' +
-      '.cc-bus-v2__bubble{background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:8px;padding:6px 10px;max-width:92%}' +
-      '.cc-bus-v2__bubble.mine{align-self:flex-end;background:var(--amber-soft,rgba(200,146,42,.08));border-color:var(--amber-glow,rgba(200,146,42,.3))}' +
-      '.cc-bus-v2__bubble-head{font-family:var(--mono,monospace);font-size:10px;display:flex;gap:6px;align-items:center;margin-bottom:3px}' +
-      '.cc-bus-v2__bubble-when{margin-left:auto;color:var(--text-xs,#6e7681);font-size:9px}' +
-      '.cc-bus-v2__bubble-body{font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}' +
-      '.cc-bus-v2__mix{font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681)}' +
+      '.cc-bus__thread{margin:8px 0 4px;border-left:2px solid var(--border,#252c33);padding-left:10px;display:flex;flex-direction:column;gap:6px}' +
+      '.cc-bus__bubble{background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:8px;padding:6px 10px;max-width:92%}' +
+      '.cc-bus__bubble.mine{align-self:flex-end;background:var(--amber-soft,rgba(200,146,42,.08));border-color:var(--amber-glow,rgba(200,146,42,.3))}' +
+      '.cc-bus__bubble-head{font-family:var(--mono,monospace);font-size:10px;display:flex;gap:6px;align-items:center;margin-bottom:3px}' +
+      '.cc-bus__bubble-when{margin-left:auto;color:var(--text-xs,#6e7681);font-size:9px}' +
+      '.cc-bus__bubble-body{font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}' +
+      '.cc-bus__mix{font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681)}' +
       'select[data-role="fwd-to"]{background:var(--surface,#0f1316);color:var(--text,#dde4eb);border:1px solid var(--border,#252c33);border-radius:4px;padding:4px 6px;font-size:11px}' +
       'select[data-role="fwd-to"].hidden{display:none}' +
       // A real split: two columns that scroll on their own. Before this the
       // grid just sat inside the page scroller, so dragging either side moved
       // both — reading down the Forge column dragged the AZ column out of view.
-      '.cc-bus-v2__split{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr auto;gap:14px;align-items:stretch;min-height:0}' +
       // Scrollbars follow the house recipe (the page-wide rule + the tokens), so
       // they read as part of the dark board instead of two pale system bars —
       // and scrollbar-color carries the same thing to Firefox, which ignores the
       // -webkit- rules entirely. Token-driven, so light theme comes free.
-      '.cc-bus-v2__split-col{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin;scrollbar-color:var(--border,#252c33) transparent}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar{width:6px;height:6px}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar-track{background:transparent}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb{background:var(--border,#252c33);border-radius:2px}' +
-      '.cc-bus-v2__split-col::-webkit-scrollbar-thumb:hover{background:var(--border-hi,#2e3740)}' +
-      '.cc-bus-v2__split-h{font-family:var(--display,inherit);font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--amber,#c8922a);padding:2px 2px 8px;border-bottom:1px solid var(--border,#252c33);margin-bottom:10px;position:sticky;top:0;background:var(--bg,#090b0d);z-index:2}' +
-      '.cc-bus-v2__split-empty{padding:18px 8px;font-family:var(--mono,monospace);font-size:11px;color:var(--text-xs,#6e7681)}' +
-      '.cc-bus-v2__machine-note{grid-column:1 / -1;font-family:var(--mono,monospace);font-size:10px;color:var(--text-xs,#6e7681);padding:6px 2px}' +
       // On a phone the two columns stack, so they go back to flowing with the
       // page — two tiny scroll boxes on one narrow screen would be worse.
-      '@media (max-width:980px){.cc-bus-v2__split{grid-template-columns:1fr;height:auto !important}.cc-bus-v2__split-col{overflow:visible;max-height:none}}' +
-      '.cc-bus-v2__channel-btn{font-size:11px !important;padding:6px 14px !important;border-radius:5px !important;letter-spacing:0.1em !important}';
+      '.cc-bus__channel-btn{font-size:11px !important;padding:6px 14px !important;border-radius:5px !important;letter-spacing:0.1em !important}';
     document.head.appendChild(st);
   }
 
@@ -1604,19 +1601,7 @@
   // column can only scroll if it has a height. Measure the room left under the
   // header and give the grid exactly that — recomputed on resize and on every
   // paint, so it never guesses at chrome that moves.
-  function sizeSplitColumns(list) {
-    var split = list && list.querySelector('.cc-bus-v2__split');
-    if (!split) return;
-    if (window.innerWidth <= 980) { split.style.height = ''; return; }   // stacked: let it flow
-    var top = split.getBoundingClientRect().top;
-    var h = Math.max(320, window.innerHeight - top - 16);
-    split.style.height = h + 'px';
-  }
-  window.addEventListener('resize', function () {
-    var mount = document.getElementById(MOUNT_ID);
-    var list = mount && mount.querySelector('[data-role="list"]');
-    if (list) sizeSplitColumns(list);
-  });
+  // sizeSplitColumns and its resize listener are deleted with the split view
 
   // A blip on the wire must not cost him his work. One failed poll used to
   // replace the ENTIRE panel — composer draft, open reply panels, everything —
@@ -1626,7 +1611,7 @@
   function busTrouble(mount, msg) {
     var painted = mount.querySelector('[data-role="list"]');
     if (!painted) {
-      mount.innerHTML = '<div class="cc-bus-v2__err">' + escapeHtml(msg) + '</div>';
+      mount.innerHTML = '<div class="cc-bus__err">' + escapeHtml(msg) + '</div>';
       return;
     }
     var bar = mount.querySelector('[data-role="trouble"]');
@@ -1639,6 +1624,24 @@
     bar.textContent = '⚠ ' + msg + ' — your open replies are untouched; retrying.';
     clearTimeout(busTrouble._t);
     busTrouble._t = setTimeout(function () { if (bar && bar.parentNode) bar.parentNode.removeChild(bar); }, 12000);
+  }
+
+  // ─── Live counts ───────────────────────────────────────────────────────
+  // One HEAD count per bucket, every refresh, straight from the database — never
+  // derived from the rows on screen. A count that is derived from a page of rows
+  // is a count of that page, and that is exactly how a number goes stale while
+  // still looking alive.
+  //
+  // A count that FAILS stores null, and null renders as a dash. It never renders
+  // as 0: "nothing here" and "I could not ask" are different answers and he is
+  // entitled to know which one he is looking at.
+  var COUNTS = {};
+  function loadCounts(client) {
+    return Promise.all(BUCKETS.map(function (b) {
+      return b.apply(client.from('agent_messages').select('id', { count: 'exact', head: true }))
+        .then(function (r) { COUNTS[b.id] = (r && !r.error) ? (r.count || 0) : null; })
+        .catch(function () { COUNTS[b.id] = null; });
+    }));
   }
 
   async function refresh() {
@@ -1666,30 +1669,40 @@
       // autosilenced lane, so it asks for lane 'log' regardless of archived state —
       // filtering those out server-side would have gone and darkened his system log
       // to fix his card list.
-      var wantArchived = STATE.status === 'archived';
-      var mainQ = client.from('agent_messages').select(ROW_COLS)
+      // THE ACTIVE BUCKET IS THE QUERY. Not a filter applied to a list we already
+      // fetched — the same builder that puts the number on his button is what asks
+      // the database for these rows. The column cannot disagree with the list,
+      // because there is one definition of each and it lives in BUCKETS.
+      var bucket = bucketById(STATE.bucket) || BUCKETS[1];
+      var mainQ = bucket.apply(client.from('agent_messages').select(ROW_COLS))
         .order('sent_at', { ascending: false, nullsFirst: false }).limit(ROW_LIMIT);
-      mainQ = wantArchived ? mainQ.not('archived_at', 'is', null)
-                           : mainQ.is('archived_at', null);
       var sysQ = client.from('agent_messages').select(ROW_COLS)
         .eq('lane', 'log')
         .order('sent_at', { ascending: false, nullsFirst: false }).limit(SYSLOG_LIMIT);
-      var pair = await Promise.all([mainQ, sysQ]);
+      var pair = await Promise.all([mainQ, sysQ, loadCounts(client)]);
       var res = pair[0], sysRes = pair[1];
       if (res.error) {
         busTrouble(mount, 'Bus query error: ' + res.error.message);
         return;
       }
+      // TWO SETS, KEPT APART ON PURPOSE. MAIN_ROWS is exactly what the bucket asked
+      // for, and it is exactly what the list draws — nothing gets skimmed out of it
+      // on the way to the screen. Route a bucket row into the system-log column and
+      // the button would say 324 while the list showed 300, which is the one thing
+      // this rebuild exists to stop.
+      var byTime = function (a, b) {
+        return String(b.sent_at || b.created_at || '').localeCompare(String(a.sent_at || a.created_at || ''));
+      };
+      MAIN_ROWS = (res.data || []).slice().sort(byTime);
+      SYS_ROWS = ((sysRes && sysRes.data) || []).slice().sort(byTime);
       var seenIds = {};
       ALL_ROWS = [];
-      (res.data || []).concat((sysRes && sysRes.data) || []).forEach(function (r) {
+      MAIN_ROWS.concat(SYS_ROWS).forEach(function (r) {
         if (seenIds[r.id]) return;
         seenIds[r.id] = true;
         ALL_ROWS.push(r);
       });
-      ALL_ROWS.sort(function (a, b) {
-        return String(b.sent_at || b.created_at || '').localeCompare(String(a.sent_at || a.created_at || ''));
-      });
+      ALL_ROWS.sort(byTime);
       var allUuids = [];
       var instanceIds = {};
       ALL_ROWS.forEach(function (r) {
@@ -1725,18 +1738,18 @@
       var card = document.querySelector('#' + MOUNT_ID + ' [data-msg-id="' + pid + '"]');
       if (card) {
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        card.classList.remove('cc-bus-v2__card--flash');
+        card.classList.remove('cc-bus__card--flash');
         void card.offsetWidth;                       // restart the highlight
-        card.classList.add('cc-bus-v2__card--flash');
+        card.classList.add('cc-bus__card--flash');
         return;
       }
       // Not on screen — filtered out, or older than the loaded page. GO GET IT and
       // open it in place. The first cut told him to press Ctrl+K and overwrote the
       // banner saying so; pointing at another control is not opening the message.
       var nxtP = jump.nextElementSibling;
-      if (nxtP && nxtP.className === 'cc-bus-v2__parentbox') { nxtP.remove(); return; }
+      if (nxtP && nxtP.className === 'cc-bus__parentbox') { nxtP.remove(); return; }
       var boxP = document.createElement('div');
-      boxP.className = 'cc-bus-v2__parentbox';
+      boxP.className = 'cc-bus__parentbox';
       boxP.textContent = 'opening #' + pid + '…';
       jump.insertAdjacentElement('afterend', boxP);
       (async function () {
@@ -1745,7 +1758,7 @@
             .select('id,from_user,to_user,body,created_at,sent_at').eq('id', pid).maybeSingle();
           if (r.error || !r.data) { boxP.textContent = 'Could not open #' + pid + '.'; return; }
           var d = r.data;
-          boxP.innerHTML = '<div class="cc-bus-v2__parentbox-h" style="color:' + instColor(d.from_user).color + '">' +
+          boxP.innerHTML = '<div class="cc-bus__parentbox-h" style="color:' + instColor(d.from_user).color + '">' +
             escapeHtml(d.from_user) + ' → ' + escapeHtml(d.to_user) + ' · #' + escapeHtml(String(d.id)) +
             ' · ' + escapeHtml(fmtTime(d.sent_at || d.created_at)) +
             ' <span style="color:var(--text-xs,#6e7681);font-weight:400">— click the line above to close</span></div>' +
@@ -1764,10 +1777,10 @@
       if (group && value != null) {
         STATE[group] = value;
         lsSet(STATE_KEYS[group], value);
-        // The status group decides WHICH rows the fetch asks for (archived, or
-        // everything else), so it has to re-fetch, not just repaint. Every other
-        // group filters rows we already hold.
-        if (group === 'status') refresh(); else paintAll();
+        // The bucket decides WHICH rows the query asks the database for, so picking
+        // one has to re-fetch, not just repaint what we already hold. That is also
+        // what keeps the count and the list honest: they are the same query.
+        if (group === 'bucket') refresh(); else paintAll();
       }
       return;
     }
@@ -1778,7 +1791,7 @@
 
     if (act === 'read-body') {
       ev.stopPropagation();
-      var rcard = btn.closest('.cc-bus-v2-card');
+      var rcard = btn.closest('.cc-bus-card');
       var rid = rcard && rcard.getAttribute('data-msg-id');
       if (!canSpeak()) { btn.textContent = 'no voice support'; return; }
       if (SPEECH.id === 'msg-' + rid) { stopSpeech(); return; }
@@ -1793,7 +1806,7 @@
       if (!canSpeak()) { btn.textContent = 'no voice support'; return; }
       if (SPEECH.id === 'all') { stopSpeech(); return; }
       stopSpeech();
-      var cards = [].slice.call(document.querySelectorAll('#bus-v2-mount .cc-bus-v2-card'));
+      var cards = [].slice.call(document.querySelectorAll('#bus-mount .cc-bus-card'));
       if (!cards.length) return;
       var all = cards.map(function (c, i) { return 'Message ' + (i + 1) + '. ' + spokenTextFor(c); }).join(' ... ');
       btn.textContent = '◼ Stop';
@@ -1803,8 +1816,8 @@
     }
     if (act === 'toggle-body') {
       ev.stopPropagation();
-      var card = btn.closest('.cc-bus-v2-card');
-      var body = card && card.querySelector('.cc-bus-v2__body');
+      var card = btn.closest('.cc-bus-card');
+      var body = card && card.querySelector('.cc-bus__body');
       if (body) {
         body.classList.toggle('collapsed');
         btn.textContent = body.classList.contains('collapsed') ? '▾ Show more' : '▴ Show less';
@@ -1824,7 +1837,7 @@
     }
     if (act === 'bounce') {
       ev.stopPropagation();
-      var card2 = btn.closest('.cc-bus-v2-card');
+      var card2 = btn.closest('.cc-bus-card');
       var reply = card2 && card2.querySelector('[data-role="reply"]');
       if (reply) {
         reply.classList.remove('hidden');
@@ -1842,7 +1855,7 @@
     }
     if (act === 'send-reply') {
       ev.stopPropagation();
-      var card3 = btn.closest('.cc-bus-v2-card');
+      var card3 = btn.closest('.cc-bus-card');
       var input2 = card3 && card3.querySelector('[data-role="reply-input"]');
       if (!input2) return;
       var parentId = input2.getAttribute('data-parent-id');
@@ -1854,14 +1867,14 @@
     }
     if (act === 'open-reply-wide') {
       ev.stopPropagation();
-      var cardR = btn.closest('.cc-bus-v2-card');
+      var cardR = btn.closest('.cc-bus-card');
       var panelR = cardR && cardR.querySelector('[data-role="reply-wide"]');
       if (panelR) {
         draftSet(cardR.getAttribute('data-msg-id'), {});   // the panel being open is itself durable
         panelR.classList.remove('hidden');
         var taR = panelR.querySelector('[data-role="reply-wide-input"]');
         // preventScroll: un-hiding the panel adds ~80px of textarea BELOW the card's old
-        // bottom edge, so a bare focus() makes the browser scroll .cc-bus-v2__main (or the
+        // bottom edge, so a bare focus() makes the browser scroll .cc-bus__main (or the
         // operator lane under 1100px) to reveal it — the card lurches away under the cursor.
         // The ✦ Close button opens this same panel and already guards it (see below).
         if (taR) { try { taR.focus({ preventScroll: true }); } catch (e) { taR.focus(); } }
@@ -1870,7 +1883,7 @@
     }
     if (act === 'open-forward') {
       ev.stopPropagation();
-      var cardF = btn.closest('.cc-bus-v2-card');
+      var cardF = btn.closest('.cc-bus-card');
       var panelF = cardF && cardF.querySelector('[data-role="reply-wide"]');
       if (!panelF) return;
       panelF.classList.remove('hidden');
@@ -1880,7 +1893,7 @@
       // Remember WHO, not just that the picker is showing. Forward used to be
       // DOM-only: one repaint and Send quietly went back to the thread partner.
       draftSet(cardF.getAttribute('data-msg-id'), { fwdTo: (selF && selF.value) || 'forge-code' });
-      var hintF = panelF.querySelector('.cc-bus-v2__reply-wide-hint');
+      var hintF = panelF.querySelector('.cc-bus__reply-wide-hint');
       if (hintF) hintF.textContent = 'Forwarding this thread — pick who joins the mix:';
       var taF = panelF.querySelector('[data-role="reply-wide-input"]');
       if (taF) {
@@ -1895,7 +1908,7 @@
       // Visibility: archived rows hide from default V2 view but stay in DB —
       // cowork/forge-code can still query them. No data loss.
       ev.stopPropagation();
-      var cardK = btn.closest('.cc-bus-v2-card');
+      var cardK = btn.closest('.cc-bus-card');
       if (!cardK) return;
       var armed = cardK.getAttribute('data-close-on-send') === '1';
       if (armed) {
@@ -1919,7 +1932,7 @@
     }
     if (act === 'cancel-reply-wide') {
       ev.stopPropagation();
-      var cardC = btn.closest('.cc-bus-v2-card');
+      var cardC = btn.closest('.cc-bus-card');
       var panelC = cardC && cardC.querySelector('[data-role="reply-wide"]');
       if (panelC) {
         panelC.classList.add('hidden');
@@ -1937,7 +1950,7 @@
     }
     if (act === 'send-reply-wide') {
       ev.stopPropagation();
-      var cardS = btn.closest('.cc-bus-v2-card');
+      var cardS = btn.closest('.cc-bus-card');
       var taS = cardS && cardS.querySelector('[data-role="reply-wide-input"]');
       if (!taS) return;
       var pIdS = taS.getAttribute('data-parent-id');
@@ -1967,14 +1980,14 @@
     }
     if (act === 'save') {
       ev.stopPropagation();
-      var cardSv = btn.closest('.cc-bus-v2-card');
+      var cardSv = btn.closest('.cc-bus-card');
       if (!cardSv) return;
       saveBusV2(cardSv.getAttribute('data-msg-id'), !!btn.getAttribute('data-saved'));
       return;
     }
     if (act === 'toggle-done') {
       ev.stopPropagation();
-      var cardDn = btn.closest('.cc-bus-v2-card');
+      var cardDn = btn.closest('.cc-bus-card');
       if (!cardDn) return;
       var mIdDn = cardDn.getAttribute('data-msg-id');
       // Done drops the card out of the list. If there is an unsent reply on it,
@@ -1988,14 +2001,14 @@
     }
     if (act === 'set-flag') {
       ev.stopPropagation();
-      var cardSf = btn.closest('.cc-bus-v2-card');
+      var cardSf = btn.closest('.cc-bus-card');
       if (!cardSf) return;
       setBusFlagV2(cardSf.getAttribute('data-msg-id'), btn.getAttribute('data-flag') || null);
       return;
     }
     if (act === 'archive') {
       ev.stopPropagation();
-      var cardA = btn.closest('.cc-bus-v2-card');
+      var cardA = btn.closest('.cc-bus-card');
       if (!cardA) return;
       var mIdA = cardA.getAttribute('data-msg-id');
       var isArchived = cardA.classList.contains('is-archived');
@@ -2072,7 +2085,7 @@
     // repaint (poll, realtime, Done, filter change) re-emits it instead of
     // eating it. Cheap: one localStorage write per debounce tick.
     if (target.matches('#' + MOUNT_ID + ' [data-role="reply-wide-input"]')) {
-      var cardIn = target.closest('.cc-bus-v2-card');
+      var cardIn = target.closest('.cc-bus-card');
       if (cardIn) {
         clearTimeout(draftDebounce);
         var txt = target.value, mid = cardIn.getAttribute('data-msg-id');
@@ -2088,7 +2101,7 @@
     var target = ev.target;
     if (!target || !target.matches) return;
     if (!target.matches('#' + MOUNT_ID + ' [data-role="fwd-to"]')) return;
-    var cardCh = target.closest('.cc-bus-v2-card');
+    var cardCh = target.closest('.cc-bus-card');
     if (cardCh) draftSet(cardCh.getAttribute('data-msg-id'), { fwdTo: target.value });
   });
 
@@ -2118,7 +2131,7 @@
       // argument, so arming Close and then sending with the keyboard silently dropped
       // it — while the textarea placeholder tells you to send with Cmd/Ctrl+Enter.
       // Following the on-screen instruction defeated the button.
-      var cardKb = target.closest('.cc-bus-v2-card');
+      var cardKb = target.closest('.cc-bus-card');
       var dKb = cardKb ? (draftGet(cardKb.getAttribute('data-msg-id')) || {}) : {};
       var closeKb = dKb.armed || (cardKb && cardKb.getAttribute('data-close-on-send') === '1');
       // Keyboard send honours a chosen forward target as well — the mouse path
@@ -2130,7 +2143,7 @@
       sendReplyWide(parentId, to, target.value, closeKb ? parentId : null);
       if (cardKb) draftClear(cardKb.getAttribute('data-msg-id'));
       target.value = '';
-      var card = target.closest('.cc-bus-v2-card');
+      var card = target.closest('.cc-bus-card');
       var panel = card && card.querySelector('[data-role="reply-wide"]');
       if (panel) panel.classList.add('hidden');
       return;
@@ -2157,7 +2170,7 @@
     if (isNaN(pinnedTop)) pinnedTop = 91;
     var height = subnav.offsetHeight || 34;
     var OVERLAP_PX = 2;
-    mount.style.setProperty('--bus-v2-stick-top', (pinnedTop + height - OVERLAP_PX) + 'px');
+    mount.style.setProperty('--bus-stick-top', (pinnedTop + height - OVERLAP_PX) + 'px');
   }
 
   // ─── Dyslexia-friendly font (Lexend) — default ON, persists, refresh-safe.
@@ -2167,9 +2180,9 @@
     try { return window.localStorage.getItem(BUS_FONT_LS); } catch (e) { return null; }
   }
   function ensureLexendCss() {
-    if (document.getElementById('bus-v2-lexend-css')) return;
+    if (document.getElementById('bus-lexend-css')) return;
     var link = document.createElement('link');
-    link.id = 'bus-v2-lexend-css';
+    link.id = 'bus-lexend-css';
     link.rel = 'stylesheet';
     link.href = 'https://fonts.googleapis.com/css2?family=Lexend:wght@400;500&display=swap';
     document.head.appendChild(link);
@@ -2214,6 +2227,17 @@
       if (isUserBusy()) return; // try again on next tick — user finishing typing
       refresh();
     }, REFRESH_MS);
+
+    // AND ON THE WAY BACK IN. The poll is paused while the tab is hidden, so a board
+    // left open overnight used to show him yesterday's numbers for up to thirty
+    // seconds after he looked at it — long enough to read them and believe them.
+    // Coming back to the tab, or to the window, re-asks immediately.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && !isUserBusy()) refresh();
+    });
+    window.addEventListener('focus', function () {
+      if (!isUserBusy()) refresh();
+    });
   }
 
   if (document.readyState === 'loading') {
