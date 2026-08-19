@@ -5717,24 +5717,76 @@ function ccLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; }
 function ccLSset(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function ccLSdel(k){ try{ localStorage.removeItem(k); }catch(e){} }
 
-/* Cold load, no session: spend the device key. Returns true if we are now signed in. */
+/* Cold load, no session: spend the device key. Returns true if we are now signed in.
+
+   Audit b69b4780 (2026-08-19, second pair of eyes) added two things, matching the
+   alessio and reanna faces:
+
+   ONE TAB REDEEMS AT A TIME. Two tabs cold-loading in the same second both called
+   redeem. GoTrue keeps exactly ONE live one-time token per user, so the second redeem
+   DELETES the first tab's OTP and that tab lands on the password box. Proved live:
+   three redeems in a row left exactly one row in auth.one_time_tokens.
+
+   AND IT RETRIES ONCE. The edge answered 502 three times in a row during the audit,
+   then 200 on the next three. One attempt meant one transient blip cost a password.
+   A 401/400 still kills the key; a 429 or 5xx keeps it.
+
+   The whole thing is raced against a ceiling, so a stalled lock or a fetch that never
+   returns shows the login box rather than a blank screen. It fails towards "type the
+   password once", never towards "locked out". */
+const AUTOLOGIN_LOCK = 'azck_autologin_lock_' + CC_FACE;
+const AUTOLOGIN_CEIL = 12000;
+
+function ccWait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+async function ccWithAutoLoginLock(fn){
+  try{
+    if(navigator.locks && navigator.locks.request){
+      return await navigator.locks.request(AUTOLOGIN_LOCK, fn);
+    }
+  }catch(e){}
+  return await fn();          /* no Web Locks (older Safari): exactly the old behaviour */
+}
+
+async function ccRedeemDeviceKey(id, key){
+  /* We may have queued behind another tab that just signed this browser in. */
+  try{
+    const s = await supa.auth.getSession();
+    if(s && s.data && s.data.session) return true;
+  }catch(e){}
+  for(let attempt = 0; attempt < 2; attempt++){
+    try{
+      const r = await fetch(AUTOLOGIN_URL, {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ action:'redeem', device_id:id, key:key })
+      });
+      const j = await r.json().catch(()=>({}));
+      if(!j.ok || !j.otp){
+        /* A key the server refuses is a dead key — drop it so we never loop on it.
+           Anything else (offline, throttled, 5xx) keeps it: not the key's fault. */
+        if(r.status === 401 || r.status === 400){ ccLSdel(DEV_KEY_LS); return false; }
+        if(r.status >= 500 && attempt === 0){ await ccWait(700); continue; }
+        return false;
+      }
+      const v = await supa.auth.verifyOtp({ email:j.email, token:j.otp, type:'magiclink' });
+      return !!(v && v.data && v.data.session);
+    }catch(e){
+      if(attempt === 0){ await ccWait(700); continue; }
+      console.warn('[auto-login] could not run', e);
+      return false;
+    }
+  }
+  return false;
+}
+
 async function ccTryAutoLogin(){
   const id = ccLS(DEV_ID_LS), key = ccLS(DEV_KEY_LS);
   if(!id || !key) return false;
   try{
-    const r = await fetch(AUTOLOGIN_URL, {
-      method:'POST', headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ action:'redeem', device_id:id, key:key })
-    });
-    const j = await r.json().catch(()=>({}));
-    if(!j.ok || !j.otp){
-      /* A key the server refuses is a dead key — drop it so we never loop on it.
-         Anything else (offline, 500) keeps it: the network is not the key's fault. */
-      if(r.status === 401 || r.status === 400) ccLSdel(DEV_KEY_LS);
-      return false;
-    }
-    const v = await supa.auth.verifyOtp({ email:j.email, token:j.otp, type:'magiclink' });
-    return !!(v && v.data && v.data.session);
+    return await Promise.race([
+      ccWithAutoLoginLock(function(){ return ccRedeemDeviceKey(id, key); }),
+      ccWait(AUTOLOGIN_CEIL).then(function(){ return false; })
+    ]);
   }catch(e){ console.warn('[auto-login] could not run', e); return false; }
 }
 
