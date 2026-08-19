@@ -11,7 +11,8 @@
 
   var MOUNT_ID = 'bus-v2-mount';
   var REFRESH_MS = 30000;
-  var ROW_LIMIT = 60;
+  var ROW_LIMIT = 120;      // live cards. Raised from 60 with the two-query split
+  var SYSLOG_LIMIT = 60;    // the right-hand system log, lane 'log', archived or not
   var UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
   var BROWSER_SESSION_KEY = 'cc.browser.session_id';
 
@@ -1048,12 +1049,16 @@
     if (STATE.sender !== 'all' && senderOrder.indexOf(STATE.sender) === -1) senderOrder.push(STATE.sender);
 
     var forStatus = rows.filter(function (r) { return rowMatches(r, 'status'); });
+    // The fetch now holds EITHER the live rows OR the archived ones, never both,
+    // so the side we are not holding gets no number at all rather than a false 0.
+    // A blank badge means "click to go and look"; a 0 would be a lie.
+    var onArchived = STATE.status === 'archived';
     var statusCounts = {
-      all:      forStatus.filter(function (r) { return !r.archived_at && r.status !== 'done'; }).length,
-      unread:   forStatus.filter(function (r) { return r.status === 'sent' && !r.archived_at; }).length,
-      awaiting: forStatus.filter(function (r) { return r.awaiting_reply_from && !r.archived_at && r.status !== 'done'; }).length,
-      done:     forStatus.filter(function (r) { return r.status === 'done' && !r.archived_at; }).length,
-      archived: forStatus.filter(function (r) { return !!r.archived_at; }).length
+      all:      onArchived ? null : forStatus.filter(function (r) { return !r.archived_at && r.status !== 'done'; }).length,
+      unread:   onArchived ? null : forStatus.filter(function (r) { return r.status === 'sent' && !r.archived_at; }).length,
+      awaiting: onArchived ? null : forStatus.filter(function (r) { return r.awaiting_reply_from && !r.archived_at && r.status !== 'done'; }).length,
+      done:     onArchived ? null : forStatus.filter(function (r) { return r.status === 'done' && !r.archived_at; }).length,
+      archived: onArchived ? forStatus.filter(function (r) { return !!r.archived_at; }).length : null
     };
     var forPriority = rows.filter(function (r) { return rowMatches(r, 'priority'); });
     var priorityCounts = {
@@ -1767,16 +1772,44 @@
       return;
     }
     try {
-      var res = await client
-        .from('agent_messages')
-        .select(ROW_COLS)
-        .order('sent_at', { ascending: false, nullsFirst: false })
-        .limit(ROW_LIMIT);
+      // 2026-08-18, his report: "I hear buses coming in but I don't see them."
+      // He was right, and it was arithmetic. This fetch took the newest ROW_LIMIT
+      // rows of the WHOLE bus and only then dropped archived ones in the browser.
+      // But fn_bus_autosilence archives system task/plan chatter AT INSERT, and on
+      // a busy night that is most of the bus: measured live, 48 of the newest 60
+      // rows were already archived, so 12 cards survived and the window reached
+      // back barely ninety minutes. Every one of those inserts still rang his phone.
+      //
+      // TWO QUERIES NOW, because the two columns want opposite things. The middle
+      // column wants rows that can render, so it asks for live rows only and spends
+      // its whole window on them. The syslog column on the right is BUILT from the
+      // autosilenced lane, so it asks for lane 'log' regardless of archived state —
+      // filtering those out server-side would have gone and darkened his system log
+      // to fix his card list.
+      var wantArchived = STATE.status === 'archived';
+      var mainQ = client.from('agent_messages').select(ROW_COLS)
+        .order('sent_at', { ascending: false, nullsFirst: false }).limit(ROW_LIMIT);
+      mainQ = wantArchived ? mainQ.not('archived_at', 'is', null)
+                           : mainQ.is('archived_at', null);
+      var sysQ = client.from('agent_messages').select(ROW_COLS)
+        .eq('lane', 'log')
+        .order('sent_at', { ascending: false, nullsFirst: false }).limit(SYSLOG_LIMIT);
+      var pair = await Promise.all([mainQ, sysQ]);
+      var res = pair[0], sysRes = pair[1];
       if (res.error) {
         busTrouble(mount, 'Bus query error: ' + res.error.message);
         return;
       }
-      ALL_ROWS = res.data || [];
+      var seenIds = {};
+      ALL_ROWS = [];
+      (res.data || []).concat((sysRes && sysRes.data) || []).forEach(function (r) {
+        if (seenIds[r.id]) return;
+        seenIds[r.id] = true;
+        ALL_ROWS.push(r);
+      });
+      ALL_ROWS.sort(function (a, b) {
+        return String(b.sent_at || b.created_at || '').localeCompare(String(a.sent_at || a.created_at || ''));
+      });
       var allUuids = [];
       var instanceIds = {};
       ALL_ROWS.forEach(function (r) {
@@ -1851,7 +1884,10 @@
       if (group && value != null) {
         STATE[group] = value;
         lsSet(STATE_KEYS[group], value);
-        paintAll();
+        // The status group decides WHICH rows the fetch asks for (archived, or
+        // everything else), so it has to re-fetch, not just repaint. Every other
+        // group filters rows we already hold.
+        if (group === 'status') refresh(); else paintAll();
       }
       return;
     }
