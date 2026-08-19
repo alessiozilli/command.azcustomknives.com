@@ -316,15 +316,9 @@
       '@media (max-width: 1280px) { #bus-v2-mount { grid-template-columns:1fr 320px; } }',
       '@media (max-width: 1024px) { #bus-v2-mount { grid-template-columns:1fr; } #bus-v2-mount .cc-bus-v2__syslog { display:none; } }',
 
-      // ─── Sidebar (filter) ───
-      '#bus-v2-mount .cc-bus-v2__filter-group { display:flex; flex-direction:column; gap:4px; }',
-      '#bus-v2-mount .cc-bus-v2__filter-label { font-family:var(--display,sans-serif); font-size:9px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-xs,#566470); margin-bottom:4px; }',
-      '#bus-v2-mount .cc-bus-v2__filter-btn { display:flex; align-items:center; gap:8px; background:transparent; border:1px solid transparent; color:var(--text-dim,#8a9aa8); padding:5px 8px; border-radius:3px; cursor:pointer; font-family:var(--sans,sans-serif); font-size:12px; text-align:left; }',
-      '#bus-v2-mount .cc-bus-v2__filter-btn:hover { background:var(--raised,#161b20); color:var(--text,#dde4eb); }',
-      '#bus-v2-mount .cc-bus-v2__filter-btn.active { background:var(--amber-soft,rgba(200,146,42,0.08)); color:var(--amber,#c8922a); border-color:var(--amber-glow,rgba(200,146,42,0.15)); }',
-      '#bus-v2-mount .cc-bus-v2__filter-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }',
-      '#bus-v2-mount .cc-bus-v2__filter-count { margin-left:auto; font-family:var(--mono,monospace); font-size:12px; font-weight:700; color:var(--text-dim,#8a9aa8); }',
-      '#bus-v2-mount .cc-bus-v2__filter-btn.active .cc-bus-v2__filter-count { color:var(--amber,#c8922a); }',
+      // The eight filter-sidebar style rules that lived here are deleted too
+      // (2026-08-18). He asked whether the column was really gone or only hidden;
+      // nothing styles an element that no longer exists.
 
       // ─── Main column ───
       '#bus-v2-mount .cc-bus-v2__main { display:flex; flex-direction:column; gap:var(--sp-10,10px); min-width:0; min-height:0; max-height:100%; overflow-y:auto; }',
