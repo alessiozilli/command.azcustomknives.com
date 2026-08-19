@@ -5987,13 +5987,17 @@ boot();
      "sign out" would be a button that does nothing. */
   function dropDeviceKey(){ try{ localStorage.removeItem('azck_cmd_device_key'); }catch(e){} }
   window.ccSignOutHere=async function(){ dropDeviceKey(); await window.supa.auth.signOut({ scope:'local' }); location.reload(); };
+  /* Audit b69b4780: both of these used to PROMISE something the device keys undo.
+     A signed-out device with its own key signs itself back in on the next load, so
+     the only thing that locks a device out for good is archiving it in this list.
+     The warning now says that BEFORE the click, not only after it. */
   window.ccSignOutOthers=async function(){
-    if(!confirm('Kick every other device off? This one keeps its seat.')) return;
+    if(!confirm('Kick every other device off?\n\nThis one keeps its seat. Any device that is password-free will sign itself back in from its own key — to lock one out for good, archive it in this list instead.')) return;
     await window.supa.auth.signOut({ scope:'others' });
     alert('Done — every other device signs itself back in from its own key. To lock one out for good, archive it in this list.');
   };
   window.ccSignOutAll=async function(){
-    if(!confirm('Sign out EVERYWHERE, including this device?')) return;
+    if(!confirm('Sign out EVERYWHERE, including this device?\n\nThis device forgets its key and will ask for the password again. Other password-free devices sign themselves back in from their own keys — archive them in this list to stop that.')) return;
     dropDeviceKey();
     await window.supa.auth.signOut({ scope:'global' });
     location.reload();
