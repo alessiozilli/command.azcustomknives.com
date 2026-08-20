@@ -306,6 +306,7 @@
   const SPLIT     = !!NOT_MINE[FACE];          // unknown face => no split, show everything
   const HANDS_KEY = 'cc.scx.hands.' + (FACE || 'x');
   const inMyHands = r => NOT_MINE[FACE].indexOf(r.item_location || '') === -1;
+  const inMyHandsSafe = r => !SPLIT || inMyHands(r);
 
   /* ══════════════ MODEL HELPERS ══════════════ */
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -730,9 +731,11 @@
   function paintHands(){
     const b = document.getElementById('scx-hands');
     if(!b) return;
-    const mine  = (S.rows || []).length;
-    const total = (S.allRows || []).length;
-    const held  = Math.max(0, total - mine);
+    /* COUNT LIVE WORK, NOT THE ARCHIVE. S.allRows is every row the module
+       loaded, history included, so a bare length difference told him "6 at the
+       Blue Building" when four were real jobs and two were collected months
+       ago. A number he cannot act on is the same lie as a hidden row. */
+    const held = (S.allRows || []).filter(r => !inMyHandsSafe(r) && isOpen(r)).length;
     const theirs = FACE === 'reanna' ? 'the shop' : 'the Blue Building';
     b.className = 'scx-hands' + (S.hands ? ' on' : '');
     b.textContent = S.hands ? ('Mine' + (held ? ' · ' + held + ' at ' + theirs : '')) : 'Everything';
