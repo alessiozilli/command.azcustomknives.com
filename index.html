@@ -610,6 +610,233 @@ footer{padding:10px 18px;font-size:11.5px;color:var(--ink-faint);border-top:1px 
     })();
     </script>
   </section>
+  <!-- ════════ ACCOUNTS lane (bus #5381, Alessio asked for it repeatedly).
+       Where every account, subscription, listing and tool the business carries LIVES.
+       Live source: public.az_accounts (RLS authenticated read/insert/update, no anon).
+       KEY PARTNERS pattern: read + add + edit in place. NO DELETE — dead is a status.
+       The cost total counts only rows that carry BOTH a cost and a cadence, and says
+       out loud how many it could not count. It never invents a number. ════════ -->
+  <section class="lane faces-tokens" id="lane-accounts" data-lane="accounts">
+    <div style="padding:4px 2px;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button type="button" id="ac-add" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">+ Add account</button>
+        <span id="ac-spend" style="font-size:11.5px;color:var(--ink-dim,#7a7a7a);"></span>
+        <span id="ac-msg" style="margin-left:auto;font-size:11px;color:var(--ink-dim,#7a7a7a);"></span>
+      </div>
+      <div id="ac-form" style="display:none;border:1px solid var(--border,#2a2a2a);border-radius:6px;padding:12px;background:var(--raised,#1a1a1a);"></div>
+      <div id="ac-mount"><div style="padding:24px;color:var(--ink-dim);font-size:12px;">Loading accounts…</div></div>
+    </div>
+
+    <script>
+    /* ACCOUNTS — az_accounts, read + add + edit in place. Nothing about the rows is
+       written into this page: kinds, statuses and sides come out of the data, so a new
+       kind appears without a code change. */
+    (function accountsLane(){
+      var S = { rows: null, editing: null, adding: false };
+      var el = function(id){ return document.getElementById(id); };
+      var E  = function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+
+      var KIND_ORDER  = ['subscription','account','listing','domain','machine-login','open-source-tool'];
+      var STATUSES    = ['active','evaluating','needs-detail','to-kill','dead'];
+      var SIDES       = ['azck','quadfang','forge','shared'];
+      var CADENCES    = ['monthly','yearly','one-time'];
+
+      function msg(t, bad){
+        var m = el('ac-msg'); if(!m) return;
+        m.textContent = t || '';
+        m.style.color = bad ? '#f85149' : 'var(--ink-dim,#7a7a7a)';
+        if(t && !bad) setTimeout(function(){ if(m.textContent===t) m.textContent=''; }, 4000);
+      }
+      function money(n){ return '$' + Number(n).toFixed(2).replace(/\.00$/,''); }
+      /* Monthly equivalent. A row without BOTH a cost and a cadence is not counted,
+         and the count of those is printed beside the total. */
+      function perMonth(r){
+        if(r.cost_cad == null) return null;             // no price on file: cannot be counted
+        if(Number(r.cost_cad) === 0) return 0;          // free is a real, known number
+        if(r.billing_cadence === 'monthly') return Number(r.cost_cad);
+        if(r.billing_cadence === 'yearly')  return Number(r.cost_cad) / 12;
+        return null;                                    // a real cost with no cadence to spread it over
+      }
+      function daysTo(d){
+        if(!d) return null;
+        var t = new Date(); t.setHours(0,0,0,0);
+        return Math.round((new Date(d+'T00:00:00') - t) / 86400000);
+      }
+
+      window.renderAccounts = async function(){
+        var mount = el('ac-mount');
+        if(!mount || !window.supa) return;
+        var r = await window.supa.from('az_accounts')
+          .select('id,name,kind,side,what_it_does,cost_cad,billing_cadence,renews_on,home_url,login_identity,status,notes,verified_at')
+          .order('kind', { ascending:true }).order('name', { ascending:true });
+        if(r.error){
+          mount.innerHTML = '<div style="padding:24px;font-size:12px;color:#f85149;">Accounts load error: '+E(r.error.message)+' <button type="button" class="cc-subtab" onclick="window.renderAccounts()">Retry</button></div>';
+          return;
+        }
+        S.rows = r.data || [];
+        paint();
+      };
+
+      function paint(){
+        var mount = el('ac-mount'); if(!mount) return;
+        var rows = S.rows || [];
+
+        var counted = 0, uncounted = 0, total = 0;
+        rows.forEach(function(x){
+          if(x.status === 'dead') return;
+          var m = perMonth(x);
+          if(m == null) uncounted++; else { counted++; total += m; }
+        });
+        var sp = el('ac-spend');
+        if(sp){
+          sp.textContent = rows.length
+            ? money(total) + ' a month across ' + counted + ' priced ' + (counted===1?'row':'rows')
+              + (uncounted ? ' · ' + uncounted + ' still without a price' : '')
+            : '';
+        }
+
+        var groups = {}, order = [];
+        rows.forEach(function(x){
+          var k = x.kind || 'other';
+          if(!groups[k]){ groups[k] = []; order.push(k); }
+          groups[k].push(x);
+        });
+        order.sort(function(a,b){
+          var ia = KIND_ORDER.indexOf(a), ib = KIND_ORDER.indexOf(b);
+          return (ia<0?99:ia) - (ib<0?99:ib);
+        });
+
+        mount.innerHTML = order.map(function(k){
+          return '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--azck-red,#990000);margin:16px 0 6px;font-weight:700;">'
+               + E(String(k).replace(/-/g,' ')) + ' <span style="color:var(--ink-dim,#7a7a7a);font-weight:400;">' + groups[k].length + '</span></div>'
+               + groups[k].map(card).join('');
+        }).join('') || '<div style="padding:24px;color:var(--ink-dim);font-size:12px;">No accounts on the book yet.</div>';
+      }
+
+      function card(x){
+        if(S.editing === x.id) return editor(x);
+        var needs = x.status === 'needs-detail';
+        var dead  = x.status === 'dead';
+        var dTo   = daysTo(x.renews_on);
+        var cost  = x.cost_cad == null
+          ? '<span style="color:#EF9F27;">no price yet</span>'
+          : money(x.cost_cad) + (x.billing_cadence ? ' ' + E(x.billing_cadence) : ' <span style="color:#EF9F27;">no cadence</span>');
+        return '<div onclick="window.acEdit(\'' + x.id + '\')" style="cursor:pointer;border:1px solid ' + (needs?'#EF9F27':'var(--border,#2a2a2a)') + ';border-left:3px solid ' + (needs?'#EF9F27':dead?'#444':'var(--azck-red,#990000)') + ';border-radius:6px;padding:10px 12px;margin-bottom:6px;background:var(--raised,#1a1a1a);' + (dead?'opacity:.55;':'') + '">'
+          + '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;">'
+          +   '<span style="font-size:13.5px;color:var(--ink,#fff);font-weight:600;">' + E(x.name) + '</span>'
+          +   '<span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:' + (needs?'#EF9F27':'var(--ink-dim,#7a7a7a)') + ';">' + E(x.status) + '</span>'
+          +   '<span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim,#7a7a7a);">' + E(x.side) + '</span>'
+          +   '<span style="margin-left:auto;font-size:12px;color:var(--ink-dim,#9a9a9a);">' + cost + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:var(--ink-dim,#9a9a9a);margin-top:3px;line-height:1.45;">' + E(x.what_it_does) + '</div>'
+          + '<div style="font-size:10.5px;color:var(--ink-dim,#7a7a7a);margin-top:4px;">'
+          +   (x.renews_on ? 'renews ' + E(x.renews_on) + (dTo!=null && dTo>=0 && dTo<=30 ? ' <span style="color:#EF9F27;">in ' + dTo + ' day' + (dTo===1?'':'s') + '</span>' : '') + ' · ' : '')
+          +   (x.login_identity ? 'signs in as ' + E(x.login_identity) + ' · ' : '')
+          +   (x.home_url ? '<a href="' + E(x.home_url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--azck-red,#990000);">open ' + String(x.home_url).replace(/^https?:\/\//,'').split('/')[0] + '</a>' : '')
+          + '</div>'
+          + (needs ? '<div style="font-size:11px;color:#EF9F27;margin-top:5px;">Click to fill in what is missing.</div>' : '')
+          + '</div>';
+      }
+
+      function field(id, label, value, type){
+        return '<label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">' + E(label)
+          + '<input id="' + id + '" type="' + (type||'text') + '" value="' + E(value==null?'':value) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;"></label>';
+      }
+      function pick(id, label, value, opts){
+        return '<label style="font-size:11px;color:var(--ink-dim,#7a7a7a);">' + E(label)
+          + '<select id="' + id + '" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:var(--bg,#111);color:var(--ink,#fff);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 8px;font-size:12.5px;">'
+          + opts.map(function(o){ return '<option value="' + E(o) + '"' + (o===value?' selected':'') + '>' + E(o) + '</option>'; }).join('')
+          + '</select></label>';
+      }
+      function formGrid(p, x){
+        var kinds = KIND_ORDER.slice();
+        (S.rows||[]).forEach(function(r){ if(kinds.indexOf(r.kind)<0) kinds.push(r.kind); });
+        return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'
+          + field(p+'-name','Name', x.name)
+          + pick(p+'-kind','What kind', x.kind || 'subscription', kinds)
+          + pick(p+'-side','Which side', x.side || 'azck', SIDES)
+          + field(p+'-does','What it does for us', x.what_it_does)
+          + field(p+'-cost','Cost CAD', x.cost_cad, 'number')
+          + pick(p+'-cad','Billing', x.billing_cadence || '', [''].concat(CADENCES))
+          + field(p+'-renews','Renews on', x.renews_on, 'date')
+          + field(p+'-url','Home page', x.home_url)
+          + field(p+'-login','Signs in as', x.login_identity)
+          + pick(p+'-status','Status', x.status || 'active', STATUSES)
+          + field(p+'-notes','Notes', x.notes)
+          + '</div>';
+      }
+
+      function editor(x){
+        return '<div style="border:1px solid var(--azck-red,#990000);border-radius:6px;padding:12px;margin-bottom:6px;background:var(--raised,#1a1a1a);">'
+          + formGrid('ac-e', x)
+          + '<div style="display:flex;gap:8px;margin-top:10px;">'
+          +   '<button type="button" onclick="window.acSave(\'' + x.id + '\')" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Save</button>'
+          +   '<button type="button" onclick="window.acCancel()" style="background:transparent;color:var(--ink-dim,#999);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Cancel</button>'
+          +   '<span style="margin-left:auto;font-size:10.5px;color:var(--ink-dim,#7a7a7a);align-self:center;">Nothing is deleted here. Set the status to dead instead.</span>'
+          + '</div></div>';
+      }
+
+      function read(p){
+        var v = function(sfx){ var e = el(p+'-'+sfx); return e ? String(e.value).trim() : ''; };
+        return {
+          name: v('name'), kind: v('kind'), side: v('side'), what_it_does: v('does'),
+          cost_cad: v('cost') === '' ? null : Number(v('cost')),
+          billing_cadence: v('cad') || null,
+          renews_on: v('renews') || null,
+          home_url: v('url') || null,
+          login_identity: v('login') || null,
+          status: v('status'), notes: v('notes') || null
+        };
+      }
+
+      window.acEdit   = function(id){ S.editing = id; S.adding = false; el('ac-form').style.display='none'; paint(); };
+      window.acCancel = function(){ S.editing = null; paint(); };
+
+      window.acSave = async function(id){
+        var row = read('ac-e');
+        if(!row.name || !row.what_it_does){ msg('Name and what it does are the two I need.', true); return; }
+        row.verified_at = new Date().toISOString();
+        var r = await window.supa.from('az_accounts').update(row).eq('id', id);
+        if(r.error){ msg('Could not save: '+r.error.message, true); return; }
+        S.editing = null; msg('Saved '+row.name+'.');
+        window.renderAccounts();
+      };
+
+      window.acAddSave = async function(){
+        var row = read('ac-a');
+        if(!row.name || !row.what_it_does){ msg('Name and what it does are the two I need.', true); return; }
+        row.verified_at = new Date().toISOString();
+        var r = await window.supa.from('az_accounts').insert(row);
+        if(r.error){ msg('Could not add: '+r.error.message, true); return; }
+        el('ac-form').style.display = 'none'; S.adding = false; msg('Added '+row.name+'.');
+        window.renderAccounts();
+      };
+
+      function boot(n){
+        var add = el('ac-add');
+        if(add && !add._wired){
+          add._wired = 1;
+          add.onclick = function(){
+            var f = el('ac-form');
+            S.adding = !S.adding;
+            f.style.display = S.adding ? 'block' : 'none';
+            if(S.adding){
+              S.editing = null; paint();
+              f.innerHTML = formGrid('ac-a', {})
+                + '<div style="display:flex;gap:8px;margin-top:10px;">'
+                +   '<button type="button" onclick="window.acAddSave()" style="background:var(--azck-red,#990000);color:#fff;border:0;border-radius:5px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Save</button>'
+                +   '<button type="button" onclick="document.getElementById(\'ac-form\').style.display=\'none\'" style="background:transparent;color:var(--ink-dim,#999);border:1px solid var(--border,#2a2a2a);border-radius:5px;padding:6px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;">Cancel</button>'
+                + '</div>';
+            }
+          };
+        }
+        if(window.supa){ window.renderAccounts(); return; }
+        if(n < 80) setTimeout(function(){ boot(n+1); }, 250);
+      }
+      boot(0);
+    })();
+    </script>
+  </section>
   <!-- ════════ KEY PARTNERS lane — ported from azck-faces 2026-08-05 (phase 3, port 2/6).
        Live source: public.contacts (RLS authenticated). KP_HIDE privacy rule rides inside
        kpFetchContacts. Sender identity comes from the session — never hardcoded. ════════ -->
@@ -4524,7 +4751,7 @@ window.openActiveRun = function() {
    scheduled_for dates, dated tasks join the same ranking automatically. ═══ */
 (function(){
   'use strict';
-  var D = { tasks:[], has:[], cal:[], jobs:[], up:[], three:{}, pick:'three:today' };
+  var D = { tasks:[], has:[], cal:[], jobs:[], accts:[], up:[], three:{}, pick:'three:today' };
   function el(id){ return document.getElementById(id); }
   function dstr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function dName(d){ try{ return new Date(d+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }catch(e){ return d; } }
@@ -4569,13 +4796,19 @@ window.openActiveRun = function() {
           .order('start_time', { ascending: true }).limit(60),
         window.supa.from('az_service_bookings')
           .select('id,customer_name,service,status,rush,preferred_date,next_action_date,scheduled_at,dropped_off_at,total_cad,blade_detail,notes,item_location')
-          .in('status', ['new','scheduled','in_shop','at_risk'])
+          .in('status', ['new','scheduled','in_shop','at_risk']),
+        /* Renewals inside 30 days ride the same river (bus #5381). Rows without a
+           renews_on date simply do not appear — no placeholder, no guessed date. */
+        window.supa.from('az_accounts')
+          .select('id,name,kind,cost_cad,billing_cadence,renews_on,status,home_url,what_it_does')
+          .not('renews_on','is',null).neq('status','dead')
       ]);
       for(var i=0;i<q.length;i++){ if(q[i].error) throw q[i].error; }
       D.tasks = q[0].data || [];
       D.has   = q[1].data || [];
       D.cal   = q[2].data || [];
       D.jobs  = q[3].data || [];
+      D.accts = q[4].data || [];
       buildThree();
       buildUp();
       paintLeft();
@@ -4641,6 +4874,16 @@ window.openActiveRun = function() {
       out.push({ kind:'job', id:'job-'+j.id, when:due, sortTs:due+'T23:59:59',
         title:(j.customer_name||'(no name)')+' — '+(j.service||'job'),
         sub:(dd<=0?'Today':dd===1?'Tomorrow':dName(due)) + ' · ' + (j.rush?'RUSH':j.status), raw:j });
+    });
+    /* Renewals: 30 days out, not 14 — a subscription needs more warning than a job. */
+    (D.accts || []).forEach(function(a){
+      var dd = dayDiff(today, a.renews_on);
+      if(dd < 0 || dd > 30) return;
+      out.push({ kind:'acct', id:'acct-'+a.id, when:a.renews_on, sortTs:a.renews_on+'T23:59:58',
+        title:a.name + ' renews',
+        sub:(dd<=0?'Today':dd===1?'Tomorrow':dName(a.renews_on))
+            + (a.cost_cad!=null ? ' · $'+Number(a.cost_cad).toFixed(2).replace(/\.00$/,'')+(a.billing_cadence?' '+a.billing_cadence:'') : ' · no price on file'),
+        raw:a });
     });
     out.sort(function(a,b){ return a.sortTs < b.sortTs ? -1 : 1; });
     D.up = out;
@@ -5534,6 +5777,8 @@ const LANES = [
   ['keypartners','KEY PARTNERS','The people the business runs with.','LIVE — ported 2026-08-05 (port 2/6). Static section below; buildShell skips it.'],
   ['comms','COMMS','Business communications.','LIVE — ported 2026-08-05 (port 3/6): bus dispatcher live, chat parked honest. Static section below.'],
   ['retail','STORE','The till and the shelf — the record of what sold.','LIVE 2026-08-12, renamed STORE 2026-08-13 (his call: the Till carries service days too, so RETAIL was the wrong word — and STORE, not SHOP, because SHOP is the floor). Till and Stock, each navigation | information | communication. Internal key stays retail so nothing breaks. Service jobs are NOT here: they belong to SERVICES, and finished ones belong nowhere he has to look. Static section below; buildShell skips it.'],
+  /* New tabs land LAST — the faces reshuffle lesson. Bus #5381. */
+  ['accounts','ACCOUNTS','Every account, subscription, listing and tool the business carries.','LIVE 2026-08-20 (bus #5381): az_accounts, read + add + edit in place. No delete — dead is a status. Static section below; buildShell skips it.'],
 ];
 /* Swiss Delicious + Forge Atlas: OUT for now (Alessio 2026-08-05). Re-add when he says so. */
 
@@ -5588,6 +5833,9 @@ function switchLane(id){
   }
   if(id==='retail'){
     (function retry(n){ if(window.supa && window.renderRetail){ try{ window.renderRetail(); }catch(e){ console.warn('[retail] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
+  }
+  if(id==='accounts'){
+    (function retry(n){ if(window.supa && window.renderAccounts){ try{ window.renderAccounts(); }catch(e){ console.warn('[accounts] render failed',e); } return; } if(n<60) setTimeout(()=>retry(n+1),100); })(0);
   }
 }
 
