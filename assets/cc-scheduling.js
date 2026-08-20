@@ -278,6 +278,35 @@
   const LOCS = ['Shop', 'Blue Building', 'In transit', "Alessio's bench", 'with customer'];
   const SVQ_QTYS = [1,2,3,4,5,6,7,8,9,10];
 
+  /* ── WHOSE HANDS — Alessio ratified this shape 2026-08-20 (task a3c2762e,
+     bouncing since 2026-08-10 as bus #4456). His words: "We are two people
+     running this show. We both need to have the things WE need visible. We
+     literally have two locations."
+
+     THE RULE HE PICKED: whose job it is comes from WHERE THE PROPERTY SITS.
+     The location is already on every row, so there is nothing new to fill in,
+     and moving an item with one tap moves the job with it. He turned down a
+     real owner column for one reason — a blank owner would become invisible
+     work — so this is written as a DENY list, the same way CLOSED is:
+
+       a face hides ONLY the other person's shelf. Everything else shows.
+
+     That makes the failure mode safe. In transit shows on BOTH boards until
+     someone taps Arrived, because a handoff is the one moment two people are
+     holding the same job. A BLANK location shows on both — website bookings
+     land with no location, so blank is the normal state of a fresh row, not an
+     error, and it must never fall down a crack.
+
+     The command face is THE BUSINESS: it has no shelf of its own and sees all. */
+  const NOT_MINE = {
+    alessio: ['Blue Building'],
+    reanna : ['Shop', "Alessio's bench"]
+  };
+  const FACE      = (window.CC_FACE_CONFIG && window.CC_FACE_CONFIG.face) || '';
+  const SPLIT     = !!NOT_MINE[FACE];          // unknown face => no split, show everything
+  const HANDS_KEY = 'cc.scx.hands.' + (FACE || 'x');
+  const inMyHands = r => NOT_MINE[FACE].indexOf(r.item_location || '') === -1;
+
   /* ══════════════ MODEL HELPERS ══════════════ */
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -314,7 +343,8 @@
 
   /* ══════════════ STATE ══════════════ */
   const S = {
-    tab: 'board', rows: null, claims: [], attendees: [], hours: [], gcal: [],
+    tab: 'board', rows: null, allRows: null, hands: true,
+    claims: [], attendees: [], hours: [], gcal: [],
     sel: null, editing: null, busy: false, err: null, host: null, opts: {},
     // composer
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
@@ -359,7 +389,8 @@
           .order('created_at',{ascending:false}).limit(400)
       ]);
       if(bk.error) throw bk.error;
-      S.rows = bk.data || [];
+      S.allRows = bk.data || [];
+      S.rows = applyHands();
       S.claims = cl.error ? [] : (cl.data || []);
       S.attendees = at.error ? [] : (at.data || []);
       S.hours = oh.error ? [] : (oh.data || []);
@@ -371,6 +402,17 @@
       S.err = (e && e.message) || String(e);
     }
     paint();
+  }
+
+  /* The hands filter is a LENS, not a fetch. Both sets stay in memory so
+     flipping it never costs a round trip — and so the topline can say how many
+     rows the lens is holding back, which is the on-screen proof that nothing
+     went missing. If the selected job is on the other shelf, let it go. */
+  function applyHands(){
+    const all = S.allRows || [];
+    const out = (SPLIT && S.hands) ? all.filter(inMyHands) : all.slice();
+    if(S.sel && !out.some(x => x.id === S.sel)){ S.sel = null; S.editing = null; }
+    return out;
   }
 
   /* ══════════════ WRITES — timestamps, never status (two pass-throughs) ══ */
@@ -460,6 +502,13 @@
   .scx-count{font-family:var(--mono,monospace);font-size:9px;color:var(--text-xs,#566470);margin-left:auto;}
   .scx-reload{background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:4px;color:var(--text-dim,#8a9aa8);cursor:pointer;font-size:11px;padding:4px 9px;}
   .scx-reload:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
+  /* the hands switch — Mine / Everything. Never hidden behind a menu: the
+     board is allowed to hold rows back only while it is saying so out loud. */
+  .scx-hands{background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:4px;
+    color:var(--text-dim,#8a9aa8);cursor:pointer;font-family:var(--mono,monospace);font-size:10px;
+    letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;margin-left:auto;white-space:nowrap;}
+  .scx-hands:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
+  .scx-hands.on{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
   .scx-new{width:100%;padding:13px 12px;background:var(--amber,#c8922a);color:#000;border:0;border-radius:5px;font-family:var(--display,sans-serif);font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;flex-shrink:0;margin-bottom:10px;}
   .scx-new:hover{filter:brightness(1.08);}
   .scx-new.open{background:var(--raised,#161b20);color:var(--text-dim,#8a9aa8);border:1px solid var(--border,#252c33);}
@@ -557,8 +606,12 @@
       document.head.appendChild(st);
     }
     host.classList.add('scx');
+    /* his choice of lens survives a reload — the board should open the way he
+       left it, not argue with him every morning */
+    try{ if(localStorage.getItem(HANDS_KEY) === '0') S.hands = false; }catch(e){}
     host.innerHTML = '<div class="scx-topline">'
       + '<div class="scx-tabs" id="scx-tabs"></div>'
+      + (SPLIT ? '<button type="button" class="scx-hands" id="scx-hands"></button>' : '')
       + '<button type="button" class="scx-reload" id="scx-reload" title="Reload">↻</button>'
       + '</div>'
       + '<div id="scx-body"></div>';
@@ -635,6 +688,7 @@
         '<span class="scx-tab'+(S.tab===t.key?' on':'')+'" data-scxtab="'+t.key+'">'+t.label
         + (c[t.key] != null ? ' <b>'+c[t.key]+'</b>' : '') + '</span>').join('');
     }
+    paintHands();
     const body = document.getElementById('scx-body');
     if(!body) return;
     if(S.err === 'signin'){ body.innerHTML = '<div class="scx-empty">Sign in to see the schedule.</div>'; return; }
@@ -667,6 +721,24 @@
     else paintDetail();
     mountBus();
     fitCols();
+  }
+
+  /* THE SWITCH SAYS WHAT IT IS DOING. A board that quietly drops rows is the
+     thing he refused when he turned down an owner column, so when the lens is
+     on it carries the count it is holding back and one plain sentence naming
+     the shelf. Tap once and everything comes back. */
+  function paintHands(){
+    const b = document.getElementById('scx-hands');
+    if(!b) return;
+    const mine  = (S.rows || []).length;
+    const total = (S.allRows || []).length;
+    const held  = Math.max(0, total - mine);
+    const theirs = FACE === 'reanna' ? 'the shop' : 'the Blue Building';
+    b.className = 'scx-hands' + (S.hands ? ' on' : '');
+    b.textContent = S.hands ? ('Mine' + (held ? ' · ' + held + ' at ' + theirs : '')) : 'Everything';
+    b.title = S.hands
+      ? 'Showing what is in your hands. Tap to see ' + theirs + ' too.'
+      : 'Showing both places. Tap to go back to yours.';
   }
 
   /* the bottom of the boxes lines up with the browser on EVERY face — measured,
@@ -790,7 +862,10 @@
   /* the day-by-day feed shared by BOARD (7 days) and SCHEDULE (14 days) */
   function upcoming(nDays){
     const rows = S.rows || [], byId = {};
-    rows.forEach(r => byId[r.id] = r);
+    /* the calendar spine is named off the FULL set on purpose: a firm hold in
+       her hands still occupies the day, and a hold with no name reads as a
+       glitch. The hands lens governs the job LISTS, never the clock. */
+    (S.allRows || rows).forEach(r => byId[r.id] = r);
     const days = [];
     for(let i = 0; i < nDays; i++){
       const d = new Date(); d.setDate(d.getDate()+i);
@@ -1979,6 +2054,11 @@
     let el;
     if(el = T('[data-scxtab]')){ S.tab = el.dataset.scxtab; S.formOpen = false; S.editing = null; paint(); return; }
     if(T('#scx-reload')){ load(); return; }
+    if(T('#scx-hands')){
+      S.hands = !S.hands;
+      try{ localStorage.setItem(HANDS_KEY, S.hands ? '1' : '0'); }catch(err){}
+      S.rows = applyHands(); S.formOpen = false; paint(); return;
+    }
     if(T('#scx-new')){ S.formOpen = !S.formOpen; S.editing = null; paint(); return; }
     if(T('#scx-form-cancel')){ S.formOpen = false; paint(); return; }
     if(el = T('[data-scxsms]')){ smsAct(el.dataset.scxsms, el.dataset.scxsmsid || null, el.dataset.scxrow); return; }
@@ -2087,7 +2167,14 @@
     mount: mount,
     refresh: load,
     setTab: function(t){ S.tab = t; paint(); },
-    openForm: function(){ S.formOpen = true; paint(); }
+    openForm: function(){ S.formOpen = true; paint(); },
+    /* the hands lens, for the smoke test and for a console rescue if the
+       switch is ever unreachable on a narrow phone */
+    setHands: function(on){
+      S.hands = !!on;
+      try{ localStorage.setItem(HANDS_KEY, S.hands ? '1' : '0'); }catch(e){}
+      S.rows = applyHands(); paint();
+    }
   };
   // every face's existing lane-enter hook keeps working:
   window.renderQueue = function(){ if(S.host) load(); };
