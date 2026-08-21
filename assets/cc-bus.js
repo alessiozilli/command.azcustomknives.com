@@ -1143,6 +1143,16 @@
     '</span>';
   }
 
+  // ONE CARD. Hoisted to module scope 2026-08-20 - it used to live INSIDE
+  // paintAll while listHtml (right below) is a module-level function, so every
+  // paint threw "unitHtml is not defined" and the surface fell back to the
+  // retry bar. A helper must live in the same scope as its callers.
+  function unitHtml(u) {
+    if (u.type === 'bundle') return renderBundleCard(u.msgs);
+    var plan = pickDraftPlan(u.msg, PLAN_MAP);
+    return renderCard(u.msg, plan, u.replies);
+  }
+
   // BOTH means both, in order, with a line between them. What he needs from the
   // split is not two columns — it is that day work and night work never blur into
   // one scroll. Business first: that is the board he is on during the day.
@@ -1567,11 +1577,6 @@
         }
       });
 
-      function unitHtml(u) {
-        if (u.type === 'bundle') return renderBundleCard(u.msgs);
-        var plan = pickDraftPlan(u.msg, PLAN_MAP);
-        return renderCard(u.msg, plan, u.replies);
-      }
       // THE AZ | FORGE SPLIT WENT WITH THE CHANNEL SWITCH (2026-08-19). It sorted
       // threads by project slug into two columns and QUIETLY SET ASIDE every
       // machine-to-machine thread into a counter at the bottom — a list that was
