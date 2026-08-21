@@ -1626,6 +1626,16 @@
       + f('customer_name','Customer','text')
       + f('quantity', r.work_type==='event' ? 'How many people' : 'How many','number','step="1"')
       + f('blade_detail','What it is','text')
+      /* THE SAME LINE BUILDER THE COMPOSER USES. A booking that arrived without
+         sizes gets them here — pick a size, pick how many, + Add line, repeat.
+         Every line you add reprices the job from the catalogue; the open Price
+         field below stays for the one-number quote and is ignored the moment
+         these lines change. */
+      + '<div class="scx-f"><label for="scx-type">Type of work</label><select id="scx-type">'
+      + Object.keys(SVQ_TYPES).filter(k => k!=='teambuilding').map(k =>
+          '<option value="'+k+'"'+((r.category||'sharpening')===k?' selected':'')+'>'+SVQ_TYPES[k]+'</option>').join('')
+      + '</select></div>'
+      + builderMarkup('+ Add line')
       + f('preferred_date', isJob(r)?'Due by (the promise)':'Wished-for date','date')
       + '<div class="scx-f"><label>Booked slot (appointments + events — this claims the calendar)</label>'
       + '<div style="display:flex;gap:6px"><input id="scx-ed-sdate" type="date" value="'+esc(dLocal)+'" style="flex:1">'
@@ -1646,6 +1656,7 @@
       + '</div>';
     det.dataset.scxEditing = r.id;
     det.dataset.scxWt = r.work_type || 'job';
+    paintBuilder();
   }
 
   async function saveEdit(id){
@@ -1687,10 +1698,36 @@
        recorded that and guessing it is what quoted Ralph $90.41 for an $86.10
        job. Untouched price, untouched lines. */
     const r = (S.rows || []).find(x => x.id === id);
+
+    /* LINES WIN WHENEVER THEY CHANGED (2026-08-21). The edit panel now carries the
+       same builder as the composer, so a job that arrived as "4 knives, no sizes"
+       can be itemised here. If he touched the lines, they are the truth: the
+       price, the count and the service text are all re-derived from them, and the
+       open Price field is left alone. If he did NOT touch the lines, the old
+       behaviour below stands untouched — typing a price still rewrites them. */
+    const linesNow = (S.lines || []).slice();
+    SVQ_ALL_EXTRAS.forEach(x => { if(S.extras[x.key]) linesNow.push(
+      { kind:'extra', label:S.extras[x.key]+' × '+x.label, qty:S.extras[x.key],
+        unit_cad:x.cad, line_cad:x.cad*S.extras[x.key] }); });
+    const linesChanged = JSON.stringify(linesNow) !== JSON.stringify((r && r.line_items) || []);
+    if(linesChanged){
+      patch.line_items = linesNow;
+      patch.total_cad  = linesNow.length ? total() : null;
+      const qtySum     = linesNow.reduce((a,l) => a + (Number(l.qty) || 0), 0);
+      if(qtySum) patch.quantity = qtySum;
+      /* the card and the lists read `service`; leaving it saying "Knife
+         Sharpening" while the lines say 2 × 6" + 2 × 8" is the two-prices-on-one-
+         screen bug wearing different clothes. blade_detail is NOT touched — that
+         field is his own words about the item and he edits it by hand. */
+      const summary = linesNow.map(l => l.label).join(' · ');
+      if(summary) patch.service = summary;
+      if(SVQ_ALL_EXTRAS.some(x => x.flag && S.extras[x.key])) patch.rush = true;
+    }
+
     const oldMoney = moneyOf(r || {});
     const typed = price === '' ? null : Number(price);
     const oldShown = oldMoney.known ? oldMoney.sub : (r && r.total_cad != null ? Number(r.total_cad) : null);
-    if(typed != null && (oldShown == null || Math.abs(typed - oldShown) > 0.005)){
+    if(!linesChanged && typed != null && (oldShown == null || Math.abs(typed - oldShown) > 0.005)){
       const inclusive = confirm('Is ' + cad(typed) + ' the price WITH GST already in it?\n\n'
         + 'OK = yes, that is the final number.\nCancel = no, add GST on top.');
       patch.line_items = [{ kind:'manual', label:'Quoted price', qty:1,
@@ -1700,6 +1737,34 @@
     const det2 = det;
     S.editing = null;
     write(id, patch, null, () => { S.editing = id; if(det2) delete det2.dataset.scxEditing; paintDetail(); });
+  }
+
+  /* ── THE LINE BUILDER, SHARED BY THE COMPOSER AND THE EDIT PANEL ──────────
+     Same element ids in both, which is safe because only ONE is ever mounted:
+     #scx-form is painted only while S.formOpen, #scx-detail only otherwise, and
+     opening either clears the other (see onClick).
+
+     WHY EDIT NEEDS IT (2026-08-21, Alessio direct): "Once a job has been created
+     and I want to edit it, I have a lack of abilities to do so." Edit offered a
+     quantity, a free-text line and one open price — no way to say two 6" and two
+     8". Website bookings land with a quantity and no sizes ON PURPOSE, so that
+     the customer is not made to measure blades to book. That means the sizes are
+     ALWAYS added later, at the counter, which is exactly the screen that could
+     not do it. ── */
+  function builderMarkup(addLabel){
+    return '<div class="scx-f" id="scx-kind-wrap"><label id="scx-kind-lbl">What came in</label><div class="scx-chips" id="scx-kind"></div></div>'
+      + '<div class="scx-f" id="scx-variant-wrap" hidden><label id="scx-variant-lbl"></label><div class="scx-chips" id="scx-variant"></div></div>'
+      + '<div class="scx-f" id="scx-addons-wrap" hidden><div id="scx-addons"></div></div>'
+      + '<div class="scx-f" id="scx-size-wrap" hidden><label>Size</label><div class="scx-chips" id="scx-size"></div></div>'
+      + '<div class="scx-f" id="scx-manual-wrap" hidden><label>Typed line</label>'
+      + '<div style="display:flex;gap:6px"><input id="scx-man-label" placeholder="what it is" style="flex:2">'
+      + '<input id="scx-man-price" type="number" step="0.01" placeholder="$" style="flex:1"></div>'
+      + '<div class="scx-count" id="scx-man-note"></div></div>'
+      + '<div class="scx-f"><label id="scx-qty-lbl">How many</label><div class="scx-chips" id="scx-qty"></div></div>'
+      + '<div class="scx-f" id="scx-extras-wrap"><label>Extras — tap again for one more, shift-tap to clear</label><div class="scx-chips" id="scx-extras"></div></div>'
+      + '<button type="button" class="scx-act" id="scx-add-line">'+esc(addLabel||'+ Add line')+'</button>'
+      + '<div id="scx-lines" style="margin:8px 0"></div>'
+      + '<div id="scx-total" style="margin:4px 0 10px;font-weight:700"></div>';
   }
 
   /* ══════════════ COMPOSER — + New job (writes the base table) ══════════ */
@@ -1718,19 +1783,7 @@
       + '<div class="scx-f"><label>This is a…</label><div class="scx-chips" id="scx-cwork">'
       + ['job','appointment','event'].map(w => '<span class="scx-chip'+(S.cWork===w?' on':'')+'" data-scxcw="'+w+'">'+w+'</span>').join('')
       + '</div></div>'
-      + '<div class="scx-f" id="scx-kind-wrap"><label id="scx-kind-lbl">What came in</label><div class="scx-chips" id="scx-kind"></div></div>'
-      + '<div class="scx-f" id="scx-variant-wrap" hidden><label id="scx-variant-lbl"></label><div class="scx-chips" id="scx-variant"></div></div>'
-      + '<div class="scx-f" id="scx-addons-wrap" hidden><div id="scx-addons"></div></div>'
-      + '<div class="scx-f" id="scx-size-wrap" hidden><label>Size</label><div class="scx-chips" id="scx-size"></div></div>'
-      + '<div class="scx-f" id="scx-manual-wrap" hidden><label>Typed line</label>'
-      + '<div style="display:flex;gap:6px"><input id="scx-man-label" placeholder="what it is" style="flex:2">'
-      + '<input id="scx-man-price" type="number" step="0.01" placeholder="$" style="flex:1"></div>'
-      + '<div class="scx-count" id="scx-man-note"></div></div>'
-      + '<div class="scx-f"><label id="scx-qty-lbl">How many</label><div class="scx-chips" id="scx-qty"></div></div>'
-      + '<div class="scx-f" id="scx-extras-wrap"><label>Extras — tap again for one more, shift-tap to clear</label><div class="scx-chips" id="scx-extras"></div></div>'
-      + '<button type="button" class="scx-act" id="scx-add-line">+ Add to this job</button>'
-      + '<div id="scx-lines" style="margin:8px 0"></div>'
-      + '<div id="scx-total" style="margin:4px 0 10px;font-weight:700"></div>'
+      + builderMarkup('+ Add to this job')
       + '<div class="scx-f" id="scx-due-wrap"><label for="scx-date">Wanted by (the due-by promise)</label><input id="scx-date" type="date"></div>'
       + '<div class="scx-f" id="scx-slot-wrap" hidden><label>Booked slot — date, time, length (this claims the calendar)</label>'
       + '<div style="display:flex;gap:6px"><input id="scx-sdate" type="date" style="flex:1"><input id="scx-stime" type="time" style="flex:1">'
@@ -1858,11 +1911,14 @@
     const ax = activeExtras();
     const xw = el('scx-extras-wrap');
     if(xw) xw.hidden = !ax.length;
-    el('scx-extras').innerHTML = ax.map(x =>
+    if(el('scx-extras')) el('scx-extras').innerHTML = ax.map(x =>
       '<span class="scx-chip'+(S.extras[x.key]?' on':'')+'" data-scxc="ex:'+x.key+'">'+esc(x.label)
       + '<span class="scx-chip__p">$'+x.cad+'</span>'
       + (S.extras[x.key] ? '<span class="scx-chip__n">'+S.extras[x.key]+'</span>' : '')+'</span>').join('');
-    el('scx-loc-chips').innerHTML = LOCS.map(l => chip('loc:'+l, l, S.loc===l)).join('');
+    /* the edit panel mounts the builder WITHOUT the composer's location chips —
+       it has its own "Where it is" select — so nothing here may assume an id. */
+    const lcEl = el('scx-loc-chips');
+    if(lcEl) lcEl.innerHTML = LOCS.map(l => chip('loc:'+l, l, S.loc===l)).join('');
     el('scx-lines').innerHTML = S.lines.map((l,i) =>
       '<div class="scx-line"><span>'+esc(l.label)+'</span>'
       + '<span>'+l.qty+' × $'+l.unit_cad+' = $'+l.line_cad.toFixed(2)+'</span>'
@@ -2098,9 +2154,23 @@
     if(el = T('[data-scxsms]')){ smsAct(el.dataset.scxsms, el.dataset.scxsmsid || null, el.dataset.scxrow); return; }
     if(el = T('[data-scxact]')){ S.smsMsg = null; act(el.dataset.scxrow, el.dataset.scxact); return; }
     if(el = T('[data-scxloc]')){ write(el.dataset.scxrow, { item_location: el.dataset.scxloc }); return; }
-    if(el = T('[data-scxedit]')){ S.editing = el.dataset.scxedit; S.sel = el.dataset.scxedit; paintDetail(); return; }
+    if(el = T('[data-scxedit]')){
+      S.editing = el.dataset.scxedit; S.sel = el.dataset.scxedit;
+      /* seed the builder with what the job already has, so editing EXTENDS the
+         lines instead of starting from a blank slate and losing them. Extras
+         start empty on purpose: any extra already charged is sitting in
+         line_items as its own line, and re-reading it here would double it. */
+      const erow = (S.rows || []).find(x => x.id === S.editing);
+      S.lines   = (erow && Array.isArray(erow.line_items)) ? erow.line_items.map(l => Object.assign({}, l)) : [];
+      S.extras  = {}; S.size = null; S.variant = null; S.addons = {}; S.qty = 1;
+      paintDetail(); return;
+    }
     if(T('#scx-ed-save')){ saveEdit(T('#scx-ed-save').dataset.scxrow); return; }
-    if(T('#scx-ed-cancel')){ S.editing = null; paintDetail(); return; }
+    if(T('#scx-ed-cancel')){
+      S.editing = null; S.lines = []; S.extras = {};
+      S.size = null; S.variant = null; S.addons = {}; S.qty = 1;
+      paintDetail(); return;
+    }
     if(el = T('[data-scxedwt]')){
       const det = document.getElementById('scx-detail');
       if(det){ det.dataset.scxWt = el.dataset.scxedwt;
