@@ -361,7 +361,9 @@
     formOpen: false, kind:'knives', variant:null, size:null, qty:1, ekind:null, ecame:null,
     addons:{}, lines:[], extras:{}, loc:null, cWork:'job', customers:null, custFetch:null,
     // the pickup text — one row of az_sms_log per job, shown inside the job window
-    sms: [], smsMsg: null, smsBad: false, smsLater: null, smsWhen: null, smsForce: false, tick: null
+    sms: [], smsMsg: null, smsBad: false, smsLater: null, smsWhen: null, smsForce: false, tick: null,
+    // the three switches the text is written from - see smsSwitches()
+    smsVoice: null, smsPlace: null, smsPrice: true
   };
 
   const TABS = [
@@ -541,6 +543,8 @@
   .scx-act{font-family:var(--display,sans-serif);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;background:var(--raised,#161b20);border:1px solid var(--border,#252c33);border-radius:4px;color:var(--text-dim,#8a9aa8);cursor:pointer;}
   .scx-act:hover{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}
   .scx-act.on{background:var(--amber,#c8922a);color:#000;border-color:var(--amber,#c8922a);}
+  .scx-sw{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .scx-sw__k{font-family:var(--mono,monospace);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim,#8a9aa8);min-width:52px;}
   .scx-act.go{border-color:rgba(46,160,67,.6);color:#2ea043;}
   .scx-act.send{background:var(--azck-red,#990000);border-color:var(--azck-red,#990000);color:#fff;font-weight:700;}
   .scx-act.send:hover{filter:brightness(1.2);color:#fff;}
@@ -1276,6 +1280,54 @@
     return mine.length ? mine[0] : null;
   }
 
+  /* ══════════════ THE THREE SWITCHES ══════════════
+     2026-08-21, Alessio, live: "the system writes texts depending on which
+     buttons are selected." Not a pile of saved templates - three choices, and
+     the machine writes from them: WHOSE tone, WHICH door, and whether the money
+     is in it at all. Every combination's wording lives in ONE place, the database
+     function az_pickup_draft_text, so this window, the Texts tab, and the draft
+     the trigger writes on its own can never drift apart. These pills only choose.
+
+     WHERE starts wherever the job says the property is sitting, which is what
+     this always did on its own. WHO is remembered per device - the person
+     holding this screen is usually the same one all week - so Reanna picks
+     herself once, not once per text. */
+  const SMS_VOICE_KEY = 'azck.scx.voice';
+  function smsSavedVoice(){
+    try{ return localStorage.getItem(SMS_VOICE_KEY) === 'reanna' ? 'reanna' : 'alessio'; }
+    catch(e){ return 'alessio'; }
+  }
+  function smsSwitches(r){
+    if(S.smsVoice == null) S.smsVoice = smsSavedVoice();
+    if(S.smsPlace == null) S.smsPlace = (r && r.item_location === 'Blue Building') ? 'blue' : 'shop';
+    return { voice: S.smsVoice, place: S.smsPlace, price: S.smsPrice !== false };
+  }
+  function smsPill(k, v, on, label, rowId){
+    return '<button type="button" class="scx-act'+(on?' on':'')+'" data-scxsw="'+k+'" data-scxval="'+v+'"'
+      + ' data-scxrow="'+rowId+'">'+esc(label)+'</button>';
+  }
+  function smsSwRows(r){
+    const w = smsSwitches(r);
+    return '<div class="scx-sw"><span class="scx-sw__k">Who</span>'
+      +   smsPill('voice','alessio', w.voice === 'alessio', 'Alessio', r.id)
+      +   smsPill('voice','reanna',  w.voice === 'reanna',  'Reanna',  r.id)
+      + '</div>'
+      + '<div class="scx-sw"><span class="scx-sw__k">Where</span>'
+      +   smsPill('place','shop', w.place === 'shop', 'The shop',      r.id)
+      +   smsPill('place','blue', w.place === 'blue', 'Blue Building', r.id)
+      + '</div>'
+      + '<div class="scx-sw"><span class="scx-sw__k">Price</span>'
+      +   smsPill('price','in',  w.price,  'In the text', r.id)
+      +   smsPill('price','out', !w.price, 'Left out',    r.id)
+      + '</div>';
+  }
+  /* what the switches just produced, in his words, so the screen says what changed */
+  function smsSwWords(w){
+    return (w.voice === 'reanna' ? "Reanna's" : "Alessio's") + ' words, '
+      + (w.place === 'blue' ? 'the Blue Building' : 'the shop') + ', '
+      + (w.price ? 'price in' : 'no price') + '.';
+  }
+
   function smsHtml(r){
     if(!isJob(r) && !isSession(r)) return '';
     if(r.status === 'archived') return '';
@@ -1309,6 +1361,7 @@
       const why = r.done_at ? '' : ' It is written for you the moment you mark this done.';
       return '<div class="scx-sms">'+head+priced
         + '<div class="scx-sms__idle">Nothing written yet.'+esc(why)+'</div>'
+        + smsSwRows(r)
         + '<div class="scx-acts"><button type="button" class="scx-act" data-scxsms="write" data-scxrow="'+r.id+'">Write the text</button></div>'
         + note + '</div>';
     }
@@ -1346,6 +1399,7 @@
       + driftWarn(r, row)
       + '<textarea class="scx-sms__body" id="scx-sms-body" data-scxsmsid="'+row.id+'" data-scxbase="'+esc(row.body||'')+'" rows="5">'+esc(row.body||'')+'</textarea>'
       + '<div class="scx-sms__to">to '+esc(row.to_name||r.customer_name||'')+' · '+esc(row.to_phone||r.customer_phone||'')+'</div>'
+      + smsSwRows(r)
       + '<div class="scx-acts">'
       +   '<button type="button" class="scx-act send" data-scxsms="send" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send</button>'
       +   '<button type="button" class="scx-act'+(S.smsLater===row.id?' on':'')+'" data-scxsms="later" data-scxsmsid="'+row.id+'" data-scxrow="'+r.id+'">Send later</button>'
@@ -1460,7 +1514,10 @@
     if(what === 'write' || what === 'rewrite'){
       S.busy = true;
       try{
-        const t = await window.supa.rpc('az_pickup_draft_text', { p_booking: bookingId });
+        const w = smsSwitches(r);
+        const t = await window.supa.rpc('az_pickup_draft_text', {
+          p_booking: bookingId, p_voice: w.voice, p_place: w.place, p_price: w.price
+        });
         if(t.error) throw new Error(t.error.message);
         const body = t.data;
         if(!body) throw new Error('That job did not give me enough to write with.');
@@ -1476,7 +1533,7 @@
           smsPatchLocal(smsId, { body: body });
           S.busy = false;
           S.smsForce = true;                     // his words are gone on purpose; let the new ones paint
-          smsSay('Rewritten from the job. It still has not gone anywhere.');
+          smsSay('Written in ' + smsSwWords(w) + ' It still has not gone anywhere.');
           return;
         }
         /* One text per job. The database trigger enforces this on its own path;
@@ -1498,7 +1555,7 @@
           ref: 'pickup-' + new Date().toISOString().slice(0,10), created_by: 'queue-window'
         });
         if(ins.error) throw new Error(ins.error.message);
-        S.smsMsg = 'Written. Read it, then press Send.'; S.smsBad = false;
+        S.smsMsg = 'Written in ' + smsSwWords(w) + ' Read it, then press Send.'; S.smsBad = false;
         await load(); S.busy = false; return;
       }catch(e){ S.busy = false; smsSay('Could not write it: '+(e.message||e), true); return; }
     }
@@ -2151,6 +2208,21 @@
     }
     if(T('#scx-new')){ S.formOpen = !S.formOpen; S.editing = null; paint(); return; }
     if(T('#scx-form-cancel')){ S.formOpen = false; paint(); return; }
+    /* Flipping a switch is not a setting to apply later - it IS "write it that
+       way", so it writes on the tap. Typed words are still guarded inside
+       smsAct(): the confirm there is the only thing that can throw them away. */
+    if(el = T('[data-scxsw]')){
+      const k = el.dataset.scxsw, v = el.dataset.scxval;
+      if(k === 'price') S.smsPrice = (v === 'in');
+      else if(k === 'voice'){
+        S.smsVoice = v;
+        try{ localStorage.setItem(SMS_VOICE_KEY, v); }catch(err){}
+      }
+      else S.smsPlace = v;
+      const rowId = el.dataset.scxrow;
+      const cur   = smsOf(rowId);
+      smsAct(cur ? 'rewrite' : 'write', cur ? cur.id : null, rowId); return;
+    }
     if(el = T('[data-scxsms]')){ smsAct(el.dataset.scxsms, el.dataset.scxsmsid || null, el.dataset.scxrow); return; }
     if(el = T('[data-scxact]')){ S.smsMsg = null; act(el.dataset.scxrow, el.dataset.scxact); return; }
     if(el = T('[data-scxloc]')){ write(el.dataset.scxrow, { item_location: el.dataset.scxloc }); return; }
@@ -2208,7 +2280,9 @@
     }
     if(el = T('[data-scxid]')){
       /* selecting stays IN PLACE — the product column is always beside you now */
-      S.editing = null; S.formOpen = false; S.smsMsg = null; S.smsLater = null; S.sel = el.dataset.scxid; paint(); return; }
+      S.editing = null; S.formOpen = false; S.smsMsg = null; S.smsLater = null;
+      S.smsPlace = null;                      // WHERE follows the new job, not the last one
+      S.sel = el.dataset.scxid; paint(); return; }
     if(T('#scx-save')){ saveNew(); return; }
     if(T('#scx-add-line')){ addLine(); return; }
     if(el = T('[data-scxc]')){
@@ -2272,6 +2346,12 @@
     refresh: load,
     setTab: function(t){ S.tab = t; paint(); },
     openForm: function(){ S.formOpen = true; paint(); },
+    /* open a job's window by id - for the smoke test, and for a console rescue
+       when a card cannot be reached by thumb */
+    select: function(id){
+      S.editing = null; S.formOpen = false; S.smsMsg = null; S.smsLater = null;
+      S.smsPlace = null; S.sel = id; paint();
+    },
     /* the hands lens, for the smoke test and for a console rescue if the
        switch is ever unreachable on a narrow phone */
     setHands: function(on){

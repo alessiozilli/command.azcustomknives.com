@@ -38,7 +38,8 @@
   var S = {
     host: null, rows: null, bookings: [], sel: null, err: null,
     busy: false, msg: null, bad: false, later: null, when: null, force: false, tick: null,
-    folded: {}    // group key -> true when shut
+    folded: {},   // group key -> true when shut
+    voice: null, place: null, price: true   // the three switches - see switchesFor()
   };
 
   /* ══════════════ small helpers ══════════════ */
@@ -187,6 +188,54 @@
     return '<div class="txm-money bad">This text no longer matches the job.<br>'
       + out.join('<br>') + '<br>Press <b>Write it again</b>, or fix the words yourself.</div>';
   }
+  /* ══════════════ THE THREE SWITCHES ══════════════
+     2026-08-21, Alessio, live: "the system writes texts depending on which
+     buttons are selected." Not a pile of saved templates - three choices, and
+     the machine writes from them: WHOSE tone, WHICH door, and whether the money
+     is in it at all. Every combination's wording lives in ONE place, the database
+     function az_pickup_draft_text, so this face, the queue window, and the draft
+     the trigger writes on its own can never drift apart. These pills only choose.
+
+     WHERE starts wherever the job says the property is sitting, which is what
+     this always did on its own. WHO is remembered per device - the person
+     holding this screen is usually the same one all week - so Reanna picks
+     herself once, not once per text. */
+  var VOICE_KEY = 'azck.txm.voice';
+  function savedVoice(){
+    try{ return localStorage.getItem(VOICE_KEY) === 'reanna' ? 'reanna' : 'alessio'; }
+    catch(e){ return 'alessio'; }
+  }
+  function switchesFor(b){
+    if(S.voice == null) S.voice = savedVoice();
+    if(S.place == null) S.place = (b && b.item_location === 'Blue Building') ? 'blue' : 'shop';
+    return { voice: S.voice, place: S.place, price: S.price !== false };
+  }
+  function swPill(k, v, on, label){
+    return '<button type="button" class="txm-act'+(on?' on':'')+'" data-txmsw="'+k+'" data-txmval="'+v+'">'
+      + esc(label) + '</button>';
+  }
+  function swRows(b){
+    var w = switchesFor(b);
+    return '<div class="txm-sw"><span class="txm-sw__k">Who</span>'
+      +   swPill('voice','alessio', w.voice === 'alessio', 'Alessio')
+      +   swPill('voice','reanna',  w.voice === 'reanna',  'Reanna')
+      + '</div>'
+      + '<div class="txm-sw"><span class="txm-sw__k">Where</span>'
+      +   swPill('place','shop', w.place === 'shop', 'The shop')
+      +   swPill('place','blue', w.place === 'blue', 'Blue Building')
+      + '</div>'
+      + '<div class="txm-sw"><span class="txm-sw__k">Price</span>'
+      +   swPill('price','in',  w.price,  'In the text')
+      +   swPill('price','out', !w.price, 'Left out')
+      + '</div>';
+  }
+  /* what the switches just produced, in his words, so the screen says what changed */
+  function swWords(w){
+    return (w.voice === 'reanna' ? "Reanna's" : "Alessio's") + ' words, '
+      + (w.place === 'blue' ? 'the Blue Building' : 'the shop') + ', '
+      + (w.price ? 'price in' : 'no price') + '.';
+  }
+
   function bookingOf(r){
     if(!r || !r.booking_id) return null;
     for(var i=0;i<S.bookings.length;i++) if(S.bookings[i].id === r.booking_id) return S.bookings[i];
@@ -290,6 +339,9 @@
   +   'border-radius:4px;padding:8px 10px;font-family:inherit;font-size:12.5px;color-scheme:dark;}'
   + '.txm-when input:focus{outline:none;border-color:var(--amber,#c8922a);}'
   + '.txm-act.on{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}'
+  + '.txm-sw{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}'
+  + '.txm-sw__k{font-family:var(--mono,monospace);font-size:9.5px;letter-spacing:.14em;'
+  +   'text-transform:uppercase;color:var(--text-dim,#8a9aa8);min-width:52px;}'
   + '.txm-tag{font-family:var(--mono,monospace);font-size:9px;letter-spacing:.06em;text-transform:uppercase;'
   +   'padding:2px 7px;border:1px solid var(--border,#252c33);border-radius:10px;color:var(--text-dim,#8a9aa8);}'
   + '.txm-tag.amber{border-color:var(--amber,#c8922a);color:var(--amber,#c8922a);}'
@@ -490,6 +542,7 @@
       ? '<div class="txm-label">The words</div>'
         + '<textarea class="txm-body" id="txm-body" data-txmid="'+esc(r.id)+'" data-txmbase="'+esc(r.body||'')+'" rows="6">'+esc(r.body||'')+'</textarea>'
         + '<div class="txm-len">'+String(r.body||'').length+' characters</div>'
+        + (b ? swRows(b) : '')
         + '<div class="txm-acts">'
         +   '<button type="button" class="txm-act send" data-txmact="send">Send</button>'
         +   '<button type="button" class="txm-act'+(S.later===r.id?' on':'')+'" data-txmact="later">Send later</button>'
@@ -597,7 +650,10 @@
 
     if(what === 'rewrite'){
       S.busy = true;
-      window.supa.rpc('az_pickup_draft_text', { p_booking: r.booking_id }).then(function(t){
+      var w = switchesFor(bookingOf(r));
+      window.supa.rpc('az_pickup_draft_text', {
+        p_booking: r.booking_id, p_voice: w.voice, p_place: w.place, p_price: w.price
+      }).then(function(t){
         if(t.error) throw new Error(t.error.message);
         if(!t.data) throw new Error('That job did not give me enough to write with.');
         /* his own wording is worth more than mine — never swap it silently */
@@ -610,7 +666,7 @@
           patchLocal(r.id, { body: t.data });
           S.busy = false;
           S.force = true;                        // his words are gone on purpose; let the new ones paint
-          say('Rewritten from the job. It still has not gone anywhere.');
+          say('Written in ' + swWords(w) + ' It still has not gone anywhere.');
         });
       }).catch(function(e){ S.busy = false; say('Could not write it: '+(e.message||e), true); });
       return;
@@ -788,7 +844,24 @@
       paintLeft(); return;
     }
     if(el = e.target.closest('[data-txmid]')){
-      if(el.classList.contains('txm-item')){ S.sel = el.dataset.txmid; S.msg = null; S.later = null; S.when = null; paintLeft(); paintMid(); return; }
+      if(el.classList.contains('txm-item')){
+        S.sel = el.dataset.txmid; S.msg = null; S.later = null; S.when = null;
+        S.place = null;                       // WHERE follows the new job, not the last one
+        paintLeft(); paintMid(); return;
+      }
+    }
+    /* Flipping a switch is not a setting to apply later - it IS "write it that
+       way", so it rewrites on the tap. Typed words are still guarded inside
+       act(): the confirm there is the only thing that can throw them away. */
+    if(el = e.target.closest('[data-txmsw]')){
+      var swk = el.dataset.txmsw, swv = el.dataset.txmval;
+      if(swk === 'price') S.price = (swv === 'in');
+      else if(swk === 'voice'){
+        S.voice = swv;
+        try{ localStorage.setItem(VOICE_KEY, swv); }catch(err){}
+      }
+      else S.place = swv;
+      act('rewrite'); return;
     }
     if(el = e.target.closest('[data-txmact]')){ act(el.dataset.txmact); return; }
     if(e.target.closest('#txm-reload')){ load(); return; }
