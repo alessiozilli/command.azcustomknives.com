@@ -40,7 +40,8 @@
     { sel: '.hw-3col',             key: 'cc.hw.cols'    }, // Hardware (builds | buy board + history | bus) — bus #4224, 2026-08-06
     { sel: '.scx-3col',            key: 'cc.scx.cols'   }, // Services > Queue scheduling module (nav | job | bus) — 2026-08-08
     { sel: '.svsc-3col',           key: 'cc.svsched.cols' }, // Services > Schedule (hours | blocks | bus) — 2026-08-09
-    { sel: '.txm-3col',            key: 'cc.txm.cols'   } // Services > Texts (nav | message | bus) — 2026-08-14
+    { sel: '.txm-3col',            key: 'cc.txm.cols'   }, // Services > Texts (nav | message | bus) — 2026-08-14
+    { sel: '#window-mount',        key: 'cc.window.cols' } // Operator > Window (clockwork | trail | bus) — 2026-08-19
   ];
 
   var DEFAULT_STACK = 700;

@@ -145,7 +145,7 @@
   // holds every reply ASC; THREAD_MAP.roots holds root rows older than the
   // fetch window so a fresh reply can still summon its original card.
   var THREAD_MAP = { replies: {}, roots: {} };
-  var ROW_COLS = 'id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug';
+  var ROW_COLS = 'id,from_user,to_user,from_instance,from_instance_id,channel,priority,body,status,parent_id,sent_at,created_at,archived_at,awaiting_reply_from,thread_id,saved_at,flag_color,lane,root_id,project_slug,track';
   async function loadThreads(client, rows) {
     var map = { replies: {}, roots: {} };
     var rootIds = {};
@@ -222,6 +222,7 @@
     // every reply he has half-typed and every pick he has made. The keys stay.
     bucket:   'cc.bus.v2.bucket',
     lane:     'cc.bus.v2.channel',
+    track:    'cc.bus.v2.track',
     sender:   'cc.bus.v2.filter.sender',
     channel:  'cc.bus.v2.filter.channel',
     status:   'cc.bus.v2.filter.status',
@@ -320,9 +321,46 @@
   // were deleted on 2026-08-18, and they stay pinned now — rowMatches still reads
   // them, so every one of those gates falls straight through. A pick left in his
   // browser from weeks ago can never filter a board that has no button to undo it.
+  // ─── THE TWO TRACKS ──────────────────────────────────────────────────
+  // Alessio direct, 2026-08-21: "I need my split lane again. My system, my AZ,
+  // at least those two … so I can keep saying at night I can work on the
+  // infrastructure, and during the day I don't get overwhelmed with what I have
+  // to do at night."
+  //
+  // WHY THE LAST ONE DIED, AND WHY THIS ONE WILL NOT. The 2026-08-19 switch was
+  // sliced by agent_messages.lane — ai / cross / log / local / human / intern —
+  // a machine taxonomy that never meant business-vs-infrastructure, so it put
+  // rows on the wrong side and got deleted. Correct diagnosis, wrong cure: the
+  // switch went, the column stayed. This one reads agent_messages.track, which
+  // is NOT NULL, CHECK-constrained to exactly these two values, and filled by a
+  // database trigger from the project registry. There is no third pile and no
+  // way to insert an untracked row.
+  //
+  // A project moves between tracks in ONE place: forge_projects.bus_track.
+  // Never by hand-editing rows here.
+  var TRACKS = [
+    { id: 'both',   label: 'Both',   hint: 'business and infrastructure, business first' },
+    { id: 'azck',   label: 'AZ',     hint: 'the business — the day board' },
+    { id: 'system', label: 'System', hint: 'infrastructure, forge, AI — the night board' }
+  ];
+  function trackById(id) {
+    for (var ti = 0; ti < TRACKS.length; ti++) if (TRACKS[ti].id === id) return TRACKS[ti];
+    return null;
+  }
+  // The face sets the waking track. Alessio's face wakes on BOTH; the command
+  // face wakes on AZ so infrastructure chatter never clogs the business surface.
+  // That difference lives in the page, not in a second copy of this file.
+  // The old switch called these 'az' and 'forge'. A face config or a browser that
+  // still says either must land somewhere real, not on an id that matches nothing
+  // and leaves him staring at a board with no button to undo it.
+  var TRACK_ALIASES = { az: 'azck', azck: 'azck', forge: 'system', system: 'system', both: 'both' };
+  function normalizeTrack(v) { return TRACK_ALIASES[String(v || '').toLowerCase()] || null; }
+  var DEFAULT_TRACK = normalizeTrack(FACE.defaultTrack || FACE.defaultLane) || 'both';
+
   var STATE = {
     bucket:   lsGet(STATE_KEYS.bucket, 'tome'),
-    lane:     'both',      // the lane switch is gone; nothing narrows the list but the bucket
+    track:    normalizeTrack(lsGet(STATE_KEYS.track, DEFAULT_TRACK)) || DEFAULT_TRACK,
+    lane:     'both',      // the old lane switch stays dead; track replaced it
     sender:   'all',
     channel:  'all',
     status:   'all',
@@ -332,6 +370,9 @@
   // A stored bucket that no longer exists falls back to his inbox rather than to an
   // empty board he cannot explain.
   if (!bucketById(STATE.bucket)) STATE.bucket = 'tome';
+  // same guard for the track: a stored value that no longer exists falls back to
+  // the face's waking track, never to an empty board he cannot explain.
+  if (!trackById(STATE.track)) STATE.track = DEFAULT_TRACK;
 
   // The ?priority=urgent hash handler that used to live here is gone with the
   // header pill that was its only caller (2026-08-18). It pinned a priority filter
@@ -546,6 +587,17 @@
 
       // ─── Empty + error ───
       '#bus-mount .cc-bus__empty { font-family:var(--mono,monospace); font-size:11px; color:var(--text-xs,#566470); text-align:center; padding:24px; border:1px dashed var(--border,#252c33); border-radius:4px; }',
+      // THE TRACK SWITCH — Both / AZ / System, restored 2026-08-21.
+      '#bus-mount .cc-bus__tracks { display:inline-flex; gap:0; margin-left:10px; border:1px solid var(--border,#252c33); border-radius:4px; overflow:hidden; flex-shrink:0; }',
+      '#bus-mount .cc-bus__track { font-family:var(--display,inherit); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; padding:4px 11px; background:transparent; color:var(--text-dim,#8b97a3); border:0; border-right:1px solid var(--border,#252c33); cursor:pointer; }',
+      '#bus-mount .cc-bus__track:last-child { border-right:0; }',
+      '#bus-mount .cc-bus__track:hover { color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__track.on { background:var(--amber,#c8922a); color:#12161a; }',
+      // the two heads that make BOTH readable instead of one blurred scroll
+      '#bus-mount .cc-bus__trackhead { display:flex; align-items:baseline; gap:8px; margin:14px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--border,#252c33); font-family:var(--display,inherit); font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--amber,#c8922a); }',
+      '#bus-mount .cc-bus__trackhead:first-child { margin-top:0; }',
+      '#bus-mount .cc-bus__trackhead-hint { font-family:var(--mono,monospace); font-size:9px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--text-xs,#566470); }',
+      '#bus-mount .cc-bus__trackhead-n { margin-left:auto; font-family:var(--mono,monospace); font-size:10px; color:var(--text-xs,#566470); }',
       '#bus-mount .cc-bus__err { font-family:var(--mono,monospace); font-size:11px; color:var(--red,#e5534b); padding:12px 16px; border:1px solid var(--red,#e5534b); border-radius:4px; background:var(--red-bg,rgba(229,83,75,0.12)); }',
 
       // ─── Dyslexia-friendly font toggle (default ON = Lexend) — Alessio 2026-05-17.
@@ -1076,23 +1128,57 @@
   // word - the column they filled is gone, and dead code that draws a wrong number
   // is exactly what he asked us to stop keeping around.
 
+  function renderTrackSwitch() {
+    // Restored 2026-08-21 on his word, on agent_messages.track this time. The old
+    // objection — two filter systems on one screen make a count lie — is answered
+    // by applyTrack(): the track narrows the same query that feeds the numbers, so
+    // the bucket counts already have it in them. One definition, no drift.
+    return '<span class="cc-bus__tracks" data-role="tracks">' +
+      TRACKS.map(function (t) {
+        var on = (STATE.track === t.id) ? ' on' : '';
+        return '<button type="button" class="cc-bus__track' + on + '"' +
+          ' data-filter-group="track" data-filter-value="' + t.id + '"' +
+          ' title="' + escapeHtml(t.hint) + '">' + escapeHtml(t.label) + '</button>';
+      }).join('') +
+    '</span>';
+  }
+
+  // BOTH means both, in order, with a line between them. What he needs from the
+  // split is not two columns — it is that day work and night work never blur into
+  // one scroll. Business first: that is the board he is on during the day.
+  function listHtml(units) {
+    if (STATE.track !== 'both') return units.map(unitHtml).join('');
+    var az = [], sys = [];
+    units.forEach(function (u) {
+      var m = u.msg || (u.msgs && u.msgs[0]) || {};
+      (m.track === 'system' ? sys : az).push(u);
+    });
+    function head(label, hint, count) {
+      return '<div class="cc-bus__trackhead"><span>' + escapeHtml(label) + '</span>' +
+             '<span class="cc-bus__trackhead-hint">' + escapeHtml(hint) + '</span>' +
+             '<span class="cc-bus__trackhead-n">' + count + '</span></div>';
+    }
+    return head('AZ · the business', 'the day board', az.length) +
+      (az.length ? az.map(unitHtml).join('')
+                 : '<div class="cc-bus__empty">Nothing on the business side.</div>') +
+      head('System · infrastructure', 'forge, AI — the night board', sys.length) +
+      (sys.length ? sys.map(unitHtml).join('')
+                  : '<div class="cc-bus__empty">Nothing on the infrastructure side.</div>');
+  }
+
   function renderHeader(filteredCount) {
-    // THE CHANNEL SWITCH IS GONE (2026-08-19). Both / AZ / Forge / System sliced by
-    // agent_messages.lane — the machine's taxonomy, the same one that put buses on
-    // his board that were never his. Two filter systems on one screen would also
-    // have broken the rule that matters here: a count on a button has to equal what
-    // clicking it shows, and it cannot if a second switch is narrowing the list
-    // behind it. The first column is the only thing that chooses now.
-    //
-    // The header says which bucket he is in, so the title is never a generic word
-    // sitting above a filtered list.
+    // The header says which bucket AND which track he is in, so the title is never
+    // a generic word sitting above a filtered list.
     var b = bucketById(STATE.bucket);
-    var title = 'Bus · ' + (b ? b.label : 'To me');
+    var t = trackById(STATE.track);
+    var title = 'Bus · ' + (b ? b.label : 'To me') +
+                ((t && t.id !== 'both') ? ' · ' + t.label : '');
     var fontOn = (busFontPref() !== 'off');
     // Search input was moved into renderComposer() per Alessio direct 2026-05-17
     // — it now sits inline with the @chips above the type box.
     return '' +
       '<span class="cc-bus__header-title">' + escapeHtml(title) + '</span>' +
+      renderTrackSwitch() +
       '<span class="cc-bus__header-count" title="conversations on screen">' + filteredCount + ' threads</span>' +
       '<button type="button" class="cc-bus__font-toggle' + (fontOn ? ' on' : '') + '" data-act="toggle-font" title="Toggle dyslexic-friendly font (Lexend)">Aa</button>' +
       '<button type="button" class="cc-bus__readall" data-act="read-all" title="Read every message shown, out loud">▶ Read bus</button>';
@@ -1504,7 +1590,7 @@
       if (!filtered.length) {
         list.innerHTML = '<div class="cc-bus__empty">Nothing here.</div>' + overflow;
       } else {
-        list.innerHTML = filtered.map(unitHtml).join('') + overflow;
+        list.innerHTML = listHtml(filtered) + overflow;
       }
 
       // Restore expanded bodies (must run BEFORE scrollTop restore so the
@@ -1646,10 +1732,17 @@
   // A count that FAILS stores null, and null renders as a dash. It never renders
   // as 0: "nothing here" and "I could not ask" are different answers and he is
   // entitled to know which one he is looking at.
+  // The track narrows the QUERY, never a list we already hold. Same law as the
+  // bucket: the builder that puts the number on a button is the builder that asks
+  // for the rows, so a count can never promise rows the click will not show.
+  function applyTrack(q) {
+    return (STATE.track === 'both') ? q : q.eq('track', STATE.track);
+  }
+
   var COUNTS = {};
   function loadCounts(client) {
     return Promise.all(BUCKETS.map(function (b) {
-      return b.apply(client.from('agent_messages').select('id', { count: 'exact', head: true }))
+      return applyTrack(b.apply(client.from('agent_messages').select('id', { count: 'exact', head: true })))
         .then(function (r) { COUNTS[b.id] = (r && !r.error) ? (r.count || 0) : null; })
         .catch(function () { COUNTS[b.id] = null; });
     }));
@@ -1685,7 +1778,7 @@
       // the database for these rows. The column cannot disagree with the list,
       // because there is one definition of each and it lives in BUCKETS.
       var bucket = bucketById(STATE.bucket) || BUCKETS[1];
-      var mainQ = bucket.apply(client.from('agent_messages').select(ROW_COLS))
+      var mainQ = applyTrack(bucket.apply(client.from('agent_messages').select(ROW_COLS)))
         .order('sent_at', { ascending: false, nullsFirst: false }).limit(ROW_LIMIT);
       var sysQ = client.from('agent_messages').select(ROW_COLS)
         .eq('lane', 'log')
@@ -1791,7 +1884,7 @@
         // The bucket decides WHICH rows the query asks the database for, so picking
         // one has to re-fetch, not just repaint what we already hold. That is also
         // what keeps the count and the list honest: they are the same query.
-        if (group === 'bucket') refresh(); else paintAll();
+        if (group === 'bucket' || group === 'track') refresh(); else paintAll();
       }
       return;
     }
