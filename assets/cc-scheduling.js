@@ -326,7 +326,17 @@
   const isSession = r => r.work_type === 'appointment' || r.work_type === 'event';
   /* A commitment is work_type-shaped: a job commits to a DUE-BY, a session
      commits to a SLOT. "No date set is simply not a queue" (locked 08-07). */
-  const committed = r => isJob(r) ? !!r.preferred_date : !!r.scheduled_at;
+  /* POSSESSION IS A COMMITMENT TOO (2026-08-21, Alessio direct: "If I manually
+     put in a job, it should land on the board instantly"). A due-by is one way a
+     job commits. Having the customer's property on our bench is another, and a
+     harder one — we cannot give it back undone. Ron Hanson's Cutco sat under
+     Requests with a chase date a week out while the knife was physically on the
+     bench, so the board said nothing was owed. dropped_off_at is the existing,
+     honest signal: saveNew stamps it only for a counter JOB whose property was
+     actually left with us. 'with customer' rows never get it, so an enquiry with
+     no date is still a request, exactly as before. */
+  const inHand    = r => isJob(r) && !!r.dropped_off_at;
+  const committed = r => isJob(r) ? (!!r.preferred_date || inHand(r)) : !!r.scheduled_at;
   const isRequest = r => isOpen(r) && !committed(r);
   const isPickup  = r => !!r.done_at && !r.picked_up_at && r.status !== 'archived' && r.status !== 'cancelled';
   /* Have they heard from us? A text that is sent or armed counts, and so does the
@@ -923,7 +933,7 @@
   /* ── the list tabs: BENCH · REQUESTS · CLASSES · PICKUPS · HISTORY ── */
   function tabRows(){
     const rows = S.rows || [];
-    if(S.tab === 'bench')    return rows.filter(r => onBench(r) && !!r.preferred_date).sort(benchSort);
+    if(S.tab === 'bench')    return rows.filter(r => onBench(r) && committed(r)).sort(benchSort);
     if(S.tab === 'requests') return rows.filter(isRequest)
       .sort((a,b) => (a.next_action_date||'9999') < (b.next_action_date||'9999') ? -1 : 1);
     if(S.tab === 'classes')  return rows.filter(r => isSession(r) && isOpen(r))
@@ -1896,12 +1906,30 @@
       S.ekind = null; S.ecame = null; S.qty = 1; paintBuilder(); return;
     }
     const manLbl = document.getElementById('scx-man-label');
-    if(mode === 'manual' || (SVQ_MANUAL_TOO[scxType()] && manLbl && manLbl.value.trim())){
+    const typed  = ((manLbl && manLbl.value) || '').trim();
+    /* THE TYPED LINE NEVER STEALS A CATALOGUE PICK (2026-08-21). On sharpening the
+       typed box is visible ALONGSIDE the chips, and any text in it used to take
+       this branch and drop the chips on the floor without a word. Ron Hanson's
+       Cutco was saved as a typed line at $0 with a 7" knives chip sitting right
+       there worth $27. Two lines asked for at once is a question, not a guess. */
+    if(typed && mode !== 'manual' && (S.size || S.variant)){
+      alert('Two lines at once: the typed line \u201c' + typed + '\u201d and the '
+            + (((scxCat()[S.kind] || {}).label || 'item').toLowerCase()) + ' you picked.\n\n'
+            + 'Add one, then the other.');
+      return;
+    }
+    if(mode === 'manual' || (SVQ_MANUAL_TOO[scxType()] && typed)){
       const prEl = document.getElementById('scx-man-price');
-      const lbl = ((manLbl && manLbl.value) || '').trim();
-      const pr  = Number((prEl && prEl.value) || '');
+      const lbl = typed;
+      /* AN EMPTY PRICE BOX IS NOT ZERO. Number('') is 0 - finite, not negative -
+         so a blank box walked straight through the old guard and booked the job at
+         $0 silently. Read the raw string and make it say something. A deliberate
+         freebie still works: type 0. */
+      const raw = String((prEl && prEl.value) || '').trim();
       if(!lbl){ alert('Say what it is first.'); return; }
-      if(!Number.isFinite(pr) || pr < 0){ alert('Type the quoted price — a number.'); return; }
+      if(!raw){ alert('\u201c' + lbl + '\u201d has no price.\n\nType the amount you quoted, or clear the typed line and pick it from the chips.'); return; }
+      const pr = Number(raw);
+      if(!Number.isFinite(pr) || pr < 0){ alert('Type the quoted price \u2014 a number.'); return; }
       S.lines.push({ kind:'manual', label: S.qty+' × '+lbl, qty:S.qty, unit_cad:pr, line_cad:pr*S.qty });
       if(manLbl) manLbl.value = ''; if(prEl) prEl.value = '';
       S.qty = 1; paintBuilder(); return;
@@ -1962,7 +1990,10 @@
       if(sdr && Number.isFinite(Number(sdr))) dur = Number(sdr);
     }
     const dueDate = work === 'job' ? (g('scx-date') || null) : null;
-    const committedNow = work === 'job' ? !!dueDate : !!scheduled_at;
+    /* matches inHand() above: property left with us is itself the commitment, so
+       a counter job with no due-by gets no chase date and no stay in Requests. */
+    const inHandNow = work === 'job' && S.loc !== 'with customer';
+    const committedNow = work === 'job' ? (!!dueDate || inHandNow) : !!scheduled_at;
 
     const rec = {
       category: scxType(),                          // honest category, no regex collapse
