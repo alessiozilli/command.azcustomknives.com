@@ -298,10 +298,14 @@
      error, and it must never fall down a crack.
 
      The command face is THE BUSINESS: it has no shelf of its own and sees all. */
-  const NOT_MINE = {
-    alessio: ['Blue Building'],
-    reanna : ['Shop', "Alessio's bench"]
-  };
+  /* NEUTRALIZED 2026-08-22 on Alessio's correction ("the blue building isn't
+     her... label it by the job, by what it is"): a place never decides whose
+     work it is, and his board exists for arrival awareness — hiding rows was
+     the opposite of the product. Empty map => SPLIT is false for every face,
+     no switch renders, no row is ever filtered. The machinery stays until the
+     replacement ships (THE BOOK design, sops slug 'the-book'), then all of it
+     goes. */
+  const NOT_MINE = {};
   const FACE      = (window.CC_FACE_CONFIG && window.CC_FACE_CONFIG.face) || '';
   const SPLIT     = !!NOT_MINE[FACE];          // unknown face => no split, show everything
   const HANDS_KEY = 'cc.scx.hands.' + (FACE || 'x');
